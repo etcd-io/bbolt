@@ -185,6 +185,12 @@ func (f *freelist) read(p *page) {
 	f.reindex()
 }
 
+// read initializes the freelist from a given list of ids.
+func (f *freelist) readIDs(ids []pgid) {
+	f.ids = ids
+	f.reindex()
+}
+
 // write writes the page ids onto a freelist page. All free and pending ids are
 // saved to disk since in the event of a program crash, all pending ids will
 // become free.

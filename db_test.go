@@ -1366,15 +1366,35 @@ func validateBatchBench(b *testing.B, db *DB) {
 // DB is a test wrapper for bolt.DB.
 type DB struct {
 	*bolt.DB
+	f string
+	o *bolt.Options
 }
 
 // MustOpenDB returns a new, open DB at a temporary location.
 func MustOpenDB() *DB {
-	db, err := bolt.Open(tempfile(), 0666, nil)
+	f := tempfile()
+	db, err := bolt.Open(f, 0666, nil)
 	if err != nil {
 		panic(err)
 	}
-	return &DB{db}
+	return &DB{
+		DB: db,
+		f:  f,
+	}
+}
+
+// MustOpenDBWithOption returns a new, open DB at a temporary location with given options.
+func MustOpenWithOption(o *bolt.Options) *DB {
+	f := tempfile()
+	db, err := bolt.Open(f, 0666, o)
+	if err != nil {
+		panic(err)
+	}
+	return &DB{
+		DB: db,
+		f:  f,
+		o:  o,
+	}
 }
 
 // Close closes the database and deletes the underlying file.
@@ -1397,6 +1417,15 @@ func (db *DB) MustClose() {
 	if err := db.Close(); err != nil {
 		panic(err)
 	}
+}
+
+// MustReopen reopen the database. Panic on error.
+func (db *DB) MustReopen() {
+	indb, err := bolt.Open(db.f, 0666, db.o)
+	if err != nil {
+		panic(err)
+	}
+	db.DB = indb
 }
 
 // PrintStats prints the database stats
