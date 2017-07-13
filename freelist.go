@@ -6,7 +6,6 @@ import (
 	"unsafe"
 )
 
-
 // txPending holds a list of pgids and corresponding allocation txns
 // that are pending to be freed.
 type txPending struct {
