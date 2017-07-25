@@ -174,6 +174,8 @@ func (tx *Tx) Commit() error {
 		if err != nil {
 			return err
 		}
+	} else {
+		tx.meta.freelist = pgidNoFreelist
 	}
 
 	// Write dirty pages to disk.
@@ -223,7 +225,9 @@ func (tx *Tx) commitFreelist() error {
 
 	// Free the freelist and allocate new pages for it. This will overestimate
 	// the size of the freelist but not underestimate the size (which would be bad).
-	tx.db.freelist.free(tx.meta.txid, tx.db.page(tx.meta.freelist))
+	if tx.meta.freelist != pgidNoFreelist {
+		tx.db.freelist.free(tx.meta.txid, tx.db.page(tx.meta.freelist))
+	}
 	p, err := tx.allocate((tx.db.freelist.size() / tx.db.pageSize) + 1)
 	if err != nil {
 		tx.rollback()
