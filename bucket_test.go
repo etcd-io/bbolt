@@ -1640,7 +1640,7 @@ func TestBucket_Put_Single(t *testing.T) {
 
 		index++
 		return true
-	}, nil); err != nil {
+	}, qconfig()); err != nil {
 		t.Error(err)
 	}
 }
