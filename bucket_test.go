@@ -423,6 +423,22 @@ func TestBucket_Delete_FreelistOverflow(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+
+	// Check more than an overflow's worth of pages are freed.
+	stats := db.Stats()
+	freePages := stats.FreePageN + stats.PendingPageN
+	if freePages <= 0xFFFF {
+		t.Fatalf("expected more than 0xFFFF free pages, got %v", freePages)
+	}
+
+	// Free page count should be preserved on reopen.
+	if err := db.DB.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db.MustReopen()
+	if reopenFreePages := db.Stats().FreePageN; freePages != reopenFreePages {
+		t.Fatalf("expected %d free pages, got %+v", freePages, db.Stats())
+	}
 }
 
 // Ensure that accessing and updating nested buckets is ok across transactions.
