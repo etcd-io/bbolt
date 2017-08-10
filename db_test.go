@@ -347,12 +347,13 @@ func TestOpen_FileTooSmall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pageSize := int64(db.Info().PageSize)
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
 
 	// corrupt the database
-	if err := os.Truncate(path, int64(os.Getpagesize())); err != nil {
+	if err := os.Truncate(path, pageSize); err != nil {
 		t.Fatal(err)
 	}
 
