@@ -188,17 +188,9 @@ func (cmd *CheckCommand) Run(args ...string) error {
 	// Perform consistency check.
 	return db.View(func(tx *bolt.Tx) error {
 		var count int
-		ch := tx.Check()
-	loop:
-		for {
-			select {
-			case err, ok := <-ch:
-				if !ok {
-					break loop
-				}
-				fmt.Fprintln(cmd.Stdout, err)
-				count++
-			}
+		for err := range tx.Check() {
+			fmt.Fprintln(cmd.Stdout, err)
+			count++
 		}
 
 		// Print summary of errors.
