@@ -240,6 +240,10 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 		return nil, err
 	}
 
+	if db.readOnly {
+		return db, nil
+	}
+
 	db.freelist = newFreelist()
 	noFreeList := db.meta().freelist == pgidNoFreelist
 	if noFreeList {
@@ -253,7 +257,7 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 
 	// Flush freelist when transitioning from no sync to sync so
 	// NoFreelistSync unaware boltdb can open the db later.
-	if !db.NoFreelistSync && noFreeList && ((mode & 0222) != 0) {
+	if !db.NoFreelistSync && noFreeList {
 		tx, err := db.Begin(true)
 		if tx != nil {
 			err = tx.Commit()
