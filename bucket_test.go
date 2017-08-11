@@ -1214,7 +1214,7 @@ func TestBucket_Stats(t *testing.T) {
 		}
 
 		// Only check allocations for 4KB pages.
-		if os.Getpagesize() == 4096 {
+		if db.Info().PageSize == 4096 {
 			if stats.BranchAlloc != 4096 {
 				t.Fatalf("unexpected BranchAlloc: %d", stats.BranchAlloc)
 			} else if stats.LeafAlloc != 36864 {
@@ -1347,7 +1347,7 @@ func TestBucket_Stats_Small(t *testing.T) {
 			t.Fatalf("unexpected LeafInuse: %d", stats.LeafInuse)
 		}
 
-		if os.Getpagesize() == 4096 {
+		if db.Info().PageSize == 4096 {
 			if stats.BranchAlloc != 0 {
 				t.Fatalf("unexpected BranchAlloc: %d", stats.BranchAlloc)
 			} else if stats.LeafAlloc != 0 {
@@ -1406,7 +1406,7 @@ func TestBucket_Stats_EmptyBucket(t *testing.T) {
 			t.Fatalf("unexpected LeafInuse: %d", stats.LeafInuse)
 		}
 
-		if os.Getpagesize() == 4096 {
+		if db.Info().PageSize == 4096 {
 			if stats.BranchAlloc != 0 {
 				t.Fatalf("unexpected BranchAlloc: %d", stats.BranchAlloc)
 			} else if stats.LeafAlloc != 0 {
@@ -1508,7 +1508,7 @@ func TestBucket_Stats_Nested(t *testing.T) {
 			t.Fatalf("unexpected LeafInuse: %d", stats.LeafInuse)
 		}
 
-		if os.Getpagesize() == 4096 {
+		if db.Info().PageSize == 4096 {
 			if stats.BranchAlloc != 0 {
 				t.Fatalf("unexpected BranchAlloc: %d", stats.BranchAlloc)
 			} else if stats.LeafAlloc != 8192 {
@@ -1581,7 +1581,7 @@ func TestBucket_Stats_Large(t *testing.T) {
 			t.Fatalf("unexpected LeafInuse: %d", stats.LeafInuse)
 		}
 
-		if os.Getpagesize() == 4096 {
+		if db.Info().PageSize == 4096 {
 			if stats.BranchAlloc != 53248 {
 				t.Fatalf("unexpected BranchAlloc: %d", stats.BranchAlloc)
 			} else if stats.LeafAlloc != 4898816 {

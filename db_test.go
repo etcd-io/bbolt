@@ -339,12 +339,13 @@ func TestOpen_FileTooSmall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pageSize := int64(db.Info().PageSize)
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
 
 	// corrupt the database
-	if err := os.Truncate(path, int64(os.Getpagesize())); err != nil {
+	if err := os.Truncate(path, pageSize); err != nil {
 		t.Fatal(err)
 	}
 
@@ -411,6 +412,22 @@ func TestDB_Open_InitialMmapSize(t *testing.T) {
 
 	if err := rtx.Rollback(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestOpen_BigPage checks the database uses bigger pages when
+// changing PageSize.
+func TestOpen_BigPage(t *testing.T) {
+	pageSize := os.Getpagesize()
+
+	db1 := MustOpenWithOption(&bolt.Options{PageSize: pageSize * 2})
+	defer db1.MustClose()
+
+	db2 := MustOpenWithOption(&bolt.Options{PageSize: pageSize * 4})
+	defer db2.MustClose()
+
+	if db1sz, db2sz := fileSize(db1.f), fileSize(db2.f); db1sz >= db2sz {
+		t.Errorf("expected %d < %d", db1sz, db2sz)
 	}
 }
 
