@@ -48,12 +48,6 @@ var (
 
 	// ErrPageIDRequired is returned when a required page id is not specified.
 	ErrPageIDRequired = errors.New("page id required")
-
-	// ErrPageNotFound is returned when specifying a page above the high water mark.
-	ErrPageNotFound = errors.New("page not found")
-
-	// ErrPageFreed is returned when reading a page that has already been freed.
-	ErrPageFreed = errors.New("page freed")
 )
 
 // PageHeaderSize represents the size of the bolt.page header.
@@ -188,17 +182,9 @@ func (cmd *CheckCommand) Run(args ...string) error {
 	// Perform consistency check.
 	return db.View(func(tx *bolt.Tx) error {
 		var count int
-		ch := tx.Check()
-	loop:
-		for {
-			select {
-			case err, ok := <-ch:
-				if !ok {
-					break loop
-				}
-				fmt.Fprintln(cmd.Stdout, err)
-				count++
-			}
+		for err := range tx.Check() {
+			fmt.Fprintln(cmd.Stdout, err)
+			count++
 		}
 
 		// Print summary of errors.
@@ -1031,12 +1017,12 @@ func (cmd *BenchCommand) runWritesRandom(db *bolt.DB, options *BenchOptions, res
 
 func (cmd *BenchCommand) runWritesSequentialNested(db *bolt.DB, options *BenchOptions, results *BenchResults) error {
 	var i = uint32(0)
-	return cmd.runWritesWithSource(db, options, results, func() uint32 { i++; return i })
+	return cmd.runWritesNestedWithSource(db, options, results, func() uint32 { i++; return i })
 }
 
 func (cmd *BenchCommand) runWritesRandomNested(db *bolt.DB, options *BenchOptions, results *BenchResults) error {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	return cmd.runWritesWithSource(db, options, results, func() uint32 { return r.Uint32() })
+	return cmd.runWritesNestedWithSource(db, options, results, func() uint32 { return r.Uint32() })
 }
 
 func (cmd *BenchCommand) runWritesWithSource(db *bolt.DB, options *BenchOptions, results *BenchResults, keySource func() uint32) error {

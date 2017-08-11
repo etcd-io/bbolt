@@ -14,13 +14,6 @@ const (
 	MaxValueSize = (1 << 31) - 2
 )
 
-const (
-	maxUint = ^uint(0)
-	minUint = 0
-	maxInt  = int(^uint(0) >> 1)
-	minInt  = -maxInt - 1
-)
-
 const bucketHeaderSize = int(unsafe.Sizeof(bucket{}))
 
 const (
