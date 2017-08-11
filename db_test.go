@@ -423,6 +423,22 @@ func TestDB_Open_InitialMmapSize(t *testing.T) {
 	}
 }
 
+// TestOpen_BigPage checks the database uses bigger pages when
+// changing PageSize.
+func TestOpen_BigPage(t *testing.T) {
+	pageSize := os.Getpagesize()
+
+	db1 := MustOpenWithOption(&bolt.Options{PageSize: pageSize * 2})
+	defer db1.MustClose()
+
+	db2 := MustOpenWithOption(&bolt.Options{PageSize: pageSize * 4})
+	defer db2.MustClose()
+
+	if db1sz, db2sz := fileSize(db1.f), fileSize(db2.f); db1sz >= db2sz {
+		t.Errorf("expected %d < %d", db1sz, db2sz)
+	}
+}
+
 // TestOpen_RecoverFreeList tests opening the DB with free-list
 // write-out after no free list sync will recover the free list
 // and write it out.
