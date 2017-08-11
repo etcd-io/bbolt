@@ -146,7 +146,7 @@ The commands are:
     buckets     print a list of buckets
     check       verifies integrity of bolt database
     compact     copies a bolt database, compacting it in the process
-    dump        print a hexidecimal dump of a single page
+    dump        print a hexadecimal dump of a single page
     get         print the value of a key in a bucket
     info        print basic info
     keys        print a list of keys in a bucket
