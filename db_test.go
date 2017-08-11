@@ -12,8 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -23,12 +21,6 @@ import (
 )
 
 var statsFlag = flag.Bool("stats", false, "show performance stats")
-
-// version is the data file format version.
-const version = 2
-
-// magic is the marker value to indicate that a file is a Bolt DB.
-const magic uint32 = 0xED0CDAED
 
 // pageSize is the size of one page in the data file.
 const pageSize = 4096
@@ -1575,40 +1567,6 @@ func tempfile() string {
 	return f.Name()
 }
 
-// mustContainKeys checks that a bucket contains a given set of keys.
-func mustContainKeys(b *bolt.Bucket, m map[string]string) {
-	found := make(map[string]string)
-	if err := b.ForEach(func(k, _ []byte) error {
-		found[string(k)] = ""
-		return nil
-	}); err != nil {
-		panic(err)
-	}
-
-	// Check for keys found in bucket that shouldn't be there.
-	var keys []string
-	for k := range found {
-		if _, ok := m[string(k)]; !ok {
-			keys = append(keys, k)
-		}
-	}
-	if len(keys) > 0 {
-		sort.Strings(keys)
-		panic(fmt.Sprintf("keys found(%d): %s", len(keys), strings.Join(keys, ",")))
-	}
-
-	// Check for keys not found in bucket that should be there.
-	for k := range m {
-		if _, ok := found[string(k)]; !ok {
-			keys = append(keys, k)
-		}
-	}
-	if len(keys) > 0 {
-		sort.Strings(keys)
-		panic(fmt.Sprintf("keys not found(%d): %s", len(keys), strings.Join(keys, ",")))
-	}
-}
-
 func trunc(b []byte, length int) []byte {
 	if length < len(b) {
 		return b[:length]
@@ -1628,15 +1586,9 @@ func fileSize(path string) int64 {
 	return fi.Size()
 }
 
-func warn(v ...interface{})              { fmt.Fprintln(os.Stderr, v...) }
-func warnf(msg string, v ...interface{}) { fmt.Fprintf(os.Stderr, msg+"\n", v...) }
-
 // u64tob converts a uint64 into an 8-byte slice.
 func u64tob(v uint64) []byte {
 	b := make([]byte, 8)
 	binary.BigEndian.PutUint64(b, v)
 	return b
 }
-
-// btou64 converts an 8-byte slice into an uint64.
-func btou64(b []byte) uint64 { return binary.BigEndian.Uint64(b) }

@@ -7,9 +7,7 @@ import (
 	"log"
 	"os"
 	"runtime"
-	"runtime/debug"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -193,6 +191,7 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 	// The database file is locked using the shared lock (more than one process may
 	// hold a lock at the same time) otherwise (options.ReadOnly is set).
 	if err := flock(db, mode, !db.readOnly, options.Timeout); err != nil {
+		db.lockfile = nil // make 'unused' happy. TODO: rework locks
 		_ = db.close()
 		return nil, err
 	}
@@ -1040,10 +1039,6 @@ func (s *Stats) Sub(other *Stats) Stats {
 	return diff
 }
 
-func (s *Stats) add(other *Stats) {
-	s.TxStats.add(&other.TxStats)
-}
-
 type Info struct {
 	Data     uintptr
 	PageSize int
@@ -1109,12 +1104,4 @@ func _assert(condition bool, msg string, v ...interface{}) {
 	if !condition {
 		panic(fmt.Sprintf("assertion failed: "+msg, v...))
 	}
-}
-
-func warn(v ...interface{})              { fmt.Fprintln(os.Stderr, v...) }
-func warnf(msg string, v ...interface{}) { fmt.Fprintf(os.Stderr, msg+"\n", v...) }
-
-func printstack() {
-	stack := strings.Join(strings.Split(string(debug.Stack()), "\n")[2:], "\n")
-	fmt.Fprintln(os.Stderr, stack)
 }
