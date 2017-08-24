@@ -1,7 +1,13 @@
-Bolt
+bbolt
 ====
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/coreos/bbolt?style=flat-square)](https://goreportcard.com/report/github.com/coreos/bbolt) [![Godoc](http://img.shields.io/badge/go-documentation-blue.svg?style=flat-square)](https://godoc.org/github.com/coreos/bbolt)
+
+bbolt is a fork of [Ben Johnson's][gh_ben] moribund [Bolt][bolt] key/value
+store. The purpose of this fork is to provide the Go community with an active
+maintenance and development target for Bolt; the goal is improved reliability
+and stability. bbolt includes bug fixes, performance enhancements, and features
+not found in Bolt while preserving backwards compatibility with the Bolt API.
 
 Bolt is a pure Go key/value store inspired by [Howard Chu's][hyc_symas]
 [LMDB project][lmdb]. The goal of the project is to provide a simple,
@@ -12,6 +18,8 @@ Since Bolt is meant to be used as such a low-level piece of functionality,
 simplicity is key. The API will be small and only focus on getting values
 and setting values. That's it.
 
+[gh_ben]: https://github.com/benbjohnson
+[bolt]: https://github.com/boltdb/bolt
 [hyc_symas]: https://twitter.com/hyc_symas
 [lmdb]: http://symas.com/mdb/
 
@@ -813,7 +821,7 @@ Here are a few things to note when evaluating and using Bolt:
 
 ## Reading the Source
 
-Bolt is a relatively small code base (<3KLOC) for an embedded, serializable,
+Bolt is a relatively small code base (<5KLOC) for an embedded, serializable,
 transactional key/value database so it can be a good starting point for people
 interested in how databases work.
 
