@@ -160,6 +160,7 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 	if options == nil {
 		options = DefaultOptions
 	}
+	db.NoSync = options.NoSync
 	db.NoGrowSync = options.NoGrowSync
 	db.MmapFlags = options.MmapFlags
 	db.NoFreelistSync = options.NoFreelistSync
@@ -1008,6 +1009,11 @@ type Options struct {
 
 	// PageSize overrides the default OS page size.
 	PageSize int
+
+	// NoSync sets the initial value of DB.NoSync. Normally this can just be
+	// set directly on the DB itself when returned from Open(), but this option
+	// is useful in APIs which expose Options but not the underlying DB.
+	NoSync bool
 }
 
 // DefaultOptions represent the options used if nil options are passed into Open().
