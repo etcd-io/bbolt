@@ -1,7 +1,9 @@
 bbolt
 ====
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/coreos/bbolt?style=flat-square)](https://goreportcard.com/report/github.com/coreos/bbolt) [![Godoc](http://img.shields.io/badge/go-documentation-blue.svg?style=flat-square)](https://godoc.org/github.com/coreos/bbolt)
+[![Go Report Card](https://goreportcard.com/badge/github.com/coreos/bbolt?style=flat-square)](https://goreportcard.com/report/github.com/coreos/bbolt)
+[![Coverage](https://codecov.io/gh/coreos/bbolt/branch/master/graph/badge.svg)](https://codecov.io/gh/coreos/bbolt)
+[![Godoc](http://img.shields.io/badge/go-documentation-blue.svg?style=flat-square)](https://godoc.org/github.com/coreos/bbolt)
 
 bbolt is a fork of [Ben Johnson's][gh_ben] moribund [Bolt][bolt] key/value
 store. The purpose of this fork is to provide the Go community with an active

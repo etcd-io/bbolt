@@ -20,7 +20,8 @@ errcheck:
 	@errcheck -ignorepkg=bytes -ignore=os:Remove github.com/coreos/bbolt
 
 test:
-	@go test -v -cover .
-	@go test -v ./cmd/bolt
+	go test -timeout 20m -v -coverprofile cover.out -covermode atomic
+	# Note: gets "program not an importable package" in out of path builds
+	go test -v ./cmd/bolt
 
-.PHONY: fmt test
+.PHONY: race fmt errcheck test
