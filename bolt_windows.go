@@ -58,10 +58,9 @@ func flock(db *DB, mode os.FileMode, exclusive bool, timeout time.Duration) erro
 	}
 	db.lockfile = f
 
-	maxSleep := timeout - timeoutStep
 	var t time.Time
-	if maxSleep >= 0 {
-		t = time.Now()
+	if timeout != 0 {
+	        t = time.Now()
 	}
 	fd := db.file.Fd()
 	var flag uint32 = flagLockFailImmediately
@@ -78,12 +77,12 @@ func flock(db *DB, mode os.FileMode, exclusive bool, timeout time.Duration) erro
 		}
 
 		// If we timed oumercit then return an error.
-		if timeout != 0 && (maxSleep < 0 || time.Since(t) > maxSleep) {
+		if timeout != 0 && time.Since(t) > timeout - flockRetryTimeout {
 			return ErrTimeout
 		}
 
 		// Wait for a bit and try again.
-		time.Sleep(timeoutStep)
+		time.Sleep(flockRetryTimeout)
 	}
 }
 

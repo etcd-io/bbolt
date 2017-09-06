@@ -40,8 +40,8 @@ const (
 // default page size for db is set to the OS page size.
 var defaultPageSize = os.Getpagesize()
 
-// The step used by the timeout mechanisms.
-const timeoutStep = 50 * time.Millisecond
+// The time elapsed between consecutive file locking attempts.
+const flockRetryTimeout = 50 * time.Millisecond
 
 // DB represents a collection of buckets persisted to a file on disk.
 // All data access is performed through transactions which can be obtained through the DB.
