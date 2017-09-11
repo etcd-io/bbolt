@@ -317,7 +317,11 @@ func (tx *Tx) WriteTo(w io.Writer) (n int64, err error) {
 	if err != nil {
 		return 0, err
 	}
-	defer func() { _ = f.Close() }()
+	defer func() {
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
+	}()
 
 	// Generate a meta page. We use the same page data for both meta pages.
 	buf := make([]byte, tx.db.pageSize)
@@ -356,7 +360,7 @@ func (tx *Tx) WriteTo(w io.Writer) (n int64, err error) {
 		return n, err
 	}
 
-	return n, f.Close()
+	return n, nil
 }
 
 // CopyFile copies the entire database to file at the given path.
