@@ -687,11 +687,7 @@ func (db *DB) View(fn func(*Tx) error) error {
 		return err
 	}
 
-	if err := t.Rollback(); err != nil {
-		return err
-	}
-
-	return nil
+	return t.Rollback()
 }
 
 // Batch calls fn as part of a batch. It behaves similar to Update,
