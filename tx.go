@@ -345,7 +345,7 @@ func (tx *Tx) WriteTo(w io.Writer) (n int64, err error) {
 	}
 
 	// Move past the meta pages in the file.
-	if _, err := f.Seek(int64(tx.db.pageSize*2), os.SEEK_SET); err != nil {
+	if _, err := f.Seek(int64(tx.db.pageSize*2), io.SeekStart); err != nil {
 		return n, fmt.Errorf("seek: %s", err)
 	}
 
