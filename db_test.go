@@ -415,6 +415,59 @@ func TestDB_Open_InitialMmapSize(t *testing.T) {
 	}
 }
 
+// TestDB_Open_ReadOnly checks a database in read only mode can read but not write.
+func TestDB_Open_ReadOnly(t *testing.T) {
+	// Create a writable db, write k-v and close it.
+	db := MustOpenDB()
+	defer db.Close()
+	if err := db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucket([]byte("widgets"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := b.Put([]byte("foo"), []byte("bar")); err != nil {
+			t.Fatal(err)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.DB.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	f := db.f
+	o := &bolt.Options{ReadOnly: true}
+	readOnlyDB, err := bolt.Open(f, 0666, o)
+	if err != nil {
+		panic(err)
+	}
+
+	if !readOnlyDB.IsReadOnly() {
+		t.Fatal("expect db in read only mode")
+	}
+
+	// Read from a read-only transaction.
+	if err := readOnlyDB.View(func(tx *bolt.Tx) error {
+		value := tx.Bucket([]byte("widgets")).Get([]byte("foo"))
+		if bytes.Compare(value, []byte("bar")) != 0 {
+			t.Fatal("expect value 'bar', got", value)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Can't launch read-write transaction.
+	if _, err := readOnlyDB.Begin(true); err != bolt.ErrDatabaseReadOnly {
+		t.Fatalf("unexpected error: %s", err)
+	}
+
+	if err := readOnlyDB.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestOpen_BigPage checks the database uses bigger pages when
 // changing PageSize.
 func TestOpen_BigPage(t *testing.T) {
@@ -1449,15 +1502,7 @@ type DB struct {
 
 // MustOpenDB returns a new, open DB at a temporary location.
 func MustOpenDB() *DB {
-	f := tempfile()
-	db, err := bolt.Open(f, 0666, nil)
-	if err != nil {
-		panic(err)
-	}
-	return &DB{
-		DB: db,
-		f:  f,
-	}
+	return MustOpenWithOption(nil)
 }
 
 // MustOpenDBWithOption returns a new, open DB at a temporary location with given options.
