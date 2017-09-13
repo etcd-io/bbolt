@@ -395,6 +395,9 @@ func (tx *Tx) Check() <-chan error {
 }
 
 func (tx *Tx) check(ch chan error) {
+	// Force loading free list if opened in ReadOnly mode.
+	tx.db.loadFreelist()
+
 	// Check if any pages are double freed.
 	freed := make(map[pgid]bool)
 	all := make([]pgid, tx.db.freelist.count())
