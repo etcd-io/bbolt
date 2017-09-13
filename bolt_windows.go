@@ -60,7 +60,7 @@ func flock(db *DB, mode os.FileMode, exclusive bool, timeout time.Duration) erro
 
 	var t time.Time
 	if timeout != 0 {
-	        t = time.Now()
+		t = time.Now()
 	}
 	fd := db.file.Fd()
 	var flag uint32 = flagLockFailImmediately
@@ -77,7 +77,7 @@ func flock(db *DB, mode os.FileMode, exclusive bool, timeout time.Duration) erro
 		}
 
 		// If we timed oumercit then return an error.
-		if timeout != 0 && time.Since(t) > timeout - flockRetryTimeout {
+		if timeout != 0 && time.Since(t) > timeout-flockRetryTimeout {
 			return ErrTimeout
 		}
 
