@@ -11,6 +11,54 @@ import (
 	"github.com/coreos/bbolt"
 )
 
+// TestTx_Check_ReadOnly tests consistency checking on a ReadOnly database.
+func TestTx_Check_ReadOnly(t *testing.T) {
+	db := MustOpenDB()
+	defer db.Close()
+	if err := db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucket([]byte("widgets"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := b.Put([]byte("foo"), []byte("bar")); err != nil {
+			t.Fatal(err)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.DB.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	readOnlyDB, err := bolt.Open(db.f, 0666, &bolt.Options{ReadOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer readOnlyDB.Close()
+
+	tx, err := readOnlyDB.Begin(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// ReadOnly DB will load freelist on Check call.
+	numChecks := 2
+	errc := make(chan error, numChecks)
+	check := func() {
+		err, _ := <-tx.Check()
+		errc <- err
+	}
+	// Ensure the freelist is not reloaded and does not race.
+	for i := 0; i < numChecks; i++ {
+		go check()
+	}
+	for i := 0; i < numChecks; i++ {
+		if err := <-errc; err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 // Ensure that committing a closed transaction returns an error.
 func TestTx_Commit_ErrTxClosed(t *testing.T) {
 	db := MustOpenDB()
