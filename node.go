@@ -39,9 +39,10 @@ func (n *node) minKeys() int {
 // size returns the size of the node after serialization.
 func (n *node) size() int {
 	sz, elsz := pageHeaderSize, n.pageElementSize()
+	sz += len(n.inodes) * elsz
 	for i := 0; i < len(n.inodes); i++ {
 		item := &n.inodes[i]
-		sz += elsz + len(item.key) + len(item.value)
+		sz += len(item.key) + len(item.value)
 	}
 	return sz
 }
@@ -51,9 +52,10 @@ func (n *node) size() int {
 // to know if it fits inside a certain page size.
 func (n *node) sizeLessThan(v int) bool {
 	sz, elsz := pageHeaderSize, n.pageElementSize()
+	sz += len(n.inodes) * elsz
 	for i := 0; i < len(n.inodes); i++ {
 		item := &n.inodes[i]
-		sz += elsz + len(item.key) + len(item.value)
+		sz += len(item.key) + len(item.value)
 		if sz >= v {
 			return false
 		}
