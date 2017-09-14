@@ -450,7 +450,7 @@ func TestDB_Open_ReadOnly(t *testing.T) {
 	// Read from a read-only transaction.
 	if err := readOnlyDB.View(func(tx *bolt.Tx) error {
 		value := tx.Bucket([]byte("widgets")).Get([]byte("foo"))
-		if bytes.Compare(value, []byte("bar")) != 0 {
+		if !bytes.Equal(value, []byte("bar")) {
 			t.Fatal("expect value 'bar', got", value)
 		}
 		return nil
