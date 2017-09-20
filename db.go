@@ -116,8 +116,11 @@ type DB struct {
 	opened   bool
 	rwtx     *Tx
 	txs      []*Tx
-	freelist *freelist
 	stats    Stats
+
+	freelist      *freelist
+	freelistLoad  sync.Once
+	freelistReady chan struct{} // closed once freelist is loaded
 
 	pagePool sync.Pool
 
@@ -157,8 +160,10 @@ func (db *DB) String() string {
 // If the file does not exist then it will be created automatically.
 // Passing in nil options will cause Bolt to open the database with the default options.
 func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
-	var db = &DB{opened: true}
-
+	db := &DB{
+		opened:        true,
+		freelistReady: make(chan struct{}),
+	}
 	// Set default options if no options are provided.
 	if options == nil {
 		options = DefaultOptions
@@ -254,20 +259,11 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 		return db, nil
 	}
 
-	db.freelist = newFreelist()
-	noFreeList := db.meta().freelist == pgidNoFreelist
-	if noFreeList {
-		// Reconstruct free list by scanning the DB.
-		db.freelist.readIDs(db.freepages())
-	} else {
-		// Read free list from freelist page.
-		db.freelist.read(db.page(db.meta().freelist))
-	}
-	db.stats.FreePageN = len(db.freelist.ids)
+	hasFreeList := db.readFreelist()
 
 	// Flush freelist when transitioning from no sync to sync so
 	// NoFreelistSync unaware boltdb can open the db later.
-	if !db.NoFreelistSync && noFreeList {
+	if !db.NoFreelistSync && !hasFreeList {
 		tx, err := db.Begin(true)
 		if tx != nil {
 			err = tx.Commit()
@@ -280,6 +276,26 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 
 	// Mark the database as opened and return.
 	return db, nil
+}
+
+// readFreelist is called on Open and tx.Check. It assumes there are no
+// concurrenct accesses are being made to the freelist.
+func (db *DB) readFreelist() bool {
+	hasFreeList := db.meta().freelist != pgidNoFreelist
+	db.freelistLoad.Do(func() {
+		db.freelist = newFreelist()
+		if !hasFreeList {
+			// Reconstruct free list by scanning the DB.
+			db.freelist.readIDs(db.freepages())
+		} else {
+			// Read free list from freelist page.
+			db.freelist.read(db.page(db.meta().freelist))
+		}
+		db.stats.FreePageN = len(db.freelist.ids)
+		close(db.freelistReady)
+	})
+	<-db.freelistReady
+	return hasFreeList
 }
 
 // mmap opens the underlying memory-mapped file and initializes the meta references.
