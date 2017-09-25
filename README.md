@@ -5,7 +5,7 @@ bbolt
 [![Coverage](https://codecov.io/gh/coreos/bbolt/branch/master/graph/badge.svg)](https://codecov.io/gh/coreos/bbolt)
 [![Godoc](http://img.shields.io/badge/go-documentation-blue.svg?style=flat-square)](https://godoc.org/github.com/coreos/bbolt)
 
-bbolt is a fork of [Ben Johnson's][gh_ben] moribund [Bolt][bolt] key/value
+bbolt is a fork of [Ben Johnson's][gh_ben] [Bolt][bolt] key/value
 store. The purpose of this fork is to provide the Go community with an active
 maintenance and development target for Bolt; the goal is improved reliability
 and stability. bbolt includes bug fixes, performance enhancements, and features
