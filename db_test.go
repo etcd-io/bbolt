@@ -44,6 +44,8 @@ type meta struct {
 // Ensure that a database can be opened without error.
 func TestOpen(t *testing.T) {
 	path := tempfile()
+	defer os.RemoveAll(path)
+
 	db, err := bolt.Open(path, 0666, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -79,6 +81,7 @@ func TestOpen_ErrNotExists(t *testing.T) {
 // Ensure that opening a file that is not a Bolt database returns ErrInvalid.
 func TestOpen_ErrInvalid(t *testing.T) {
 	path := tempfile()
+	defer os.RemoveAll(path)
 
 	f, err := os.Create(path)
 	if err != nil {
@@ -90,7 +93,6 @@ func TestOpen_ErrInvalid(t *testing.T) {
 	if err := f.Close(); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(path)
 
 	if _, err := bolt.Open(path, 0666, nil); err != bolt.ErrInvalid {
 		t.Fatalf("unexpected error: %s", err)
@@ -302,15 +304,16 @@ func TestOpen_Size_Large(t *testing.T) {
 // Ensure that a re-opened database is consistent.
 func TestOpen_Check(t *testing.T) {
 	path := tempfile()
+	defer os.RemoveAll(path)
 
 	db, err := bolt.Open(path, 0666, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.View(func(tx *bolt.Tx) error { return <-tx.Check() }); err != nil {
+	if err = db.View(func(tx *bolt.Tx) error { return <-tx.Check() }); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Close(); err != nil {
+	if err = db.Close(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -334,18 +337,19 @@ func TestOpen_MetaInitWriteError(t *testing.T) {
 // Ensure that a database that is too small returns an error.
 func TestOpen_FileTooSmall(t *testing.T) {
 	path := tempfile()
+	defer os.RemoveAll(path)
 
 	db, err := bolt.Open(path, 0666, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	pageSize := int64(db.Info().PageSize)
-	if err := db.Close(); err != nil {
+	if err = db.Close(); err != nil {
 		t.Fatal(err)
 	}
 
 	// corrupt the database
-	if err := os.Truncate(path, pageSize); err != nil {
+	if err = os.Truncate(path, pageSize); err != nil {
 		t.Fatal(err)
 	}
 
@@ -419,7 +423,8 @@ func TestDB_Open_InitialMmapSize(t *testing.T) {
 func TestDB_Open_ReadOnly(t *testing.T) {
 	// Create a writable db, write k-v and close it.
 	db := MustOpenDB()
-	defer db.Close()
+	defer db.MustClose()
+
 	if err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
 		if err != nil {
@@ -507,7 +512,7 @@ func TestOpen_RecoverFreeList(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := tx.Commit(); err != nil {
+	if err = tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1270,7 +1275,7 @@ func ExampleDB_Begin_ReadOnly() {
 	defer os.Remove(db.Path())
 
 	// Create a bucket using a read-write transaction.
-	if err := db.Update(func(tx *bolt.Tx) error {
+	if err = db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucket([]byte("widgets"))
 		return err
 	}); err != nil {
@@ -1283,16 +1288,16 @@ func ExampleDB_Begin_ReadOnly() {
 		log.Fatal(err)
 	}
 	b := tx.Bucket([]byte("widgets"))
-	if err := b.Put([]byte("john"), []byte("blue")); err != nil {
+	if err = b.Put([]byte("john"), []byte("blue")); err != nil {
 		log.Fatal(err)
 	}
-	if err := b.Put([]byte("abby"), []byte("red")); err != nil {
+	if err = b.Put([]byte("abby"), []byte("red")); err != nil {
 		log.Fatal(err)
 	}
-	if err := b.Put([]byte("zephyr"), []byte("purple")); err != nil {
+	if err = b.Put([]byte("zephyr"), []byte("purple")); err != nil {
 		log.Fatal(err)
 	}
-	if err := tx.Commit(); err != nil {
+	if err = tx.Commit(); err != nil {
 		log.Fatal(err)
 	}
 
@@ -1306,11 +1311,11 @@ func ExampleDB_Begin_ReadOnly() {
 		fmt.Printf("%s likes %s\n", k, v)
 	}
 
-	if err := tx.Rollback(); err != nil {
+	if err = tx.Rollback(); err != nil {
 		log.Fatal(err)
 	}
 
-	if err := db.Close(); err != nil {
+	if err = db.Close(); err != nil {
 		log.Fatal(err)
 	}
 
