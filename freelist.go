@@ -132,9 +132,9 @@ func (f *freelist) free(txid txid, p *page) {
 	allocTxid, ok := f.allocs[p.id]
 	if ok {
 		delete(f.allocs, p.id)
-	} else if (p.flags & (freelistPageFlag | metaPageFlag)) != 0 {
-		// Safe to claim txid as allocating since these types are private to txid.
-		allocTxid = txid
+	} else if (p.flags & freelistPageFlag) != 0 {
+		// Freelist is always allocated by prior tx.
+		allocTxid = txid - 1
 	}
 
 	for id := p.id; id <= p.id+pgid(p.overflow); id++ {
