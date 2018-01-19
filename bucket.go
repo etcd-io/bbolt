@@ -182,7 +182,7 @@ func (b *Bucket) CreateBucket(key []byte) (*Bucket, error) {
 
 	// Insert into node.
 	key = cloneBytes(key)
-	c.node().put(key, key, value, 0, bucketLeafFlag)
+	c.node().put(key, value, 0, bucketLeafFlag)
 
 	// Since subbuckets are not allowed on inline buckets, we need to
 	// dereference the inline page, if it exists. This will cause the bucket
@@ -299,7 +299,7 @@ func (b *Bucket) Put(key []byte, value []byte) error {
 
 	// Insert into node.
 	key = cloneBytes(key)
-	c.node().put(key, key, value, 0, 0)
+	c.node().put(key, value, 0, 0)
 
 	return nil
 }
@@ -556,7 +556,7 @@ func (b *Bucket) spill() error {
 		if flags&bucketLeafFlag == 0 {
 			panic(fmt.Sprintf("unexpected bucket header flag: %x", flags))
 		}
-		c.node().put([]byte(name), []byte(name), value, 0, bucketLeafFlag)
+		c.node().put([]byte(name), value, 0, bucketLeafFlag)
 	}
 
 	// Ignore if there's not a materialized root node.
