@@ -8,10 +8,10 @@ import (
 // Ensure that a node can insert a key/value.
 func TestNode_put(t *testing.T) {
 	n := &node{inodes: make(inodes, 0), bucket: &Bucket{tx: &Tx{meta: &meta{pgid: 1}}}}
-	n.put([]byte("baz"), []byte("baz"), []byte("2"), 0, 0)
-	n.put([]byte("foo"), []byte("foo"), []byte("0"), 0, 0)
-	n.put([]byte("bar"), []byte("bar"), []byte("1"), 0, 0)
-	n.put([]byte("foo"), []byte("foo"), []byte("3"), 0, leafPageFlag)
+	n.put([]byte("baz"), []byte("2"), 0, 0)
+	n.put([]byte("foo"), []byte("0"), 0, 0)
+	n.put([]byte("bar"), []byte("1"), 0, 0)
+	n.put([]byte("foo"), []byte("3"), 0, leafPageFlag)
 
 	if len(n.inodes) != 3 {
 		t.Fatalf("exp=3; got=%d", len(n.inodes))
@@ -71,9 +71,9 @@ func TestNode_read_LeafPage(t *testing.T) {
 func TestNode_write_LeafPage(t *testing.T) {
 	// Create a node.
 	n := &node{isLeaf: true, inodes: make(inodes, 0), bucket: &Bucket{tx: &Tx{db: &DB{}, meta: &meta{pgid: 1}}}}
-	n.put([]byte("susy"), []byte("susy"), []byte("que"), 0, 0)
-	n.put([]byte("ricki"), []byte("ricki"), []byte("lake"), 0, 0)
-	n.put([]byte("john"), []byte("john"), []byte("johnson"), 0, 0)
+	n.put([]byte("susy"), []byte("que"), 0, 0)
+	n.put([]byte("ricki"), []byte("lake"), 0, 0)
+	n.put([]byte("john"), []byte("johnson"), 0, 0)
 
 	// Write it to a page.
 	var buf [4096]byte
@@ -103,11 +103,11 @@ func TestNode_write_LeafPage(t *testing.T) {
 func TestNode_split(t *testing.T) {
 	// Create a node.
 	n := &node{inodes: make(inodes, 0), bucket: &Bucket{tx: &Tx{db: &DB{}, meta: &meta{pgid: 1}}}}
-	n.put([]byte("00000001"), []byte("00000001"), []byte("0123456701234567"), 0, 0)
-	n.put([]byte("00000002"), []byte("00000002"), []byte("0123456701234567"), 0, 0)
-	n.put([]byte("00000003"), []byte("00000003"), []byte("0123456701234567"), 0, 0)
-	n.put([]byte("00000004"), []byte("00000004"), []byte("0123456701234567"), 0, 0)
-	n.put([]byte("00000005"), []byte("00000005"), []byte("0123456701234567"), 0, 0)
+	n.put([]byte("00000001"), []byte("0123456701234567"), 0, 0)
+	n.put([]byte("00000002"), []byte("0123456701234567"), 0, 0)
+	n.put([]byte("00000003"), []byte("0123456701234567"), 0, 0)
+	n.put([]byte("00000004"), []byte("0123456701234567"), 0, 0)
+	n.put([]byte("00000005"), []byte("0123456701234567"), 0, 0)
 
 	// Split between 2 & 3.
 	n.split(100)
@@ -128,8 +128,8 @@ func TestNode_split(t *testing.T) {
 func TestNode_split_MinKeys(t *testing.T) {
 	// Create a node.
 	n := &node{inodes: make(inodes, 0), bucket: &Bucket{tx: &Tx{db: &DB{}, meta: &meta{pgid: 1}}}}
-	n.put([]byte("00000001"), []byte("00000001"), []byte("0123456701234567"), 0, 0)
-	n.put([]byte("00000002"), []byte("00000002"), []byte("0123456701234567"), 0, 0)
+	n.put([]byte("00000001"), []byte("0123456701234567"), 0, 0)
+	n.put([]byte("00000002"), []byte("0123456701234567"), 0, 0)
 
 	// Split.
 	n.split(20)
@@ -142,11 +142,11 @@ func TestNode_split_MinKeys(t *testing.T) {
 func TestNode_split_SinglePage(t *testing.T) {
 	// Create a node.
 	n := &node{inodes: make(inodes, 0), bucket: &Bucket{tx: &Tx{db: &DB{}, meta: &meta{pgid: 1}}}}
-	n.put([]byte("00000001"), []byte("00000001"), []byte("0123456701234567"), 0, 0)
-	n.put([]byte("00000002"), []byte("00000002"), []byte("0123456701234567"), 0, 0)
-	n.put([]byte("00000003"), []byte("00000003"), []byte("0123456701234567"), 0, 0)
-	n.put([]byte("00000004"), []byte("00000004"), []byte("0123456701234567"), 0, 0)
-	n.put([]byte("00000005"), []byte("00000005"), []byte("0123456701234567"), 0, 0)
+	n.put([]byte("00000001"), []byte("0123456701234567"), 0, 0)
+	n.put([]byte("00000002"), []byte("0123456701234567"), 0, 0)
+	n.put([]byte("00000003"), []byte("0123456701234567"), 0, 0)
+	n.put([]byte("00000004"), []byte("0123456701234567"), 0, 0)
+	n.put([]byte("00000005"), []byte("0123456701234567"), 0, 0)
 
 	// Split.
 	n.split(4096)
