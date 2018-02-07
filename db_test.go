@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -55,6 +56,36 @@ func TestOpen(t *testing.T) {
 	}
 
 	if s := db.Path(); s != path {
+		t.Fatalf("unexpected path: %s", s)
+	}
+
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Ensure that an anonymous database can be opened without error.
+func TestOpenFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		return
+	}
+
+	path := tempfile()
+
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		t.Error(err)
+	}
+	os.RemoveAll(path)
+
+	db, err := bolt.OpenFile(f, nil)
+	if err != nil {
+		t.Fatal(err)
+	} else if db == nil {
+		t.Fatal("expected db")
+	}
+
+	if s := db.Path(); s != "" {
 		t.Fatalf("unexpected path: %s", s)
 	}
 
