@@ -441,7 +441,8 @@ func (db *DB) init() error {
 }
 
 // Close releases all database resources.
-// It will block waiting for any open transactions to finish before closing the database and returning.
+// It will block waiting for any open transactions to finish
+// before closing the database and returning.
 func (db *DB) Close() error {
 	db.rwlock.Lock()
 	defer db.rwlock.Unlock()
