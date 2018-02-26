@@ -155,26 +155,18 @@ func (db *DB) String() string {
 	return fmt.Sprintf("DB<%q>", db.path)
 }
 
-// Open creates and opens a database at the given path.
+// Open creates and opens a database at the given path. The file will be locked
+// to prevent other processes from trying to write to it.
 // If the file does not exist then it will be created automatically.
 // Passing in nil options will cause Bolt to open the database with the default options.
 func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
-	db := &DB{
-		opened: true,
-	}
 	// Set default options if no options are provided.
 	if options == nil {
 		options = DefaultOptions
 	}
-	db.NoSync = options.NoSync
-	db.NoGrowSync = options.NoGrowSync
-	db.MmapFlags = options.MmapFlags
-	db.NoFreelistSync = options.NoFreelistSync
-
-	// Set default values for later DB operations.
-	db.MaxBatchSize = DefaultMaxBatchSize
-	db.MaxBatchDelay = DefaultMaxBatchDelay
-	db.AllocSize = DefaultAllocSize
+	db := &DB{
+		opened: true,
+	}
 
 	flag := os.O_RDWR
 	if options.ReadOnly {
@@ -202,6 +194,35 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 		_ = db.close()
 		return nil, err
 	}
+
+	return db.open(options)
+}
+
+// OpenFile opens a database in the file f. The caller is responsible for
+// locking the file, or ensuring that it is only opened one time.
+// Passing in nil options will cause Bolt to open the database with the default options.
+func OpenFile(f *os.File, options *Options) (*DB, error) {
+	// Set default options if no options are provided.
+	if options == nil {
+		options = DefaultOptions
+	}
+	db := &DB{
+		opened: true,
+		file:   f,
+	}
+	return db.open(options)
+}
+
+func (db *DB) open(options *Options) (*DB, error) {
+	db.NoSync = options.NoSync
+	db.NoGrowSync = options.NoGrowSync
+	db.MmapFlags = options.MmapFlags
+	db.NoFreelistSync = options.NoFreelistSync
+
+	// Set default values for later DB operations.
+	db.MaxBatchSize = DefaultMaxBatchSize
+	db.MaxBatchDelay = DefaultMaxBatchDelay
+	db.AllocSize = DefaultAllocSize
 
 	// Default values for test hooks
 	db.ops.writeAt = db.file.WriteAt
