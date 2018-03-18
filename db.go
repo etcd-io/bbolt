@@ -239,6 +239,7 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 				db.pageSize = int(m.pageSize)
 			}
 		} else {
+			_ = db.close()
 			return nil, ErrInvalid
 		}
 	}
