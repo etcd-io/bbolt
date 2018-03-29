@@ -454,8 +454,8 @@ func (db *DB) Close() error {
 	db.metalock.Lock()
 	defer db.metalock.Unlock()
 
-	db.mmaplock.RLock()
-	defer db.mmaplock.RUnlock()
+	db.mmaplock.Lock()
+	defer db.mmaplock.Unlock()
 
 	return db.close()
 }
