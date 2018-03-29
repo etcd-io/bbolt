@@ -112,6 +112,8 @@ func TestTx_Commit_ErrTxNotWritable(t *testing.T) {
 	if err := tx.Commit(); err != bolt.ErrTxNotWritable {
 		t.Fatal(err)
 	}
+	// Close the view transaction
+	tx.Rollback()
 }
 
 // Ensure that a transaction can retrieve a cursor on the root bucket.
