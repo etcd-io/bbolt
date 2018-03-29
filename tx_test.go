@@ -57,6 +57,8 @@ func TestTx_Check_ReadOnly(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// Close the view transaction
+	tx.Rollback()
 }
 
 // Ensure that committing a closed transaction returns an error.
