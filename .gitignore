@@ -3,3 +3,4 @@
 *.swp
 /bin/
 cmd/bolt/bolt
+vendor/
