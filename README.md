@@ -36,6 +36,12 @@ consistency and thread safety. Bolt is currently used in high-load production
 environments serving databases as large as 1TB. Many companies such as
 Shopify and Heroku use Bolt-backed services every day.
 
+## Project versioning
+
+bbolt uses [semantic versioning](http://semver.org).
+API should not change between patch and minor releases.
+New minor versions may add additional features to the API.
+
 ## Table of Contents
 
 - [Getting Started](#getting-started)
