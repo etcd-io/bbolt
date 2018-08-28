@@ -1,9 +1,9 @@
 bbolt
 ====
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/coreos/bbolt?style=flat-square)](https://goreportcard.com/report/github.com/coreos/bbolt)
-[![Coverage](https://codecov.io/gh/coreos/bbolt/branch/master/graph/badge.svg)](https://codecov.io/gh/coreos/bbolt)
-[![Godoc](http://img.shields.io/badge/go-documentation-blue.svg?style=flat-square)](https://godoc.org/github.com/coreos/bbolt)
+[![Go Report Card](https://goreportcard.com/badge/github.com/etcd-io/bbolt?style=flat-square)](https://goreportcard.com/report/github.com/etcd-io/bbolt)
+[![Coverage](https://codecov.io/gh/etcd-io/bbolt/branch/master/graph/badge.svg)](https://codecov.io/gh/etcd-io/bbolt)
+[![Godoc](http://img.shields.io/badge/go-documentation-blue.svg?style=flat-square)](https://godoc.org/github.com/etcd-io/bbolt)
 
 bbolt is a fork of [Ben Johnson's][gh_ben] [Bolt][bolt] key/value
 store. The purpose of this fork is to provide the Go community with an active
@@ -71,7 +71,7 @@ Shopify and Heroku use Bolt-backed services every day.
 To start using Bolt, install Go and run `go get`:
 
 ```sh
-$ go get github.com/coreos/bbolt/...
+$ go get github.com/etcd-io/bbolt/...
 ```
 
 This will retrieve the library and install the `bolt` command line utility into
@@ -91,7 +91,7 @@ package main
 import (
 	"log"
 
-	bolt "github.com/coreos/bbolt"
+	bolt "github.com/etcd-io/bbolt"
 )
 
 func main() {
@@ -534,7 +534,7 @@ this from a read-only transaction, it will perform a hot backup and not block
 your other database reads and writes.
 
 By default, it will use a regular file handle which will utilize the operating
-system's page cache. See the [`Tx`](https://godoc.org/github.com/coreos/bbolt#Tx)
+system's page cache. See the [`Tx`](https://godoc.org/github.com/etcd-io/bbolt#Tx)
 documentation for information about optimizing for larger-than-RAM datasets.
 
 One common use case is to backup over HTTP so you can use tools like `cURL` to
