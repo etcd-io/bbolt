@@ -25,6 +25,6 @@ errcheck:
 test:
 	go test -timeout 20m -v -coverprofile cover.out -covermode atomic
 	# Note: gets "program not an importable package" in out of path builds
-	go test -v ./cmd/bolt
+	go test -v ./cmd/bbolt
 
 .PHONY: race fmt errcheck test gosimple unused
