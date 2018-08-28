@@ -12,6 +12,6 @@ before_install:
 
 script:
 - make fmt
-- make errcheck
 - make test
 - make race
+# - make errcheck
