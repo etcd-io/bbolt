@@ -7,8 +7,10 @@ go:
 
 before_install:
 - go get -v honnef.co/go/tools/...
+- go get -v github.com/kisielk/errcheck
 
 script:
 - make fmt
+- make errcheck
 - make test
 - make race
