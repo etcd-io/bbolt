@@ -81,6 +81,21 @@ This will retrieve the library and install the `bolt` command line utility into
 your `$GOBIN` path.
 
 
+### Importing bbolt
+
+To use bbolt as an embedded key-value store, import as:
+
+```go
+import bolt "go.etcd.io/bbolt"
+
+db, err := bolt.Open(path, 0666, nil)
+if err != nil {
+  return err
+}
+defer db.Close()
+```
+
+
 ### Opening a database
 
 The top-level object in Bolt is a `DB`. It is represented as a single file on
