@@ -11,7 +11,7 @@ import (
 	"testing"
 	"testing/quick"
 
-	"github.com/coreos/bbolt"
+	"github.com/etcd-io/bbolt"
 )
 
 // Ensure that a cursor can return a reference to the bucket that created it.

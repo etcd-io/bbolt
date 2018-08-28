@@ -18,7 +18,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/coreos/bbolt"
+	"github.com/etcd-io/bbolt"
 )
 
 var statsFlag = flag.Bool("stats", false, "show performance stats")
