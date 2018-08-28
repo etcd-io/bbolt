@@ -20,7 +20,7 @@ unused:
 
 # go get github.com/kisielk/errcheck
 errcheck:
-	@errcheck -ignorepkg=bytes -ignore=os:Remove github.com/etcd-io/bbolt
+	@errcheck -ignorepkg=bytes -ignore=os:Remove go.etcd.io/bbolt
 
 test:
 	go test -timeout 20m -v -coverprofile cover.out -covermode atomic
