@@ -662,10 +662,9 @@ func TestDB_Close_PendingTx_RO(t *testing.T) { testDB_Close_PendingTx(t, false) 
 // Ensure that a database cannot close while transactions are open.
 func testDB_Close_PendingTx(t *testing.T, writable bool) {
 	db := MustOpenDB()
-	defer db.MustClose()
 
 	// Start transaction.
-	tx, err := db.Begin(true)
+	tx, err := db.Begin(writable)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -687,8 +686,13 @@ func testDB_Close_PendingTx(t *testing.T, writable bool) {
 	default:
 	}
 
-	// Commit transaction.
-	if err := tx.Commit(); err != nil {
+	// Commit/close transaction.
+	if writable {
+		err = tx.Commit()
+	} else {
+		err = tx.Rollback()
+	}
+	if err != nil {
 		t.Fatal(err)
 	}
 
