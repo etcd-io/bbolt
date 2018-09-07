@@ -1,4 +1,4 @@
-// +build !windows,!plan9,!solaris
+// +build !windows,!plan9,!solaris,!js
 
 package bbolt
 
