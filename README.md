@@ -948,5 +948,6 @@ Below is a list of public, open source projects that use Bolt:
 * [dcrwallet](https://github.com/decred/dcrwallet) - A wallet for the Decred cryptocurrency.
 * [Ironsmith](https://github.com/timshannon/ironsmith) - A simple, script-driven continuous integration (build - > test -> release) tool, with no external dependencies
 * [BoltHold](https://github.com/timshannon/bolthold) - An embeddable NoSQL store for Go types built on BoltDB
+* [reef-pi](https://github.com/reef-pi/reef-pi) - reef-pi is an award winning, modular, DIY reef tank controller using easy to learn electronics based on a Raspberry Pi.
 
 If you are using Bolt in a project please send a pull request to add it to the list.
