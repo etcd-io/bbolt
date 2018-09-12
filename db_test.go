@@ -63,6 +63,34 @@ func TestOpen(t *testing.T) {
 	}
 }
 
+// Regression validation for https://github.com/etcd-io/bbolt/pull/122.
+// Tests multiple goroutines simultaneously opening a database.
+func TestOpen_MultipleGoroutines(t *testing.T) {
+	const (
+		instances  = 30
+		iterations = 30
+	)
+	path := tempfile()
+	defer os.RemoveAll(path)
+	var wg sync.WaitGroup
+	for iteration := 0; iteration < iterations; iteration++ {
+		for instance := 0; instance < instances; instance++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				db, err := bolt.Open(path, 0600, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := db.Close(); err != nil {
+					t.Fatal(err)
+				}
+			}()
+		}
+		wg.Wait()
+	}
+}
+
 // Ensure that opening a database with a blank path returns an error.
 func TestOpen_ErrPathRequired(t *testing.T) {
 	_, err := bolt.Open("", 0666, nil)
