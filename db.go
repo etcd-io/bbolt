@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"sort"
 	"sync"
+	"syscall"
 	"time"
 	"unsafe"
 )
@@ -131,6 +132,8 @@ type DB struct {
 	statlock sync.RWMutex // Protects stats access.
 
 	ops struct {
+		offset  int64
+		mmapByt []byte
 		writeAt func(b []byte, off int64) (n int, err error)
 	}
 
@@ -240,6 +243,10 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 			_ = db.close()
 			return nil, ErrInvalid
 		}
+	}
+
+	if !options.NoSync || IgnoreNoSync {
+		db.ops.writeAt = db.mmapWriteAt
 	}
 
 	// Initialize page pool.
@@ -396,6 +403,32 @@ func (db *DB) mmapSize(size int) (int, error) {
 	}
 
 	return int(sz), nil
+}
+
+func (db *DB) mmapToDisk() error {
+	data, err := syscall.Mmap(int(db.file.Fd()), db.ops.offset, len(db.ops.mmapByt), syscall.PROT_WRITE, syscall.MAP_SHARED)
+	if err != nil {
+		return err
+	}
+	copy(data, db.ops.mmapByt)
+	err = syscall.Munmap(data)
+	if err != nil {
+		return err
+	}
+	db.ops.mmapByt = nil
+	db.ops.offset = 0
+	return nil
+}
+
+func (db *DB) mmapWriteAt(b []byte, off int64) (int, error) {
+	if db.ops.mmapByt == nil {
+		db.ops.mmapByt = make([]byte, 0)
+		db.ops.offset = off
+	}
+	paddingByt := make([]byte, off-db.ops.offset-int64(len(db.ops.mmapByt)))
+	db.ops.mmapByt = append(db.ops.mmapByt, paddingByt...)
+	db.ops.mmapByt = append(db.ops.mmapByt, b...)
+	return len(b), nil
 }
 
 // init creates a new database file and initializes its meta pages.

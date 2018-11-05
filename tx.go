@@ -539,7 +539,10 @@ func (tx *Tx) write() error {
 
 	// Ignore file sync if flag is set on DB.
 	if !tx.db.NoSync || IgnoreNoSync {
-		if err := fdatasync(tx.db); err != nil {
+		//if err := fdatasync(tx.db); err != nil {
+		//	return err
+		//}
+		if err := tx.db.mmapToDisk(); err != nil {
 			return err
 		}
 	}
@@ -576,7 +579,10 @@ func (tx *Tx) writeMeta() error {
 		return err
 	}
 	if !tx.db.NoSync || IgnoreNoSync {
-		if err := fdatasync(tx.db); err != nil {
+		//if err := fdatasync(tx.db); err != nil {
+		//	return err
+		//}
+		if err := tx.db.mmapToDisk(); err != nil {
 			return err
 		}
 	}
