@@ -6,7 +6,8 @@ import (
 
 func TestTx_allocatePageStats(t *testing.T) {
 	f := newFreelist()
-	f.ids = []pgid{2, 3}
+	f.spans = []freespan{makeFreespan(2, 2)}
+	f.spansTomap()
 
 	tx := &Tx{
 		db: &DB{
@@ -18,7 +19,7 @@ func TestTx_allocatePageStats(t *testing.T) {
 	}
 
 	prePageCnt := tx.Stats().PageCount
-	allocateCnt := f.free_count()
+	allocateCnt := f.freePageCount()
 
 	if _, err := tx.allocate(allocateCnt); err != nil {
 		t.Fatal(err)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
+	"time"
 	"unsafe"
 )
 
@@ -226,6 +227,7 @@ func (n *node) write(p *page) {
 			_assert(elem.pgid != p.id, "write: circular dependency occurred")
 		}
 
+		s := time.Now()
 		// If the length of key+value is larger than the max allocation size
 		// then we need to reallocate the byte array pointer.
 		//
@@ -234,12 +236,17 @@ func (n *node) write(p *page) {
 		if len(b) < klen+vlen {
 			b = (*[maxAllocSize]byte)(unsafe.Pointer(&b[0]))[:]
 		}
+		n.bucket.tx.stats.SpillNodeWriteOversize++
 
 		// Write data for the element to the end of the page.
 		copy(b[0:], item.key)
 		b = b[klen:]
 		copy(b[0:], item.value)
 		b = b[vlen:]
+
+		n.bucket.tx.stats.SpillNodeWriteCopyCount += 1
+		n.bucket.tx.stats.SpillNodeWriteCopyTime += time.Since(s)
+		n.bucket.tx.stats.SpillNodeWriteSize = n.bucket.tx.stats.SpillNodeWriteSize + int64(len(item.key)) + int64(len(item.value))
 	}
 
 	// DEBUG ONLY: n.dump()
@@ -358,25 +365,31 @@ func (n *node) spill() error {
 	// Split nodes into appropriate sizes. The first node will always be n.
 	var nodes = n.split(tx.db.pageSize)
 	for _, node := range nodes {
+		s := time.Now()
 		// Add node's page to the freelist if it's not new.
 		if node.pgid > 0 {
 			tx.db.freelist.free(tx.meta.txid, tx.page(node.pgid))
+			tx.stats.FreelistFreeTime += time.Since(s)
 			node.pgid = 0
 		}
 
+		s = time.Now()
 		// Allocate contiguous space for the node.
 		p, err := tx.allocate((node.size() + tx.db.pageSize - 1) / tx.db.pageSize)
 		if err != nil {
 			return err
 		}
+		tx.stats.TxAllocTime += time.Since(s)
 
 		// Write the node.
 		if p.id >= tx.meta.pgid {
 			panic(fmt.Sprintf("pgid (%d) above high water mark (%d)", p.id, tx.meta.pgid))
 		}
 		node.pgid = p.id
+		s = time.Now()
 		node.write(p)
 		node.spilled = true
+		tx.stats.SpillNodeWriteTime += time.Since(s)
 
 		// Insert into parent inodes.
 		if node.parent != nil {

@@ -291,7 +291,7 @@ func (db *DB) loadFreelist() {
 			// Read free list from freelist page.
 			db.freelist.read(db.page(db.meta().freelist))
 		}
-		db.stats.FreePageN = len(db.freelist.ids)
+		db.stats.FreePageN = db.freelist.freePageCount()
 	})
 }
 
@@ -904,10 +904,18 @@ func (db *DB) allocate(txid txid, count int) (*page, error) {
 	p.overflow = uint32(count - 1)
 
 	// Use pages from the freelist if they are available.
+	s := time.Now()
 	if p.id = db.freelist.allocate(txid, count); p.id != 0 {
+		db.statlock.Lock()
+		db.stats.TxStats.FreelistAlloctime += time.Since(s)
+		db.statlock.Unlock()
 		return p, nil
 	}
+	db.statlock.Lock()
+	db.stats.TxStats.FreelistAlloctime += time.Since(s)
+	db.statlock.Unlock()
 
+	s = time.Now()
 	// Resize mmap() if we're at the end.
 	p.id = db.rwtx.meta.pgid
 	var minsz = int((p.id+pgid(count))+1) * db.pageSize
@@ -916,6 +924,9 @@ func (db *DB) allocate(txid txid, count int) (*page, error) {
 			return nil, fmt.Errorf("mmap allocate error: %s", err)
 		}
 	}
+	db.statlock.Lock()
+	db.stats.TxStats.RemapTime += time.Since(s)
+	db.statlock.Unlock()
 
 	// Move the page id high water mark.
 	db.rwtx.meta.pgid += pgid(count)

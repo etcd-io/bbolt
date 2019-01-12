@@ -154,14 +154,42 @@ func (tx *Tx) Commit() error {
 	if tx.stats.Rebalance > 0 {
 		tx.stats.RebalanceTime += time.Since(startTime)
 	}
+	//log.Println("rebalance took", time.Since(startTime))
 
 	// spill data onto dirty pages.
 	startTime = time.Now()
+	// os := tx.stats.Spill
+	// ofa := tx.stats.TxAllocTime
+	// off := tx.stats.FreelistFreeTime
+	// onw := tx.stats.SpillNodeWriteTime
+	// oncw := tx.stats.SpillNodeWriteCopyTime
+	// ons := tx.stats.SpillNodeWriteSize
+	// onos := tx.stats.SpillNodeWriteOversize
+	// onct := tx.stats.SpillNodeWriteCopyCount
+	// previousPageCount := tx.stats.PageCount
+	// previousRemaptime := tx.db.Stats().TxStats.RemapTime
+	// previousFreelistalloctime := tx.db.Stats().TxStats.FreelistAlloctime
+	// previousSplit := tx.stats.Split
+
 	if err := tx.root.spill(); err != nil {
 		tx.rollback()
 		return err
 	}
 	tx.stats.SpillTime += time.Since(startTime)
+	// log.Println("spill took", time.Since(startTime))
+	// log.Println("Tx allocate took", tx.stats.TxAllocTime-ofa)
+	// log.Println("db remap took ", tx.db.Stats().TxStats.RemapTime-previousRemaptime)
+	// log.Println("freelist allocate took", tx.db.Stats().TxStats.FreelistAlloctime-previousFreelistalloctime)
+	// log.Println("page allocate PageCount", tx.stats.PageCount-previousPageCount)
+	// log.Println("freelist free took", tx.stats.FreelistFreeTime-off)
+	// log.Println("node write took", tx.stats.SpillNodeWriteTime-onw)
+	// log.Println("node write copy took", tx.stats.SpillNodeWriteCopyTime-oncw)
+	// log.Println("node write size", tx.stats.SpillNodeWriteSize-ons)
+	// log.Println("node write oversize", tx.stats.SpillNodeWriteOversize-onos)
+	// log.Println("node write copy count", tx.stats.SpillNodeWriteCopyCount-onct)
+
+	// log.Println("spilled ", tx.stats.Spill-os)
+	// log.Println("split node number ", tx.stats.Split-previousSplit)
 
 	// Free the old root bucket.
 	tx.meta.root.root = tx.root.root
@@ -210,6 +238,7 @@ func (tx *Tx) Commit() error {
 		return err
 	}
 	tx.stats.WriteTime += time.Since(startTime)
+	//log.Println("bolt write took", time.Since(startTime))
 
 	// Finalize the transaction.
 	tx.close()
@@ -275,8 +304,8 @@ func (tx *Tx) close() {
 	}
 	if tx.writable {
 		// Grab freelist stats.
-		var freelistFreeN = tx.db.freelist.free_count()
-		var freelistPendingN = tx.db.freelist.pending_count()
+		var freelistFreeN = tx.db.freelist.freePageCount()
+		var freelistPendingN = tx.db.freelist.pendingPageCount()
 		var freelistAlloc = tx.db.freelist.size()
 
 		// Remove transaction ref & writer lock.
@@ -402,8 +431,7 @@ func (tx *Tx) check(ch chan error) {
 
 	// Check if any pages are double freed.
 	freed := make(map[pgid]bool)
-	all := make([]pgid, tx.db.freelist.count())
-	tx.db.freelist.copyall(all)
+	all := tx.db.freelist.allpages()
 	for _, id := range all {
 		if freed[id] {
 			ch <- fmt.Errorf("page %d: already freed", id)
@@ -661,11 +689,19 @@ type TxStats struct {
 	Rebalance     int           // number of node rebalances
 	RebalanceTime time.Duration // total time spent rebalancing
 
-	// Split/Spill statistics.
-	Split     int           // number of nodes split
-	Spill     int           // number of nodes spilled
-	SpillTime time.Duration // total time spent spilling
+	Split                   int           // number of nodes split
+	Spill                   int           // number of nodes spilled
+	SpillTime               time.Duration // total time spent spilling
+	SpillNodeWriteTime      time.Duration
+	SpillNodeWriteCopyTime  time.Duration
+	SpillNodeWriteCopyCount int64
+	SpillNodeWriteSize      int64
+	SpillNodeWriteOversize  int
 
+	TxAllocTime       time.Duration
+	FreelistFreeTime  time.Duration
+	FreelistAlloctime time.Duration
+	RemapTime         time.Duration
 	// Write statistics.
 	Write     int           // number of writes performed
 	WriteTime time.Duration // total time spent writing to disk

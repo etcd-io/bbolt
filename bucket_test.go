@@ -424,6 +424,7 @@ func TestBucket_Delete_FreelistOverflow(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	db.MustCheck()
 
 	// Check more than an overflow's worth of pages are freed.
 	stats := db.Stats()

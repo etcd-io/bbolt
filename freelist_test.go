@@ -12,7 +12,7 @@ import (
 func TestFreelist_free(t *testing.T) {
 	f := newFreelist()
 	f.free(100, &page{id: 12})
-	if !reflect.DeepEqual([]pgid{12}, f.pending[100].ids) {
+	if !reflect.DeepEqual([]freespan{makeFreespan(12, 1)}, f.pending[100].spans) {
 		t.Fatalf("exp=%v; got=%v", []pgid{12}, f.pending[100])
 	}
 }
@@ -21,7 +21,7 @@ func TestFreelist_free(t *testing.T) {
 func TestFreelist_free_overflow(t *testing.T) {
 	f := newFreelist()
 	f.free(100, &page{id: 12, overflow: 3})
-	if exp := []pgid{12, 13, 14, 15}; !reflect.DeepEqual(exp, f.pending[100].ids) {
+	if exp := []freespan{makeFreespan(12, 4)}; !reflect.DeepEqual(exp, f.pending[100].spans) {
 		t.Fatalf("exp=%v; got=%v", exp, f.pending[100])
 	}
 }
@@ -34,13 +34,13 @@ func TestFreelist_release(t *testing.T) {
 	f.free(102, &page{id: 39})
 	f.release(100)
 	f.release(101)
-	if exp := []pgid{9, 12, 13}; !reflect.DeepEqual(exp, f.ids) {
-		t.Fatalf("exp=%v; got=%v", exp, f.ids)
+	if exp := []freespan{makeFreespan(9, 1), makeFreespan(12, 2)}; !reflect.DeepEqual(exp, f.spans) {
+		t.Fatalf("exp=%v; got=%v", exp, f.spans)
 	}
 
 	f.release(102)
-	if exp := []pgid{9, 12, 13, 39}; !reflect.DeepEqual(exp, f.ids) {
-		t.Fatalf("exp=%v; got=%v", exp, f.ids)
+	if exp := []freespan{makeFreespan(9, 1), makeFreespan(12, 2), makeFreespan(39, 1)}; !reflect.DeepEqual(exp, f.spans) {
+		t.Fatalf("exp=%v; got=%v", exp, f.spans)
 	}
 }
 
@@ -51,8 +51,7 @@ func TestFreelist_releaseRange(t *testing.T) {
 	}
 
 	type testPage struct {
-		id       pgid
-		n        int
+		span     freespan
 		allocTxn txid
 		freeTxn  txid
 	}
@@ -61,88 +60,88 @@ func TestFreelist_releaseRange(t *testing.T) {
 		title         string
 		pagesIn       []testPage
 		releaseRanges []testRange
-		wantFree      []pgid
+		wantFree      []freespan
 	}{
 		{
 			title:         "Single pending in range",
-			pagesIn:       []testPage{{id: 3, n: 1, allocTxn: 100, freeTxn: 200}},
+			pagesIn:       []testPage{{span: makeFreespan(3, 1), allocTxn: 100, freeTxn: 200}},
 			releaseRanges: []testRange{{1, 300}},
-			wantFree:      []pgid{3},
+			wantFree:      []freespan{makeFreespan(3, 1)},
 		},
 		{
 			title:         "Single pending with minimum end range",
-			pagesIn:       []testPage{{id: 3, n: 1, allocTxn: 100, freeTxn: 200}},
+			pagesIn:       []testPage{{span: makeFreespan(3, 1), allocTxn: 100, freeTxn: 200}},
 			releaseRanges: []testRange{{1, 200}},
-			wantFree:      []pgid{3},
+			wantFree:      []freespan{makeFreespan(3, 1)},
 		},
 		{
 			title:         "Single pending outsize minimum end range",
-			pagesIn:       []testPage{{id: 3, n: 1, allocTxn: 100, freeTxn: 200}},
+			pagesIn:       []testPage{{span: makeFreespan(3, 1), allocTxn: 100, freeTxn: 200}},
 			releaseRanges: []testRange{{1, 199}},
-			wantFree:      nil,
+			wantFree:      []freespan{},
 		},
 		{
 			title:         "Single pending with minimum begin range",
-			pagesIn:       []testPage{{id: 3, n: 1, allocTxn: 100, freeTxn: 200}},
+			pagesIn:       []testPage{{span: makeFreespan(3, 1), allocTxn: 100, freeTxn: 200}},
 			releaseRanges: []testRange{{100, 300}},
-			wantFree:      []pgid{3},
+			wantFree:      []freespan{makeFreespan(3, 1)},
 		},
 		{
 			title:         "Single pending outside minimum begin range",
-			pagesIn:       []testPage{{id: 3, n: 1, allocTxn: 100, freeTxn: 200}},
+			pagesIn:       []testPage{{span: makeFreespan(3, 1), allocTxn: 100, freeTxn: 200}},
 			releaseRanges: []testRange{{101, 300}},
-			wantFree:      nil,
+			wantFree:      []freespan{},
 		},
 		{
 			title:         "Single pending in minimum range",
-			pagesIn:       []testPage{{id: 3, n: 1, allocTxn: 199, freeTxn: 200}},
+			pagesIn:       []testPage{{span: makeFreespan(3, 1), allocTxn: 199, freeTxn: 200}},
 			releaseRanges: []testRange{{199, 200}},
-			wantFree:      []pgid{3},
+			wantFree:      []freespan{makeFreespan(3, 1)},
 		},
 		{
 			title:         "Single pending and read transaction at 199",
-			pagesIn:       []testPage{{id: 3, n: 1, allocTxn: 199, freeTxn: 200}},
+			pagesIn:       []testPage{{span: makeFreespan(3, 1), allocTxn: 199, freeTxn: 200}},
 			releaseRanges: []testRange{{100, 198}, {200, 300}},
-			wantFree:      nil,
+			wantFree:      []freespan{},
 		},
 		{
 			title: "Adjacent pending and read transactions at 199, 200",
 			pagesIn: []testPage{
-				{id: 3, n: 1, allocTxn: 199, freeTxn: 200},
-				{id: 4, n: 1, allocTxn: 200, freeTxn: 201},
+				{span: makeFreespan(3, 1), allocTxn: 199, freeTxn: 200},
+				{span: makeFreespan(4, 1), allocTxn: 200, freeTxn: 201},
 			},
 			releaseRanges: []testRange{
 				{100, 198},
 				{200, 199}, // Simulate the ranges db.freePages might produce.
 				{201, 300},
 			},
-			wantFree: nil,
+			wantFree: []freespan{},
 		},
 		{
 			title: "Out of order ranges",
 			pagesIn: []testPage{
-				{id: 3, n: 1, allocTxn: 199, freeTxn: 200},
-				{id: 4, n: 1, allocTxn: 200, freeTxn: 201},
+				{span: makeFreespan(3, 1), allocTxn: 199, freeTxn: 200},
+				{span: makeFreespan(4, 1), allocTxn: 200, freeTxn: 201},
 			},
 			releaseRanges: []testRange{
 				{201, 199},
 				{201, 200},
 				{200, 200},
 			},
-			wantFree: nil,
+			wantFree: []freespan{},
 		},
 		{
 			title: "Multiple pending, read transaction at 150",
 			pagesIn: []testPage{
-				{id: 3, n: 1, allocTxn: 100, freeTxn: 200},
-				{id: 4, n: 1, allocTxn: 100, freeTxn: 125},
-				{id: 5, n: 1, allocTxn: 125, freeTxn: 150},
-				{id: 6, n: 1, allocTxn: 125, freeTxn: 175},
-				{id: 7, n: 2, allocTxn: 150, freeTxn: 175},
-				{id: 9, n: 2, allocTxn: 175, freeTxn: 200},
+				{span: makeFreespan(3, 1), allocTxn: 100, freeTxn: 200},
+				{span: makeFreespan(4, 1), allocTxn: 100, freeTxn: 125},
+				{span: makeFreespan(5, 1), allocTxn: 125, freeTxn: 150},
+				{span: makeFreespan(6, 1), allocTxn: 125, freeTxn: 175},
+				{span: makeFreespan(7, 2), allocTxn: 150, freeTxn: 175},
+				{span: makeFreespan(9, 2), allocTxn: 175, freeTxn: 200},
 			},
 			releaseRanges: []testRange{{50, 149}, {151, 300}},
-			wantFree:      []pgid{4, 9},
+			wantFree:      []freespan{makeFreespan(4, 1), makeFreespan(9, 2)},
 		},
 	}
 
@@ -150,24 +149,28 @@ func TestFreelist_releaseRange(t *testing.T) {
 		f := newFreelist()
 
 		for _, p := range c.pagesIn {
-			for i := uint64(0); i < uint64(p.n); i++ {
-				f.ids = append(f.ids, pgid(uint64(p.id)+i))
-			}
+			f.spans = append(f.spans, p.span)
 		}
+		f.spansTomap()
+
 		for _, p := range c.pagesIn {
-			f.allocate(p.allocTxn, p.n)
+			f.allocate(p.allocTxn, int(p.span.size()))
 		}
 
 		for _, p := range c.pagesIn {
-			f.free(p.freeTxn, &page{id: p.id})
+			overflow := uint32(0)
+			if p.span.size() != 1 {
+				overflow = uint32(p.span.size() - 1)
+			}
+			f.free(p.freeTxn, &page{id: p.span.start(), overflow: overflow})
 		}
 
 		for _, r := range c.releaseRanges {
 			f.releaseRange(r.begin, r.end)
 		}
 
-		if exp := c.wantFree; !reflect.DeepEqual(exp, f.ids) {
-			t.Errorf("exp=%v; got=%v for %s", exp, f.ids, c.title)
+		if exp := c.wantFree; !reflect.DeepEqual(exp, f.spans) {
+			t.Errorf("exp=%v; got=%v for %s", exp, f.spans, c.title)
 		}
 	}
 }
@@ -175,43 +178,48 @@ func TestFreelist_releaseRange(t *testing.T) {
 // Ensure that a freelist can find contiguous blocks of pages.
 func TestFreelist_allocate(t *testing.T) {
 	f := newFreelist()
-	f.ids = []pgid{3, 4, 5, 6, 7, 9, 12, 13, 18}
-	if id := int(f.allocate(1, 3)); id != 3 {
-		t.Fatalf("exp=3; got=%v", id)
+	f.spans = []freespan{makeFreespan(3, 5), makeFreespan(9, 1), makeFreespan(12, 2), makeFreespan(18, 1)}
+	f.spansTomap()
+
+	f.allocate(1, 3)
+	if x := f.freePageCount(); x != 6 {
+		t.Fatalf("exp=6; got=%v", x)
 	}
-	if id := int(f.allocate(1, 1)); id != 6 {
-		t.Fatalf("exp=6; got=%v", id)
+	f.allocate(1, 1)
+	if x := f.freePageCount(); x != 5 {
+		t.Fatalf("exp=5; got=%v", x)
 	}
-	if id := int(f.allocate(1, 3)); id != 0 {
-		t.Fatalf("exp=0; got=%v", id)
-	}
-	if id := int(f.allocate(1, 2)); id != 12 {
-		t.Fatalf("exp=12; got=%v", id)
-	}
-	if id := int(f.allocate(1, 1)); id != 7 {
-		t.Fatalf("exp=7; got=%v", id)
-	}
-	if id := int(f.allocate(1, 0)); id != 0 {
-		t.Fatalf("exp=0; got=%v", id)
-	}
-	if id := int(f.allocate(1, 0)); id != 0 {
-		t.Fatalf("exp=0; got=%v", id)
-	}
-	if exp := []pgid{9, 18}; !reflect.DeepEqual(exp, f.ids) {
-		t.Fatalf("exp=%v; got=%v", exp, f.ids)
+	f.allocate(1, 3)
+	if x := f.freePageCount(); x != 5 {
+		t.Fatalf("exp=5; got=%v", x)
 	}
 
-	if id := int(f.allocate(1, 1)); id != 9 {
-		t.Fatalf("exp=9; got=%v", id)
+	f.allocate(1, 2)
+	if x := f.freePageCount(); x != 3 {
+		t.Fatalf("exp=3; got=%v", x)
 	}
-	if id := int(f.allocate(1, 1)); id != 18 {
-		t.Fatalf("exp=18; got=%v", id)
+	f.allocate(1, 1)
+	if x := f.freePageCount(); x != 2 {
+		t.Fatalf("exp=2; got=%v", x)
 	}
-	if id := int(f.allocate(1, 1)); id != 0 {
-		t.Fatalf("exp=0; got=%v", id)
+	f.allocate(1, 0)
+	if x := f.freePageCount(); x != 2 {
+		t.Fatalf("exp=2; got=%v", x)
 	}
-	if exp := []pgid{}; !reflect.DeepEqual(exp, f.ids) {
-		t.Fatalf("exp=%v; got=%v", exp, f.ids)
+
+	f.allocate(1, 0)
+	if x := f.freePageCount(); x != 2 {
+		t.Fatalf("exp=2; got=%v", x)
+	}
+
+	f.allocate(1, 1)
+	if x := f.freePageCount(); x != 1 {
+		t.Fatalf("exp=1; got=%v", x)
+	}
+
+	f.allocate(1, 1)
+	if x := f.freePageCount(); x != 0 {
+		t.Fatalf("exp=0; got=%v", x)
 	}
 }
 
@@ -224,17 +232,17 @@ func TestFreelist_read(t *testing.T) {
 	page.count = 2
 
 	// Insert 2 page ids.
-	ids := (*[3]pgid)(unsafe.Pointer(&page.ptr))
-	ids[0] = 23
-	ids[1] = 50
+	ids := (*[3]freespan)(unsafe.Pointer(&page.ptr))
+	ids[0] = makeFreespan(23, 1)
+	ids[1] = makeFreespan(50, 1)
 
 	// Deserialize page into a freelist.
 	f := newFreelist()
 	f.read(page)
 
 	// Ensure that there are two page ids in the freelist.
-	if exp := []pgid{23, 50}; !reflect.DeepEqual(exp, f.ids) {
-		t.Fatalf("exp=%v; got=%v", exp, f.ids)
+	if exp := []freespan{makeFreespan(23, 1), makeFreespan(50, 1)}; !reflect.DeepEqual(exp, f.spans) {
+		t.Fatalf("exp=%v; got=%v", exp, f.spans)
 	}
 }
 
@@ -242,9 +250,9 @@ func TestFreelist_read(t *testing.T) {
 func TestFreelist_write(t *testing.T) {
 	// Create a freelist and write it to a page.
 	var buf [4096]byte
-	f := &freelist{ids: []pgid{12, 39}, pending: make(map[txid]*txPending)}
-	f.pending[100] = &txPending{ids: []pgid{28, 11}}
-	f.pending[101] = &txPending{ids: []pgid{3}}
+	f := &freelist{spans: []freespan{makeFreespan(12, 1), makeFreespan(39, 1)}, pending: make(map[txid]*txPending)}
+	f.pending[100] = &txPending{spans: []freespan{makeFreespan(11, 1), makeFreespan(28, 1)}}
+	f.pending[101] = &txPending{spans: []freespan{makeFreespan(3, 1)}}
 	p := (*page)(unsafe.Pointer(&buf[0]))
 	if err := f.write(p); err != nil {
 		t.Fatal(err)
@@ -256,8 +264,8 @@ func TestFreelist_write(t *testing.T) {
 
 	// Ensure that the freelist is correct.
 	// All pages should be present and in reverse order.
-	if exp := []pgid{3, 11, 12, 28, 39}; !reflect.DeepEqual(exp, f2.ids) {
-		t.Fatalf("exp=%v; got=%v", exp, f2.ids)
+	if exp := []freespan{makeFreespan(3, 1), makeFreespan(11, 2), makeFreespan(28, 1), makeFreespan(39, 1)}; !reflect.DeepEqual(exp, f2.spans) {
+		t.Fatalf("exp=%v; got=%v", exp, f2.spans)
 	}
 }
 
@@ -267,22 +275,31 @@ func Benchmark_FreelistRelease1000K(b *testing.B)  { benchmark_FreelistRelease(b
 func Benchmark_FreelistRelease10000K(b *testing.B) { benchmark_FreelistRelease(b, 10000000) }
 
 func benchmark_FreelistRelease(b *testing.B, size int) {
-	ids := randomPgids(size)
-	pending := randomPgids(len(ids) / 400)
+	total := randomSpans(size)
+	spans := total[0 : size/2]
+	pending := total[size/2:]
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		txp := &txPending{ids: pending}
-		f := &freelist{ids: ids, pending: map[txid]*txPending{1: txp}}
+		txp := &txPending{spans: pending}
+		f := &freelist{spans: spans, pending: map[txid]*txPending{1: txp}}
 		f.release(1)
 	}
 }
 
-func randomPgids(n int) []pgid {
+func randomSpans(n int) freespans {
 	rand.Seed(42)
-	pgids := make(pgids, n)
-	for i := range pgids {
-		pgids[i] = pgid(rand.Int63())
+	freespans := make(freespans, n)
+	for i := range freespans {
+		freespans[i] = makeFreespan(pgid(rand.Int31()), 1)
 	}
-	sort.Sort(pgids)
-	return pgids
+	sort.Sort(freespans)
+	// filter out the dup ones
+	index := 1
+	for i := 1; i < len(freespans)-1; i++ {
+		if freespans[i] != freespans[i-1] {
+			freespans[index] = freespans[i]
+			index++
+		}
+	}
+	return freespans[:index]
 }
