@@ -4,7 +4,8 @@ go_import_path: go.etcd.io/bbolt
 sudo: false
 
 go:
-- 1.11
+- "1.11.x"
+- "1.12beta2"
 
 before_install:
 - go get -v honnef.co/go/tools/...
