@@ -1605,6 +1605,16 @@ func MustOpenDB() *DB {
 // MustOpenDBWithOption returns a new, open DB at a temporary location with given options.
 func MustOpenWithOption(o *bolt.Options) *DB {
 	f := tempfile()
+	if o == nil {
+		o = bolt.DefaultOptions
+	}
+
+	freelistType := bolt.FreelistArrayType
+	if env := os.Getenv(bolt.TestFreelistType); env == string(bolt.FreelistMapType) {
+		freelistType = bolt.FreelistMapType
+	}
+	o.FreelistType = freelistType
+
 	db, err := bolt.Open(f, 0666, o)
 	if err != nil {
 		panic(err)
