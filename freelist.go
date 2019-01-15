@@ -2,9 +2,12 @@ package bbolt
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"unsafe"
 )
+
+const arrayFreelist = "ARRAY_FREELIST"
 
 // txPending holds a list of pgids and corresponding allocation txns
 // that are pending to be freed.
@@ -14,22 +17,62 @@ type txPending struct {
 	lastReleaseBegin txid   // beginning txid of last matching releaseRange
 }
 
+// pidSet holds the set of starting pgids which have the same span size
+type pidSet map[pgid]struct{}
+
 // freelist represents a list of all pages that are available for allocation.
 // It also tracks pages that have been freed but are still in use by open transactions.
 type freelist struct {
-	ids     []pgid              // all free and available free page ids.
-	allocs  map[pgid]txid       // mapping of txid that allocated a pgid.
-	pending map[txid]*txPending // mapping of soon-to-be free page ids by tx.
-	cache   map[pgid]bool       // fast lookup of all free and pending page ids.
+	freelistType   freelistType                // freelist type
+	ids            []pgid                      // all free and available free page ids.
+	allocs         map[pgid]txid               // mapping of txid that allocated a pgid.
+	pending        map[txid]*txPending         // mapping of soon-to-be free page ids by tx.
+	cache          map[pgid]bool               // fast lookup of all free and pending page ids.
+	freemaps       map[uint64]pidSet           // key is the size of continuous pages(span), value is a set which contains the starting pgids of same size
+	forwardMap     map[pgid]uint64             // key is start pgid, value is its span size
+	backwardMap    map[pgid]uint64             // key is end pgid, value is its span size
+	allocate       func(txid txid, n int) pgid // the freelist allocate func
+	free_count     func() int                  // the function which gives you free page number
+	mergeSpans     func(ids pgids)             // the mergeSpan func
+	getFreePageIDs func() []pgid               // get free pgids func
+	readIDs        func(pgids []pgid)          // readIDs func reads list of pages and init the freelist
 }
 
 // newFreelist returns an empty, initialized freelist.
-func newFreelist() *freelist {
-	return &freelist{
-		allocs:  make(map[pgid]txid),
-		pending: make(map[txid]*txPending),
-		cache:   make(map[pgid]bool),
+func newFreelist(freelistType freelistType) *freelist {
+	if env := os.Getenv(arrayFreelist); env != "" {
+		if env == "y" {
+			freelistType = ArrayType
+		} else {
+			freelistType = HashMapType
+		}
 	}
+
+	f := &freelist{
+		freelistType: freelistType,
+		allocs:       make(map[pgid]txid),
+		pending:      make(map[txid]*txPending),
+		cache:        make(map[pgid]bool),
+		freemaps:     make(map[uint64]pidSet),
+		forwardMap:   make(map[pgid]uint64),
+		backwardMap:  make(map[pgid]uint64),
+	}
+
+	if freelistType == HashMapType {
+		f.allocate = f.hashmapAllocate
+		f.free_count = f.hashmapFree_count
+		f.mergeSpans = f.hashmapMergeSpans
+		f.getFreePageIDs = f.hashmapGetFreePageIDs
+		f.readIDs = f.hashmapReadIDs
+	} else {
+		f.allocate = f.arrayAllocate
+		f.free_count = f.arrayFree_count
+		f.mergeSpans = f.arrayMergeSpans
+		f.getFreePageIDs = f.arrayGetFreePageIDs
+		f.readIDs = f.arrayReadIDs
+	}
+
+	return f
 }
 
 // size returns the size of the page after serialization.
@@ -47,9 +90,19 @@ func (f *freelist) count() int {
 	return f.free_count() + f.pending_count()
 }
 
-// free_count returns count of free pages
-func (f *freelist) free_count() int {
+// arrayFree_count returns count of free pages(array version)
+func (f *freelist) arrayFree_count() int {
 	return len(f.ids)
+}
+
+// hashmapFree_count returns count of free pages(hashmap version)
+func (f *freelist) hashmapFree_count() int {
+	// use the forwardmap to get the total count
+	count := 0
+	for _, size := range f.forwardMap {
+		count += int(size)
+	}
+	return count
 }
 
 // pending_count returns count of pending pages
@@ -72,9 +125,9 @@ func (f *freelist) copyall(dst []pgid) {
 	mergepgids(dst, f.getFreePageIDs(), m)
 }
 
-// allocate returns the starting page id of a contiguous list of pages of a given size.
+// arrayAllocate returns the starting page id of a contiguous list of pages of a given size.
 // If a contiguous block cannot be found then 0 is returned.
-func (f *freelist) allocate(txid txid, n int) pgid {
+func (f *freelist) arrayAllocate(txid txid, n int) pgid {
 	if len(f.ids) == 0 {
 		return 0
 	}
@@ -113,6 +166,54 @@ func (f *freelist) allocate(txid txid, n int) pgid {
 
 		previd = id
 	}
+	return 0
+}
+
+// hashmapAllocate serves the same purpose as arrayAllocate, but use hashmap as backend
+func (f *freelist) hashmapAllocate(txid txid, n int) pgid {
+	if n == 0 {
+		return 0
+	}
+
+	// if we have a exact size match just return short path
+	if bm, ok := f.freemaps[uint64(n)]; ok {
+		for pid := range bm {
+			// remove the span
+			f.delSpan(pid, uint64(n))
+
+			f.allocs[pid] = txid
+
+			for i := pgid(0); i < pgid(n); i++ {
+				delete(f.cache, pid+pgid(i))
+			}
+			return pid
+		}
+	}
+
+	// lookup the map to find larger span
+	for size, bm := range f.freemaps {
+		if size < uint64(n) {
+			continue
+		}
+
+		for pid := range bm {
+			// remove the initial
+			f.delSpan(pid, uint64(size))
+
+			f.allocs[pid] = txid
+
+			remain := size - uint64(n)
+
+			// add remain span
+			f.addSpan(pid+pgid(n), remain)
+
+			for i := pgid(0); i < pgid(n); i++ {
+				delete(f.cache, pid+pgid(i))
+			}
+			return pid
+		}
+	}
+
 	return 0
 }
 
@@ -160,8 +261,7 @@ func (f *freelist) release(txid txid) {
 			delete(f.pending, tid)
 		}
 	}
-	sort.Sort(m)
-	f.ids = pgids(f.ids).merge(m)
+	f.mergeSpans(m)
 }
 
 // releaseRange moves pending pages allocated within an extent [begin,end] to the free list.
@@ -194,8 +294,7 @@ func (f *freelist) releaseRange(begin, end txid) {
 			delete(f.pending, tid)
 		}
 	}
-	sort.Sort(m)
-	f.ids = pgids(f.ids).merge(m)
+	f.mergeSpans(m)
 }
 
 // rollback removes the pages from a given pending tx.
@@ -222,8 +321,7 @@ func (f *freelist) rollback(txid txid) {
 	}
 	// Remove pages from pending list and mark as free if allocated by txid.
 	delete(f.pending, txid)
-	sort.Sort(m)
-	f.ids = pgids(f.ids).merge(m)
+	f.mergeSpans(m)
 }
 
 // freed returns whether a given page is in the free list.
@@ -249,25 +347,66 @@ func (f *freelist) read(p *page) {
 		f.ids = nil
 	} else {
 		ids := ((*[maxAllocSize]pgid)(unsafe.Pointer(&p.ptr)))[idx : idx+count]
-		f.ids = make([]pgid, len(ids))
-		copy(f.ids, ids)
-
-		// Make sure they're sorted.
-		sort.Sort(pgids(f.ids))
+		f.readIDs(ids)
 	}
+}
+
+// arrayReadIDs initializes the freelist from a given list of ids.
+func (f *freelist) arrayReadIDs(ids []pgid) {
+	if ids == nil {
+		return
+	}
+	f.ids = make([]pgid, len(ids))
+	copy(f.ids, ids)
+	// Make sure they're sorted.
+	sort.Sort(pgids(f.ids))
 
 	// Rebuild the page cache.
 	f.reindex()
 }
 
-// readIDs initializes the freelist from a given list of ids.
-func (f *freelist) readIDs(ids []pgid) {
-	f.ids = ids
+// reindex rebuilds the free cache based on available and pending free lists.
+func (f *freelist) reindex() {
+	ids := f.getFreePageIDs()
+	f.cache = make(map[pgid]bool, len(ids))
+	for _, id := range ids {
+		f.cache[id] = true
+	}
+	for _, txp := range f.pending {
+		for _, pendingID := range txp.ids {
+			f.cache[pendingID] = true
+		}
+	}
+}
+
+// hashmapReadIDs reads pgids as input an initial the freelist(hashmap version)
+func (f *freelist) hashmapReadIDs(pgids []pgid) {
+	f.init(pgids)
+
+	// Rebuild the page cache.
 	f.reindex()
 }
 
-func (f *freelist) getFreePageIDs() []pgid {
+func (f *freelist) arrayGetFreePageIDs() []pgid {
 	return f.ids
+}
+
+// hashmapGetFreePageIDs returns the sorted free page ids
+func (f *freelist) hashmapGetFreePageIDs() []pgid {
+	count := f.free_count()
+	if count == 0 {
+		return nil
+	}
+
+	m := make([]pgid, 0, count)
+	for start, size := range f.forwardMap {
+		for i := 0; i < int(size); i++ {
+			m = append(m, start+pgid(i))
+		}
+	}
+	sort.Sort(pgids(m))
+
+	return m
 }
 
 // write writes the page ids onto a freelist page. All free and pending ids are
@@ -320,15 +459,99 @@ func (f *freelist) reload(p *page) {
 	f.readIDs(a)
 }
 
-// reindex rebuilds the free cache based on available and pending free lists.
-func (f *freelist) reindex() {
-	f.cache = make(map[pgid]bool, len(f.getFreePageIDs()))
-	for _, id := range f.getFreePageIDs() {
-		f.cache[id] = true
+// hashmapMergeSpans try to merge list of pages(represented by pgids) with existing spans
+func (f *freelist) hashmapMergeSpans(ids pgids) {
+	for _, id := range ids {
+		// try to see if we can merge and update
+		f.mergeWithExistingSpan(id)
 	}
-	for _, txp := range f.pending {
-		for _, pendingID := range txp.ids {
-			f.cache[pendingID] = true
+}
+
+// arrayMergeSpans try to merge list of pages(represented by pgids) with existing spans but using array
+func (f *freelist) arrayMergeSpans(ids pgids) {
+	sort.Sort(ids)
+	f.ids = pgids(f.ids).merge(ids)
+}
+
+// mergeWithExistingSpan merges pid to the existing free spans, try to merge it backward and forward
+func (f *freelist) mergeWithExistingSpan(pid pgid) {
+	prev := pid - 1
+	next := pid + 1
+
+	preSize, mergeWithPrev := f.backwardMap[prev]
+	nextSize, mergeWithNext := f.forwardMap[next]
+	newStart := pid
+	newSize := uint64(1)
+
+	if mergeWithPrev {
+		//merge with previous span
+		start := prev + 1 - pgid(preSize)
+		f.delSpan(start, preSize)
+
+		newStart -= pgid(preSize)
+		newSize += preSize
+	}
+
+	if mergeWithNext {
+		// merge with next span
+		f.delSpan(next, nextSize)
+		newSize += nextSize
+	}
+
+	f.addSpan(newStart, newSize)
+}
+
+func (f *freelist) addSpan(start pgid, size uint64) {
+	f.backwardMap[start-1+pgid(size)] = size
+	f.forwardMap[start] = size
+	if _, ok := f.freemaps[size]; !ok {
+		f.freemaps[size] = make(map[pgid]struct{})
+	}
+
+	f.freemaps[size][start] = struct{}{}
+}
+
+func (f *freelist) delSpan(start pgid, size uint64) {
+	delete(f.forwardMap, start)
+	delete(f.backwardMap, start+pgid(size-1))
+	delete(f.freemaps[size], start)
+	if len(f.freemaps[size]) == 0 {
+		delete(f.freemaps, size)
+	}
+}
+
+// initial from pgids using when use hashmap version
+// pgids must be sorted
+func (f *freelist) init(pgids []pgid) {
+	if len(pgids) == 0 {
+		return
+	}
+
+	size := uint64(1)
+	start := pgids[0]
+
+	if !sort.SliceIsSorted([]pgid(pgids), func(i, j int) bool { return pgids[i] < pgids[j] }) {
+		panic("pgids not sorted")
+	}
+
+	f.freemaps = make(map[uint64]pidSet)
+	f.forwardMap = make(map[pgid]uint64)
+	f.backwardMap = make(map[pgid]uint64)
+
+	for i := 1; i < len(pgids); i++ {
+		// continuous page
+		if pgids[i] == pgids[i-1]+1 {
+			size++
+		} else {
+			f.addSpan(start, size)
+
+			size = 1
+			start = pgids[i]
 		}
+	}
+
+	// init the tail
+	if size != 0 && start != 0 {
+		f.addSpan(start, size)
 	}
 }

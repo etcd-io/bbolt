@@ -5,7 +5,9 @@ GOLDFLAGS="-X main.branch $(BRANCH) -X main.commit $(COMMIT)"
 default: build
 
 race:
-	@go test -v -race -test.run="TestSimulate_(100op|1000op)"
+	@ARRAY_FREELIST=n go test -v -race -test.run="TestSimulate_(100op|1000op)"
+	@echo "array freelist test"
+	@ARRAY_FREELIST=y go test -v -race -test.run="TestSimulate_(100op|1000op)"
 
 fmt:
 	!(gofmt -l -s -d $(shell find . -name \*.go) | grep '[a-z]')
@@ -23,8 +25,14 @@ errcheck:
 	@errcheck -ignorepkg=bytes -ignore=os:Remove go.etcd.io/bbolt
 
 test:
-	go test -timeout 20m -v -coverprofile cover.out -covermode atomic
+	ARRAY_FREELIST=n go test -timeout 20m -v -coverprofile cover.out -covermode atomic
 	# Note: gets "program not an importable package" in out of path builds
-	go test -v ./cmd/bbolt
+	ARRAY_FREELIST=n go test -v ./cmd/bbolt
+
+	@echo "array freelist test"
+
+	@ARRAY_FREELIST=y go test -timeout 20m -v -coverprofile cover.out -covermode atomic
+	# Note: gets "program not an importable package" in out of path builds
+	@ARRAY_FREELIST=y go test -v ./cmd/bbolt
 
 .PHONY: race fmt errcheck test gosimple unused
