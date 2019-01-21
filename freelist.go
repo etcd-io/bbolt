@@ -69,7 +69,7 @@ func (f *freelist) copyall(dst []pgid) {
 		m = append(m, txp.ids...)
 	}
 	sort.Sort(m)
-	mergepgids(dst, f.ids, m)
+	mergepgids(dst, f.getFreePageIDs(), m)
 }
 
 // allocate returns the starting page id of a contiguous list of pages of a given size.
@@ -266,6 +266,10 @@ func (f *freelist) readIDs(ids []pgid) {
 	f.reindex()
 }
 
+func (f *freelist) getFreePageIDs() []pgid {
+	return f.ids
+}
+
 // write writes the page ids onto a freelist page. All free and pending ids are
 // saved to disk since in the event of a program crash, all pending ids will
 // become free.
@@ -307,7 +311,7 @@ func (f *freelist) reload(p *page) {
 	// Check each page in the freelist and build a new available freelist
 	// with any pages not in the pending lists.
 	var a []pgid
-	for _, id := range f.ids {
+	for _, id := range f.getFreePageIDs() {
 		if !pcache[id] {
 			a = append(a, id)
 		}
@@ -318,8 +322,8 @@ func (f *freelist) reload(p *page) {
 
 // reindex rebuilds the free cache based on available and pending free lists.
 func (f *freelist) reindex() {
-	f.cache = make(map[pgid]bool, len(f.ids))
-	for _, id := range f.ids {
+	f.cache = make(map[pgid]bool, len(f.getFreePageIDs()))
+	for _, id := range f.getFreePageIDs() {
 		f.cache[id] = true
 	}
 	for _, txp := range f.pending {

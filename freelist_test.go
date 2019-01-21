@@ -34,13 +34,13 @@ func TestFreelist_release(t *testing.T) {
 	f.free(102, &page{id: 39})
 	f.release(100)
 	f.release(101)
-	if exp := []pgid{9, 12, 13}; !reflect.DeepEqual(exp, f.ids) {
-		t.Fatalf("exp=%v; got=%v", exp, f.ids)
+	if exp := []pgid{9, 12, 13}; !reflect.DeepEqual(exp, f.getFreePageIDs()) {
+		t.Fatalf("exp=%v; got=%v", exp, f.getFreePageIDs())
 	}
 
 	f.release(102)
-	if exp := []pgid{9, 12, 13, 39}; !reflect.DeepEqual(exp, f.ids) {
-		t.Fatalf("exp=%v; got=%v", exp, f.ids)
+	if exp := []pgid{9, 12, 13, 39}; !reflect.DeepEqual(exp, f.getFreePageIDs()) {
+		t.Fatalf("exp=%v; got=%v", exp, f.getFreePageIDs())
 	}
 }
 
@@ -167,8 +167,8 @@ func TestFreelist_releaseRange(t *testing.T) {
 			f.releaseRange(r.begin, r.end)
 		}
 
-		if exp := c.wantFree; !reflect.DeepEqual(exp, f.ids) {
-			t.Errorf("exp=%v; got=%v for %s", exp, f.ids, c.title)
+		if exp := c.wantFree; !reflect.DeepEqual(exp, f.getFreePageIDs()) {
+			t.Errorf("exp=%v; got=%v for %s", exp, f.getFreePageIDs(), c.title)
 		}
 	}
 }
@@ -199,8 +199,8 @@ func TestFreelist_allocate(t *testing.T) {
 	if id := int(f.allocate(1, 0)); id != 0 {
 		t.Fatalf("exp=0; got=%v", id)
 	}
-	if exp := []pgid{9, 18}; !reflect.DeepEqual(exp, f.ids) {
-		t.Fatalf("exp=%v; got=%v", exp, f.ids)
+	if exp := []pgid{9, 18}; !reflect.DeepEqual(exp, f.getFreePageIDs()) {
+		t.Fatalf("exp=%v; got=%v", exp, f.getFreePageIDs())
 	}
 
 	if id := int(f.allocate(1, 1)); id != 9 {
@@ -212,8 +212,8 @@ func TestFreelist_allocate(t *testing.T) {
 	if id := int(f.allocate(1, 1)); id != 0 {
 		t.Fatalf("exp=0; got=%v", id)
 	}
-	if exp := []pgid{}; !reflect.DeepEqual(exp, f.ids) {
-		t.Fatalf("exp=%v; got=%v", exp, f.ids)
+	if exp := []pgid{}; !reflect.DeepEqual(exp, f.getFreePageIDs()) {
+		t.Fatalf("exp=%v; got=%v", exp, f.getFreePageIDs())
 	}
 }
 
@@ -235,8 +235,8 @@ func TestFreelist_read(t *testing.T) {
 	f.read(page)
 
 	// Ensure that there are two page ids in the freelist.
-	if exp := []pgid{23, 50}; !reflect.DeepEqual(exp, f.ids) {
-		t.Fatalf("exp=%v; got=%v", exp, f.ids)
+	if exp := []pgid{23, 50}; !reflect.DeepEqual(exp, f.getFreePageIDs()) {
+		t.Fatalf("exp=%v; got=%v", exp, f.getFreePageIDs())
 	}
 }
 
@@ -258,8 +258,8 @@ func TestFreelist_write(t *testing.T) {
 
 	// Ensure that the freelist is correct.
 	// All pages should be present and in reverse order.
-	if exp := []pgid{3, 11, 12, 28, 39}; !reflect.DeepEqual(exp, f2.ids) {
-		t.Fatalf("exp=%v; got=%v", exp, f2.ids)
+	if exp := []pgid{3, 11, 12, 28, 39}; !reflect.DeepEqual(exp, f2.getFreePageIDs()) {
+		t.Fatalf("exp=%v; got=%v", exp, f2.getFreePageIDs())
 	}
 }
 
