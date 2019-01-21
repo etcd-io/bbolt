@@ -291,7 +291,7 @@ func (db *DB) loadFreelist() {
 			// Read free list from freelist page.
 			db.freelist.read(db.page(db.meta().freelist))
 		}
-		db.stats.FreePageN = len(db.freelist.ids)
+		db.stats.FreePageN = len(db.freelist.getFreePageIDs())
 	})
 }
 
