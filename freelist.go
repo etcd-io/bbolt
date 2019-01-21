@@ -260,7 +260,7 @@ func (f *freelist) read(p *page) {
 	f.reindex()
 }
 
-// read initializes the freelist from a given list of ids.
+// readIDs initializes the freelist from a given list of ids.
 func (f *freelist) readIDs(ids []pgid) {
 	f.ids = ids
 	f.reindex()
@@ -312,11 +312,8 @@ func (f *freelist) reload(p *page) {
 			a = append(a, id)
 		}
 	}
-	f.ids = a
 
-	// Once the available list is rebuilt then rebuild the free cache so that
-	// it includes the available and pending free pages.
-	f.reindex()
+	f.readIDs(a)
 }
 
 // reindex rebuilds the free cache based on available and pending free lists.

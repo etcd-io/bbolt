@@ -148,12 +148,13 @@ func TestFreelist_releaseRange(t *testing.T) {
 
 	for _, c := range releaseRangeTests {
 		f := newFreelist()
-
+		var ids []pgid
 		for _, p := range c.pagesIn {
 			for i := uint64(0); i < uint64(p.n); i++ {
-				f.ids = append(f.ids, pgid(uint64(p.id)+i))
+				ids = append(ids, pgid(uint64(p.id)+i))
 			}
 		}
+		f.readIDs(ids)
 		for _, p := range c.pagesIn {
 			f.allocate(p.allocTxn, p.n)
 		}
@@ -175,7 +176,8 @@ func TestFreelist_releaseRange(t *testing.T) {
 // Ensure that a freelist can find contiguous blocks of pages.
 func TestFreelist_allocate(t *testing.T) {
 	f := newFreelist()
-	f.ids = []pgid{3, 4, 5, 6, 7, 9, 12, 13, 18}
+	ids := []pgid{3, 4, 5, 6, 7, 9, 12, 13, 18}
+	f.readIDs(ids)
 	if id := int(f.allocate(1, 3)); id != 3 {
 		t.Fatalf("exp=3; got=%v", id)
 	}

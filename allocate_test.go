@@ -6,7 +6,8 @@ import (
 
 func TestTx_allocatePageStats(t *testing.T) {
 	f := newFreelist()
-	f.ids = []pgid{2, 3}
+	ids := []pgid{2, 3}
+	f.readIDs(ids)
 
 	tx := &Tx{
 		db: &DB{
