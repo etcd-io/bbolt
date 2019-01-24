@@ -142,7 +142,7 @@ func TestFreelist_releaseRange(t *testing.T) {
 				{id: 9, n: 2, allocTxn: 175, freeTxn: 200},
 			},
 			releaseRanges: []testRange{{50, 149}, {151, 300}},
-			wantFree:      []pgid{4, 9},
+			wantFree:      []pgid{4, 9, 10},
 		},
 	}
 
@@ -160,7 +160,7 @@ func TestFreelist_releaseRange(t *testing.T) {
 		}
 
 		for _, p := range c.pagesIn {
-			f.free(p.freeTxn, &page{id: p.id})
+			f.free(p.freeTxn, &page{id: p.id, overflow: uint32(p.n - 1)})
 		}
 
 		for _, r := range c.releaseRanges {
