@@ -45,8 +45,8 @@ func TestNode_read_LeafPage(t *testing.T) {
 
 	// Write data for the nodes at the end.
 	data := (*[4096]byte)(unsafe.Pointer(&nodes[2]))
-	copy(data[:], []byte("barfooz"))
-	copy(data[7:], []byte("helloworldbye"))
+	copy(data[:], "barfooz")
+	copy(data[7:], "helloworldbye")
 
 	// Deserialize page into a leaf.
 	n := &node{}
