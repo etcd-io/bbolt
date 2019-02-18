@@ -94,7 +94,7 @@ To use bbolt as an embedded key-value store, import as:
 ```go
 import bolt "go.etcd.io/bbolt"
 
-db, err := bolt.Open(path, 0666, nil)
+db, err := bbolt.Open(path, 0666, nil)
 if err != nil {
   return err
 }
@@ -107,7 +107,7 @@ defer db.Close()
 The top-level object in Bolt is a `DB`. It is represented as a single file on
 your disk and represents a consistent snapshot of your data.
 
-To open your database, simply use the `bolt.Open()` function:
+To open your database, simply use the `bbolt.Open()` function:
 
 ```go
 package main
@@ -121,7 +121,7 @@ import (
 func main() {
 	// Open the my.db data file in your current directory.
 	// It will be created if it doesn't exist.
-	db, err := bolt.Open("my.db", 0600, nil)
+	db, err := bbolt.Open("my.db", 0600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -137,7 +137,7 @@ database will cause it to hang until the other process closes it. To prevent
 an indefinite wait you can pass a timeout option to the `Open()` function:
 
 ```go
-db, err := bolt.Open("my.db", 0600, &bolt.Options{Timeout: 1 * time.Second})
+db, err := bbolt.Open("my.db", 0600, &bbolt.Options{Timeout: 1 * time.Second})
 ```
 
 
@@ -163,7 +163,7 @@ re-map the data file but it cannot do so while a read-only transaction is open.
 To start a read-write transaction, you can use the `DB.Update()` function:
 
 ```go
-err := db.Update(func(tx *bolt.Tx) error {
+err := db.Update(func(tx *bbolt.Tx) error {
 	...
 	return nil
 })
@@ -184,7 +184,7 @@ it will be passed through.
 To start a read-only transaction, you can use the `DB.View()` function:
 
 ```go
-err := db.View(func(tx *bolt.Tx) error {
+err := db.View(func(tx *bbolt.Tx) error {
 	...
 	return nil
 })
@@ -203,7 +203,7 @@ can be minimized by combining multiple updates with the `DB.Batch()`
 function:
 
 ```go
-err := db.Batch(func(tx *bolt.Tx) error {
+err := db.Batch(func(tx *bbolt.Tx) error {
 	...
 	return nil
 })
@@ -223,7 +223,7 @@ set variables in the enclosing scope:
 
 ```go
 var id uint64
-err := db.Batch(func(tx *bolt.Tx) error {
+err := db.Batch(func(tx *bbolt.Tx) error {
 	// Find last key in bucket, decode as bigendian uint64, increment
 	// by one, encode back to []byte, and add new key.
 	...
@@ -279,7 +279,7 @@ bucket must be unique. You can create a bucket using the `DB.CreateBucket()`
 function:
 
 ```go
-db.Update(func(tx *bolt.Tx) error {
+db.Update(func(tx *bbolt.Tx) error {
 	b, err := tx.CreateBucket([]byte("MyBucket"))
 	if err != nil {
 		return fmt.Errorf("create bucket: %s", err)
@@ -301,7 +301,7 @@ To delete a bucket, simply call the `Tx.DeleteBucket()` function.
 To save a key/value pair to a bucket, use the `Bucket.Put()` function:
 
 ```go
-db.Update(func(tx *bolt.Tx) error {
+db.Update(func(tx *bbolt.Tx) error {
 	b := tx.Bucket([]byte("MyBucket"))
 	err := b.Put([]byte("answer"), []byte("42"))
 	return err
@@ -312,7 +312,7 @@ This will set the value of the `"answer"` key to `"42"` in the `MyBucket`
 bucket. To retrieve this value, we can use the `Bucket.Get()` function:
 
 ```go
-db.View(func(tx *bolt.Tx) error {
+db.View(func(tx *bbolt.Tx) error {
 	b := tx.Bucket([]byte("MyBucket"))
 	v := b.Get([]byte("answer"))
 	fmt.Printf("The answer is: %s\n", v)
@@ -341,7 +341,7 @@ example below.
 ```go
 // CreateUser saves u to the store. The new user ID is set on u once the data is persisted.
 func (s *Store) CreateUser(u *User) error {
-    return s.db.Update(func(tx *bolt.Tx) error {
+    return s.db.Update(func(tx *bbolt.Tx) error {
         // Retrieve the users bucket.
         // This should be created when the DB is first opened.
         b := tx.Bucket([]byte("users"))
@@ -383,7 +383,7 @@ iteration over these keys extremely fast. To iterate over keys we'll use a
 `Cursor`:
 
 ```go
-db.View(func(tx *bolt.Tx) error {
+db.View(func(tx *bbolt.Tx) error {
 	// Assume bucket exists and has keys
 	b := tx.Bucket([]byte("MyBucket"))
 
@@ -426,7 +426,7 @@ access the sub-bucket.
 To iterate over a key prefix, you can combine `Seek()` and `bytes.HasPrefix()`:
 
 ```go
-db.View(func(tx *bolt.Tx) error {
+db.View(func(tx *bbolt.Tx) error {
 	// Assume bucket exists and has keys
 	c := tx.Bucket([]byte("MyBucket")).Cursor()
 
@@ -446,7 +446,7 @@ use a sortable time encoding such as RFC3339 then you can query a specific
 date range like this:
 
 ```go
-db.View(func(tx *bolt.Tx) error {
+db.View(func(tx *bbolt.Tx) error {
 	// Assume our events bucket exists and has RFC3339 encoded time keys.
 	c := tx.Bucket([]byte("Events")).Cursor()
 
@@ -472,7 +472,7 @@ You can also use the function `ForEach()` if you know you'll be iterating over
 all the keys in a bucket:
 
 ```go
-db.View(func(tx *bolt.Tx) error {
+db.View(func(tx *bbolt.Tx) error {
 	// Assume bucket exists and has keys
 	b := tx.Bucket([]byte("MyBucket"))
 
@@ -566,7 +566,7 @@ do database backups:
 
 ```go
 func BackupHandleFunc(w http.ResponseWriter, req *http.Request) {
-	err := db.View(func(tx *bolt.Tx) error {
+	err := db.View(func(tx *bbolt.Tx) error {
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.Header().Set("Content-Disposition", `attachment; filename="my.db"`)
 		w.Header().Set("Content-Length", strconv.Itoa(int(tx.Size())))
@@ -635,7 +635,7 @@ uses a shared lock to allow multiple processes to read from the database but
 it will block any processes from opening the database in read-write mode.
 
 ```go
-db, err := bolt.Open("my.db", 0666, &bolt.Options{ReadOnly: true})
+db, err := bbolt.Open("my.db", 0666, &bbolt.Options{ReadOnly: true})
 if err != nil {
 	log.Fatal(err)
 }
@@ -645,13 +645,13 @@ if err != nil {
 
 Bolt is able to run on mobile devices by leveraging the binding feature of the
 [gomobile](https://github.com/golang/mobile) tool. Create a struct that will
-contain your database logic and a reference to a `*bolt.DB` with a initializing
+contain your database logic and a reference to a `*bbolt.DB` with a initializing
 constructor that takes in a filepath where the database file will be stored.
 Neither Android nor iOS require extra permissions or cleanup from using this method.
 
 ```go
 func NewBoltDB(filepath string) *BoltDB {
-	db, err := bolt.Open(filepath+"/demo.db", 0600, nil)
+	db, err := bbolt.Open(filepath+"/demo.db", 0600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -660,7 +660,7 @@ func NewBoltDB(filepath string) *BoltDB {
 }
 
 type BoltDB struct {
-	db *bolt.DB
+	db *bbolt.DB
 	...
 }
 
