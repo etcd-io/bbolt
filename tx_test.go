@@ -654,6 +654,57 @@ func TestTx_CopyFile_Error_Normal(t *testing.T) {
 	}
 }
 
+// TestTx_Rollback ensures there is no error when tx rollback whether we sync freelist or not.
+func TestTx_Rollback(t *testing.T) {
+	for _, isSyncFreelist := range []bool{false, true} {
+		// Open the database.
+		db, err := bolt.Open(tempfile(), 0666, nil)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer os.Remove(db.Path())
+		db.NoFreelistSync = isSyncFreelist
+
+		tx, err := db.Begin(true)
+		if err != nil {
+			t.Fatalf("Error starting tx: %v", err)
+		}
+		bucket := []byte("mybucket")
+		if _, err := tx.CreateBucket(bucket); err != nil {
+			t.Fatalf("Error creating bucket: %v", err)
+		}
+		if err := tx.Commit(); err != nil {
+			t.Fatalf("Error on commit: %v", err)
+		}
+
+		tx, err = db.Begin(true)
+		if err != nil {
+			t.Fatalf("Error starting tx: %v", err)
+		}
+		b := tx.Bucket(bucket)
+		if err := b.Put([]byte("k"), []byte("v")); err != nil {
+			t.Fatalf("Error on put: %v", err)
+		}
+		// Imagine there is an error and tx needs to be rolled-back
+		if err := tx.Rollback(); err != nil {
+			t.Fatalf("Error on rollback: %v", err)
+		}
+
+		tx, err = db.Begin(false)
+		if err != nil {
+			t.Fatalf("Error starting tx: %v", err)
+		}
+		b = tx.Bucket(bucket)
+		if v := b.Get([]byte("k")); v != nil {
+			t.Fatalf("Value for k should not have been stored")
+		}
+		if err := tx.Rollback(); err != nil {
+			t.Fatalf("Error on rollback: %v", err)
+		}
+
+	}
+}
+
 // TestTx_releaseRange ensures db.freePages handles page releases
 // correctly when there are transaction that are no longer reachable
 // via any read/write transactions and are "between" ongoing read
