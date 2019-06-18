@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	bolt "github.com/pixelrazor/bbolt"
+	bolt "go.etcd.io/bbolt"
 )
 
 // Ensure the usercan register their sort functions
