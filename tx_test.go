@@ -8,7 +8,7 @@ import (
 	"os"
 	"testing"
 
-	bolt "github.com/pixelrazor/bbolt"
+	bolt "go.etcd.io/bbolt"
 )
 
 // TestTx_Check_ReadOnly tests consistency checking on a ReadOnly database.
