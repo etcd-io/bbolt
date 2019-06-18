@@ -13,7 +13,7 @@ import (
 	"testing"
 	"testing/quick"
 
-	bolt "github.com/pixelrazor/bbolt"
+	bolt "go.etcd.io/bbolt"
 )
 
 // Ensure that a bucket that gets a non-existent key returns nil.
