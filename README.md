@@ -935,6 +935,7 @@ Below is a list of public, open source projects that use Bolt:
 * [mbuckets](https://github.com/abhigupta912/mbuckets) - A Bolt wrapper that allows easy operations on multi level (nested) buckets.
 * [MetricBase](https://github.com/msiebuhr/MetricBase) - Single-binary version of Graphite.
 * [MuLiFS](https://github.com/dankomiocevic/mulifs) - Music Library Filesystem creates a filesystem to organise your music files.
+* [NATS](https://github.com/nats-io/nats-streaming-server) - NATS Streaming uses bbolt for message and metadata storage.
 * [Operation Go: A Routine Mission](http://gocode.io) - An online programming game for Golang using Bolt for user accounts and a leaderboard.
 * [photosite/session](https://godoc.org/bitbucket.org/kardianos/photosite/session) - Sessions for a photo viewing site.
 * [Prometheus Annotation Server](https://github.com/oliver006/prom_annotation_server) - Annotation server for PromDash & Prometheus service monitoring system.
