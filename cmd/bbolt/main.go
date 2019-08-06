@@ -774,7 +774,7 @@ func (cmd *PageCommand) PrintFreelist(w io.Writer, buf []byte) error {
 
 	// Print each page in the freelist.
 	ids := (*[maxAllocSize]pgid)(unsafe.Pointer(&p.ptr))
-	for i := int(idx); i < count; i++ {
+	for i := idx; i < count; i++ {
 		fmt.Fprintf(w, "%d\n", ids[i])
 	}
 	fmt.Fprintf(w, "\n")
