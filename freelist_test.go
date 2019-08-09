@@ -17,7 +17,7 @@ func TestFreelist_free(t *testing.T) {
 	f := newTestFreelist()
 	f.free(100, &page{id: 12})
 	if !reflect.DeepEqual([]pgid{12}, f.pending[100].ids) {
-		t.Fatalf("exp=%v; got=%v", []pgid{12}, f.pending[100])
+		t.Fatalf("exp=%v; got=%v", []pgid{12}, f.pending[100].ids)
 	}
 }
 
@@ -26,7 +26,7 @@ func TestFreelist_free_overflow(t *testing.T) {
 	f := newTestFreelist()
 	f.free(100, &page{id: 12, overflow: 3})
 	if exp := []pgid{12, 13, 14, 15}; !reflect.DeepEqual(exp, f.pending[100].ids) {
-		t.Fatalf("exp=%v; got=%v", exp, f.pending[100])
+		t.Fatalf("exp=%v; got=%v", exp, f.pending[100].ids)
 	}
 }
 
@@ -188,21 +188,21 @@ func TestFreelistHashmap_allocate(t *testing.T) {
 
 	f.allocate(1, 3)
 	if x := f.free_count(); x != 6 {
-		t.Fatalf("exp=5; got=%v", x)
+		t.Fatalf("exp=6; got=%v", x)
 	}
 
 	f.allocate(1, 2)
 	if x := f.free_count(); x != 4 {
-		t.Fatalf("exp=3; got=%v", x)
+		t.Fatalf("exp=4; got=%v", x)
 	}
 	f.allocate(1, 1)
 	if x := f.free_count(); x != 3 {
-		t.Fatalf("exp=2; got=%v", x)
+		t.Fatalf("exp=3; got=%v", x)
 	}
 
 	f.allocate(1, 0)
 	if x := f.free_count(); x != 3 {
-		t.Fatalf("exp=2; got=%v", x)
+		t.Fatalf("exp=3; got=%v", x)
 	}
 }
 
