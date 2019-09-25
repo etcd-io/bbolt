@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"reflect"
+	"testing"
 	"testing/quick"
 	"time"
 )
@@ -23,7 +24,7 @@ import (
 
 var qcount, qseed, qmaxitems, qmaxksize, qmaxvsize int
 
-func init() {
+func TestMain(m *testing.M) {
 	flag.IntVar(&qcount, "quick.count", 5, "")
 	flag.IntVar(&qseed, "quick.seed", int(time.Now().UnixNano())%100000, "")
 	flag.IntVar(&qmaxitems, "quick.maxitems", 1000, "")
@@ -32,6 +33,8 @@ func init() {
 	flag.Parse()
 	fmt.Fprintln(os.Stderr, "seed:", qseed)
 	fmt.Fprintf(os.Stderr, "quick settings: count=%v, items=%v, ksize=%v, vsize=%v\n", qcount, qmaxitems, qmaxksize, qmaxvsize)
+
+	m.Run()
 }
 
 func qconfig() *quick.Config {
