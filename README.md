@@ -275,7 +275,7 @@ should be writable.
 ### Using buckets
 
 Buckets are collections of key/value pairs within the database. All keys in a
-bucket must be unique. You can create a bucket using the `DB.CreateBucket()`
+bucket must be unique. You can create a bucket using the `Tx.CreateBucket()`
 function:
 
 ```go
