@@ -75,6 +75,7 @@ New minor versions may add additional features to the API.
 
 ## Getting Started
 
+[chinese doc](./README_CN.md)
 ### Installing
 
 To start using Bolt, install Go and run `go get`:
