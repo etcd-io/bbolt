@@ -73,6 +73,7 @@ func TestOpen_MultipleGoroutines(t *testing.T) {
 	path := tempfile()
 	defer os.RemoveAll(path)
 	var wg sync.WaitGroup
+	errCh := make(chan error, 1)
 	for iteration := 0; iteration < iterations; iteration++ {
 		for instance := 0; instance < instances; instance++ {
 			wg.Add(1)
@@ -80,14 +81,27 @@ func TestOpen_MultipleGoroutines(t *testing.T) {
 				defer wg.Done()
 				db, err := bolt.Open(path, 0600, nil)
 				if err != nil {
-					t.Fatal(err)
+					select {
+					case errCh <- err:
+					default:
+					}
+					return
 				}
 				if err := db.Close(); err != nil {
-					t.Fatal(err)
+					select {
+					case errCh <- err:
+					default:
+					}
+					return
 				}
 			}()
 		}
 		wg.Wait()
+		select {
+		case err := <-errCh:
+			t.Fatal(err)
+		default:
+		}
 	}
 }
 
@@ -428,19 +442,20 @@ func TestDB_Open_InitialMmapSize(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	done := make(chan struct{})
+	done := make(chan error, 1)
 
 	go func() {
-		if err := wtx.Commit(); err != nil {
-			t.Fatal(err)
-		}
-		done <- struct{}{}
+		err := wtx.Commit()
+		done <- err
 	}()
 
 	select {
 	case <-time.After(5 * time.Second):
 		t.Errorf("unexpected that the reader blocks writer")
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	if err := rtx.Rollback(); err != nil {
@@ -698,18 +713,19 @@ func testDB_Close_PendingTx(t *testing.T, writable bool) {
 	}
 
 	// Open update in separate goroutine.
-	done := make(chan struct{})
+	done := make(chan error, 1)
 	go func() {
-		if err := db.Close(); err != nil {
-			t.Fatal(err)
-		}
-		close(done)
+		err := db.Close()
+		done <- err
 	}()
 
 	// Ensure database hasn't closed.
 	time.Sleep(100 * time.Millisecond)
 	select {
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Error(err)
+		}
 		t.Fatal("database closed too early")
 	default:
 	}
@@ -727,7 +743,10 @@ func testDB_Close_PendingTx(t *testing.T, writable bool) {
 	// Ensure database closed now.
 	time.Sleep(100 * time.Millisecond)
 	select {
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
 	default:
 		t.Fatal("database did not close")
 	}
@@ -1520,6 +1539,7 @@ func BenchmarkDBBatchManual10x100(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		start := make(chan struct{})
 		var wg sync.WaitGroup
+		errCh := make(chan error, 1)
 
 		for major := 0; major < 10; major++ {
 			wg.Add(1)
@@ -1543,12 +1563,21 @@ func BenchmarkDBBatchManual10x100(b *testing.B) {
 					return nil
 				}
 				if err := db.Update(insert100); err != nil {
-					b.Fatal(err)
+					select {
+					case errCh <- err:
+					default:
+					}
+					return
 				}
 			}(uint32(major))
 		}
 		close(start)
 		wg.Wait()
+		select {
+		case err := <-errCh:
+			b.Fatal(err)
+		default:
+		}
 	}
 
 	b.StopTimer()

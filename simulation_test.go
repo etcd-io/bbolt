@@ -49,6 +49,7 @@ func testSimulate(t *testing.T, openOption *bolt.Options, round, threadCount, pa
 
 	// Run n threads in parallel, each with their own operation.
 	var wg sync.WaitGroup
+	errMsgCh := make(chan string, 1)
 
 	for n := 0; n < round; n++ {
 
@@ -74,7 +75,11 @@ func testSimulate(t *testing.T, openOption *bolt.Options, round, threadCount, pa
 				// Start transaction.
 				tx, err := db.Begin(writable)
 				if err != nil {
-					t.Fatal("tx begin: ", err)
+					select {
+					case errMsgCh <- "tx begin: " + err.Error():
+					default:
+					}
+					return
 				}
 
 				// Obtain current state of the dataset.
@@ -93,7 +98,11 @@ func testSimulate(t *testing.T, openOption *bolt.Options, round, threadCount, pa
 						mutex.Unlock()
 
 						if err := tx.Commit(); err != nil {
-							t.Fatal(err)
+							select {
+							case errMsgCh <- err.Error():
+							default:
+							}
+							return
 						}
 					}()
 				} else {
@@ -120,6 +129,11 @@ func testSimulate(t *testing.T, openOption *bolt.Options, round, threadCount, pa
 
 		// Wait until all threads are done.
 		wg.Wait()
+		select {
+		case errMsg := <-errMsgCh:
+			t.Fatal(errMsg)
+		default:
+		}
 
 		db.MustClose()
 		db.MustReopen()
