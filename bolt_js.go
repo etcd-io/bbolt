@@ -1,7 +1,6 @@
 package bbolt
 
 import (
-	"os"
 	"time"
 )
 
@@ -15,7 +14,7 @@ const maxAllocSize = 0xFFFFFFF
 var brokenUnaligned bool
 
 // flock acquires an advisory lock on a file descriptor.
-func flock(db *DB, mode os.FileMode, exclusive bool, timeout time.Duration) error {
+func flock(db *DB, exclusive bool, timeout time.Duration) error {
 	return nil
 }
 
