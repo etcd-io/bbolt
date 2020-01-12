@@ -328,25 +328,7 @@ func (f *freelist) write(p *page) error {
 // reload reads the freelist from a page and filters out pending items.
 func (f *freelist) reload(p *page) {
 	f.read(p)
-
-	// Build a cache of only pending pages.
-	pcache := make(map[pgid]bool)
-	for _, txp := range f.pending {
-		for _, pendingID := range txp.ids {
-			pcache[pendingID] = true
-		}
-	}
-
-	// Check each page in the freelist and build a new available freelist
-	// with any pages not in the pending lists.
-	var a []pgid
-	for _, id := range f.getFreePageIDs() {
-		if !pcache[id] {
-			a = append(a, id)
-		}
-	}
-
-	f.readIDs(a)
+	f.noSyncReload(f.getFreePageIDs())
 }
 
 // noSyncReload reads the freelist from pgids and filters out pending items.
