@@ -39,7 +39,7 @@ func TestNode_read_LeafPage(t *testing.T) {
 	page.count = 2
 
 	// Insert 2 elements at the beginning. sizeof(leafPageElement) == 16
-	nodes := (*[3]leafPageElement)(unsafe.Pointer(&page.ptr))
+	nodes := (*[3]leafPageElement)(unsafe.Pointer(uintptr(unsafe.Pointer(page)) + unsafe.Sizeof(*page)))
 	nodes[0] = leafPageElement{flags: 0, pos: 32, ksize: 3, vsize: 4}  // pos = sizeof(leafPageElement) * 2
 	nodes[1] = leafPageElement{flags: 0, pos: 23, ksize: 10, vsize: 3} // pos = sizeof(leafPageElement) + 3 + 4
 
