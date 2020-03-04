@@ -88,7 +88,6 @@ func testSimulate(t *testing.T, openOption *bolt.Options, round, threadCount, pa
 				// Start transaction.
 				tx, err := db.Begin(writable)
 				if err != nil {
-
 				  errCh <- fmt.Errorf("error tx begin: %v", err)
 					return
 				}
