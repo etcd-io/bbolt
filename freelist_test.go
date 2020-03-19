@@ -262,7 +262,7 @@ func TestFreelist_read(t *testing.T) {
 	page.count = 2
 
 	// Insert 2 page ids.
-	ids := (*[3]pgid)(unsafe.Pointer(&page.ptr))
+	ids := (*[3]pgid)(unsafe.Pointer(uintptr(unsafe.Pointer(page)) + unsafe.Sizeof(*page)))
 	ids[0] = 23
 	ids[1] = 50
 
