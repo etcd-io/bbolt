@@ -56,7 +56,7 @@ func (p *page) meta() *meta {
 
 // leafPageElement retrieves the leaf node by index
 func (p *page) leafPageElement(index uint16) *leafPageElement {
-	off := uintptr(index) * unsafe.Sizeof(leafPageElement{})
+	off := uintptr(index) * leafPageElementSize
 	return (*leafPageElement)(unsafe.Pointer(uintptr(unsafe.Pointer(p)) + unsafe.Sizeof(*p) + off))
 }
 
