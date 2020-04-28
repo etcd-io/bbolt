@@ -443,7 +443,7 @@ func Test_freelist_hashmapGetFreePageIDs(t *testing.T) {
 	fm := make(map[pgid]uint64)
 	i := int32(0)
 	val := int32(0)
-	for i = 0; i < N;  {
+	for i = 0; i < N; {
 		val = rand.Int31n(1000)
 		fm[pgid(i)] = uint64(val)
 		i += val
