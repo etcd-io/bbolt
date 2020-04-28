@@ -443,7 +443,7 @@ func Test_freelist_hashmapGetFreePageIDs(t *testing.T) {
 	res := f.hashmapGetFreePageIDs()
 
 	if !sort.SliceIsSorted(res, func(i, j int) bool { return res[i] < res[j] }) {
-		panic("pgids not sorted")
+		t.Fatalf("pgids not sorted")
 	}
 }
 
