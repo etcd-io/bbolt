@@ -2,7 +2,6 @@ package bbolt
 
 import (
 	"fmt"
-	"reflect"
 	"sort"
 	"unsafe"
 )
@@ -94,24 +93,8 @@ func (f *freelist) pending_count() int {
 	return count
 }
 
-// copyallunsafe copies a list of all free ids and all pending ids in one sorted list.
+// copyall copies a list of all free ids and all pending ids in one sorted list.
 // f.count returns the minimum length required for dst.
-func (f *freelist) copyallunsafe(dstptr unsafe.Pointer) { // dstptr is []pgid data pointer
-	m := make(pgids, 0, f.pending_count())
-	for _, txp := range f.pending {
-		m = append(m, txp.ids...)
-	}
-	sort.Sort(m)
-	fpgids := f.getFreePageIDs()
-	sz := len(fpgids) + len(m)
-	dst := *(*[]pgid)(unsafe.Pointer(&reflect.SliceHeader{
-		Data: uintptr(dstptr),
-		Len:  sz,
-		Cap:  sz,
-	}))
-	mergepgids(dst, fpgids, m)
-}
-
 func (f *freelist) copyall(dst []pgid) {
 	m := make(pgids, 0, f.pending_count())
 	for _, txp := range f.pending {
@@ -287,18 +270,15 @@ func (f *freelist) read(p *page) {
 	var idx, count uintptr = 0, uintptr(p.count)
 	if count == 0xFFFF {
 		idx = 1
-		count = uintptr(*(*pgid)(unsafe.Pointer(uintptr(unsafe.Pointer(p)) + unsafe.Sizeof(*p))))
+		count = uintptr(*(*pgid)(unsafeAdd(unsafe.Pointer(p), unsafe.Sizeof(*p))))
 	}
 
 	// Copy the list of page ids from the freelist.
 	if count == 0 {
 		f.ids = nil
 	} else {
-		ids := *(*[]pgid)(unsafe.Pointer(&reflect.SliceHeader{
-			Data: uintptr(unsafe.Pointer(p)) + unsafe.Sizeof(*p) + idx*unsafe.Sizeof(pgid(0)),
-			Len:  int(count),
-			Cap:  int(count),
-		}))
+		ids := (*[maxAllocSize]pgid)(unsafeAdd(
+			unsafe.Pointer(p), unsafe.Sizeof(*p)))[idx : idx+count : idx+count]
 
 		// copy the ids, so we don't modify on the freelist page directly
 		idsCopy := make([]pgid, count)
@@ -331,16 +311,18 @@ func (f *freelist) write(p *page) error {
 
 	// The page.count can only hold up to 64k elements so if we overflow that
 	// number then we handle it by putting the size in the first element.
-	lenids := f.count()
-	if lenids == 0 {
-		p.count = uint16(lenids)
-	} else if lenids < 0xFFFF {
-		p.count = uint16(lenids)
-		f.copyallunsafe(unsafe.Pointer(uintptr(unsafe.Pointer(p)) + unsafe.Sizeof(*p)))
+	l := f.count()
+	if l == 0 {
+		p.count = uint16(l)
+	} else if l < 0xFFFF {
+		p.count = uint16(l)
+		ids := (*[maxAllocSize]pgid)(unsafeAdd(unsafe.Pointer(p), unsafe.Sizeof(*p)))[:l:l]
+		f.copyall(ids)
 	} else {
 		p.count = 0xFFFF
-		*(*pgid)(unsafe.Pointer(uintptr(unsafe.Pointer(p)) + unsafe.Sizeof(*p))) = pgid(lenids)
-		f.copyallunsafe(unsafe.Pointer(uintptr(unsafe.Pointer(p)) + unsafe.Sizeof(*p) + unsafe.Sizeof(pgid(0))))
+		ids := (*[maxAllocSize]pgid)(unsafeAdd(unsafe.Pointer(p), unsafe.Sizeof(*p)))[: l+1 : l+1]
+		ids[0] = pgid(l)
+		f.copyall(ids[1:])
 	}
 
 	return nil
