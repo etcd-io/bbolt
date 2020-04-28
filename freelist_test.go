@@ -429,11 +429,14 @@ func Test_freelist_hashmapGetFreePageIDs(t *testing.T) {
 		t.Skip()
 	}
 
-	N := 10000
-	val_len := 1000
+	N := int32(100000)
 	fm := make(map[pgid]uint64)
-	for i := 0; i < N * val_len;  i += val_len{
-		fm[pgid(i)] = uint64(val_len)
+	i := int32(0)
+	val := int32(0)
+	for i = 0; i < N;  {
+		val = rand.Int31n(1000)
+		fm[pgid(i)] = uint64(val)
+		i += val
 	}
 
 	f.forwardMap = fm
