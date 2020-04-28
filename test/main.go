@@ -77,7 +77,7 @@ func (f *freelist) newHashmapGetFreePageIDs() []pgid {
 	return m
 }
 
-func main() {
+func test1() {
 	N := int32(100)
 	fm := make(map[pgid]uint64)
 	i := int32(0)
@@ -105,4 +105,38 @@ func main() {
 	if !sort.SliceIsSorted(res, func(i, j int) bool { return res[i] < res[j] }) {
 		panic("pgids not sorted")
 	}
+}
+
+func test2() {
+	N := int32(10000)
+	fm := make(map[pgid]uint64)
+	i := int32(0)
+	val := int32(10)
+	for i = 0; i < N ;  {
+		//val = rand.Int31n(1000)
+		fm[pgid(i)] = uint64(val)
+		i += val
+	}
+
+	f := freelist{
+		forwardMap: fm,
+	}
+	start := time.Now()
+	f.hashmapGetFreePageIDs()
+	end := time.Now()
+	fmt.Printf("origin time:%v\n", end.Sub(start))
+
+	start = time.Now()
+	res := f.newHashmapGetFreePageIDs()
+	end = time.Now()
+	fmt.Printf("new time:%v\n", end.Sub(start))
+
+
+	if !sort.SliceIsSorted(res, func(i, j int) bool { return res[i] < res[j] }) {
+		panic("pgids not sorted")
+	}
+}
+
+func main() {
+	test2()
 }
