@@ -85,7 +85,7 @@ func (f *freelist) hashmapGetFreePageIDs() []pgid {
 
 	for _, start := range keys {
 		size, ok := f.forwardMap[start]
-		if (ok) {
+		if ok {
 			for i := 0; i < int(size); i++ {
 				m = append(m, start+pgid(i))
 			}
