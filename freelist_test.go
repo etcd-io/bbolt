@@ -423,6 +423,28 @@ func Test_freelist_mergeWithExist(t *testing.T) {
 	}
 }
 
+func Test_freelist_hashmapGetFreePageIDs(t *testing.T) {
+	f := newTestFreelist()
+	if f.freelistType == FreelistArrayType {
+		t.Skip()
+	}
+
+	N := 10000
+	val_len := 1000
+	fm := make(map[pgid]uint64)
+	for i := 0; i < N * val_len;  i += val_len{
+		fm[pgid(i)] = uint64(val_len)
+	}
+
+	f.forwardMap = fm
+	res := f.hashmapGetFreePageIDs()
+
+	if !sort.SliceIsSorted(res, func(i, j int) bool { return res[i] < res[j] }) {
+		panic("pgids not sorted")
+	}
+}
+
+
 // newTestFreelist get the freelist type from env and initial the freelist
 func newTestFreelist() *freelist {
 	freelistType := FreelistArrayType
