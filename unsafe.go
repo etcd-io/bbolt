@@ -12,7 +12,7 @@ func unsafeIndex(base unsafe.Pointer, offset uintptr, elemsz uintptr, n int) uns
 
 func unsafeByteSlice(base unsafe.Pointer, offset uintptr, i, j int) []byte {
 	// See: https://github.com/golang/go/wiki/cgo#turning-c-arrays-into-go-slices
-	// 
+	//
 	// This memory is not allocated from C, but it is unmanaged by Go's
 	// garbage collector and should behave similarly, and the compiler
 	// should produce similar code.  Note that this conversion allows a
