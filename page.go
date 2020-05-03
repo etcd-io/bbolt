@@ -64,7 +64,8 @@ func (p *page) leafPageElements() []leafPageElement {
 	if p.count == 0 {
 		return nil
 	}
-	return (*[maxAllocSize]leafPageElement)(unsafeIndex(unsafe.Pointer(p), unsafe.Sizeof(*p),
+	const maxArraySize = maxAllocSize / unsafe.Sizeof(leafPageElement{})
+	return (*[maxArraySize]leafPageElement)(unsafeIndex(unsafe.Pointer(p), unsafe.Sizeof(*p),
 		unsafe.Sizeof(leafPageElement{}), 0))[:p.count:p.count]
 }
 
@@ -79,7 +80,8 @@ func (p *page) branchPageElements() []branchPageElement {
 	if p.count == 0 {
 		return nil
 	}
-	return (*[maxAllocSize]branchPageElement)(unsafeIndex(unsafe.Pointer(p), unsafe.Sizeof(*p),
+	const maxArraySize = maxAllocSize / unsafe.Sizeof(branchPageElement{})
+	return (*[maxArraySize]branchPageElement)(unsafeIndex(unsafe.Pointer(p), unsafe.Sizeof(*p),
 		unsafe.Sizeof(branchPageElement{}), 0))[:p.count:p.count]
 }
 
