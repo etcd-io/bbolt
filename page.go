@@ -64,9 +64,10 @@ func (p *page) leafPageElements() []leafPageElement {
 	if p.count == 0 {
 		return nil
 	}
-	const maxArraySize = maxAllocSize / unsafe.Sizeof(leafPageElement{})
-	return (*[maxArraySize]leafPageElement)(unsafeIndex(unsafe.Pointer(p), unsafe.Sizeof(*p),
-		unsafe.Sizeof(leafPageElement{}), 0))[:p.count:p.count]
+	var elems []leafPageElement
+	data := unsafeAdd(unsafe.Pointer(p), unsafe.Sizeof(*p))
+	unsafeSlice(unsafe.Pointer(&elems), data, int(p.count))
+	return elems
 }
 
 // branchPageElement retrieves the branch node by index
@@ -80,9 +81,10 @@ func (p *page) branchPageElements() []branchPageElement {
 	if p.count == 0 {
 		return nil
 	}
-	const maxArraySize = maxAllocSize / unsafe.Sizeof(branchPageElement{})
-	return (*[maxArraySize]branchPageElement)(unsafeIndex(unsafe.Pointer(p), unsafe.Sizeof(*p),
-		unsafe.Sizeof(branchPageElement{}), 0))[:p.count:p.count]
+	var elems []branchPageElement
+	data := unsafeAdd(unsafe.Pointer(p), unsafe.Sizeof(*p))
+	unsafeSlice(unsafe.Pointer(&elems), data, int(p.count))
+	return elems
 }
 
 // dump writes n bytes of the page to STDERR as hex output.
