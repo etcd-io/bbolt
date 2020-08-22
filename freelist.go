@@ -9,9 +9,8 @@ import (
 // txPending holds a list of pgids and corresponding allocation txns
 // that are pending to be freed.
 type txPending struct {
-	ids              []pgid
-	alloctx          []txid // txids allocating the ids
-	lastReleaseBegin txid   // beginning txid of last matching releaseRange
+	ids     []pgid
+	alloctx []txid // txids allocating the ids
 }
 
 // pidSet holds the set of starting pgids which have the same span size
@@ -181,51 +180,59 @@ func (f *freelist) free(txid txid, p *page) {
 	}
 }
 
-// release moves all page ids for a transaction id (or older) to the freelist.
-func (f *freelist) release(txid txid) {
+// release moves all pending pages which unseen to the read-only transactions to
+// the free list.
+func (f *freelist) release(txids []txid) {
+	// Sort the txids for the binary search by pageSeenByTxs.
+	sort.Slice(txids, func(i, j int) bool {
+		return txids[i] < txids[j]
+	})
+
 	m := make(pgids, 0)
-	for tid, txp := range f.pending {
-		if tid <= txid {
+	for freeTxid, txp := range f.pending {
+		n := 0
+		for i, id := range txp.ids {
+			if allocTxid := txp.alloctx[i]; pageSeenByTxs(allocTxid, freeTxid, txids) {
+				// The pending page is not safe to release, keep it.
+				txp.ids[n] = id
+				txp.alloctx[n] = allocTxid
+				n++
+				continue
+			}
+
 			// Move transaction's pending pages to the available freelist.
 			// Don't remove from the cache since the page is still free.
-			m = append(m, txp.ids...)
-			delete(f.pending, tid)
+			m = append(m, id)
 		}
+		if n == 0 {
+			delete(f.pending, freeTxid)
+		}
+		txp.ids = txp.ids[:n]
+		txp.alloctx = txp.alloctx[:n]
 	}
 	f.mergeSpans(m)
 }
 
-// releaseRange moves pending pages allocated within an extent [begin,end] to the free list.
-func (f *freelist) releaseRange(begin, end txid) {
-	if begin > end {
-		return
+// pageSeenByTxs tests whether a page allocated at the allocTxid and
+// freed at the freeTxid can be seen by any read-only transaction.
+func pageSeenByTxs(allocTxid, freeTxid txid, txids []txid) bool {
+	// Consider that if allocTxid <= txid < freeTxid, the page can be
+	// seen by the read-only transaction.
+
+	// Find the earliest transaction since the page has been allocated.
+	i := sort.Search(len(txids), func(i int) bool {
+		return txids[i] >= allocTxid
+	})
+	if i == len(txids) {
+		// No transaction can see the page.
+		return false
 	}
-	var m pgids
-	for tid, txp := range f.pending {
-		if tid < begin || tid > end {
-			continue
-		}
-		// Don't recompute freed pages if ranges haven't updated.
-		if txp.lastReleaseBegin == begin {
-			continue
-		}
-		for i := 0; i < len(txp.ids); i++ {
-			if atx := txp.alloctx[i]; atx < begin || atx > end {
-				continue
-			}
-			m = append(m, txp.ids[i])
-			txp.ids[i] = txp.ids[len(txp.ids)-1]
-			txp.ids = txp.ids[:len(txp.ids)-1]
-			txp.alloctx[i] = txp.alloctx[len(txp.alloctx)-1]
-			txp.alloctx = txp.alloctx[:len(txp.alloctx)-1]
-			i--
-		}
-		txp.lastReleaseBegin = begin
-		if len(txp.ids) == 0 {
-			delete(f.pending, tid)
-		}
+	txid := txids[i]
+	if txid >= freeTxid {
+		// The page has been freed before the transaction can see it.
+		return false
 	}
-	f.mergeSpans(m)
+	return true
 }
 
 // rollback removes the pages from a given pending tx.
