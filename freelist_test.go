@@ -96,7 +96,7 @@ func TestFreelist_release(t *testing.T) {
 		{
 			title:    "Single pending #9",
 			pagesIn:  []testPage{{id: 3, n: 1, allocTxn: 100, freeTxn: 200}},
-			txidSets: [][]txid{{100}},
+			txidSets: [][]txid{{100, 199}},
 			wantFree: []pgid{},
 		},
 		{
@@ -145,7 +145,7 @@ func TestFreelist_release(t *testing.T) {
 			wantFree: []pgid{3, 4},
 		},
 		{
-			title: "Multiple pending",
+			title: "Multiple pending #1",
 			pagesIn: []testPage{
 				{id: 3, n: 1, allocTxn: 100, freeTxn: 200},
 				{id: 4, n: 1, allocTxn: 100, freeTxn: 125},
@@ -159,6 +159,22 @@ func TestFreelist_release(t *testing.T) {
 				{50, 149, 151, 300},
 			},
 			wantFree: []pgid{4, 9, 10},
+		},
+		{
+			title: "Multiple pending #2",
+			pagesIn: []testPage{
+				{id: 3, n: 1, allocTxn: 100, freeTxn: 200},
+				{id: 4, n: 1, allocTxn: 100, freeTxn: 250},
+				{id: 5, n: 1, allocTxn: 125, freeTxn: 200},
+				{id: 6, n: 1, allocTxn: 125, freeTxn: 250},
+				{id: 7, n: 2, allocTxn: 150, freeTxn: 200},
+				{id: 9, n: 2, allocTxn: 175, freeTxn: 250},
+			},
+			txidSets: [][]txid{
+				{110, 240},
+				{249},
+			},
+			wantFree: []pgid{3, 5, 7, 8},
 		},
 	}
 

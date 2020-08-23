@@ -11,6 +11,25 @@ import (
 type txPending struct {
 	ids     []pgid
 	alloctx []txid // txids allocating the ids
+	sorted  bool   // if the ids and alloctx are already sorted
+}
+
+// sort sorts the ids and alloctx by txid.
+func (txp *txPending) sort() {
+	if txp.sorted {
+		return
+	}
+	sort.Sort((*sortTxPending)(txp))
+	txp.sorted = true
+}
+
+type sortTxPending txPending
+
+func (s *sortTxPending) Len() int           { return len(s.ids) }
+func (s *sortTxPending) Less(i, j int) bool { return s.alloctx[i] < s.alloctx[j] }
+func (s *sortTxPending) Swap(i, j int) {
+	s.ids[i], s.ids[j] = s.ids[j], s.ids[i]
+	s.alloctx[i], s.alloctx[j] = s.alloctx[j], s.alloctx[i]
 }
 
 // pidSet holds the set of starting pgids which have the same span size
@@ -180,59 +199,52 @@ func (f *freelist) free(txid txid, p *page) {
 	}
 }
 
-// release moves all pending pages which unseen to the read-only transactions to
+// release moves all pending pages unseen by the read-only transactions to
 // the free list.
 func (f *freelist) release(txids []txid) {
-	// Sort the txids for the binary search by pageSeenByTxs.
-	sort.Slice(txids, func(i, j int) bool {
-		return txids[i] < txids[j]
-	})
+	// Pre-sort the txids for the binary search by firstPageUnseenByTxs.
+	sort.Slice(txids, func(i, j int) bool { return txids[i] < txids[j] })
 
 	m := make(pgids, 0)
 	for freeTxid, txp := range f.pending {
-		n := 0
-		for i, id := range txp.ids {
-			if allocTxid := txp.alloctx[i]; pageSeenByTxs(allocTxid, freeTxid, txids) {
-				// The pending page is not safe to release, keep it.
-				txp.ids[n] = id
-				txp.alloctx[n] = allocTxid
-				n++
-				continue
-			}
+		// Pre-sort the txp for the binary search by firstPageUnseenByTxs.
+		txp.sort()
+		allocTxids := txp.alloctx
+		i := firstPageUnseenByTxs(allocTxids, freeTxid, txids)
 
-			// Move transaction's pending pages to the available freelist.
-			// Don't remove from the cache since the page is still free.
-			m = append(m, id)
-		}
-		if n == 0 {
+		// The pages unseen by any transaction is safe to release, move to the available freelist.
+		// Don't remove from the cache since the page is still free.
+		m = append(m, txp.ids[i:]...)
+		if i == 0 {
 			delete(f.pending, freeTxid)
+			continue
 		}
-		txp.ids = txp.ids[:n]
-		txp.alloctx = txp.alloctx[:n]
+
+		// The pages maybe seen by transactions, remain pending.
+		txp.ids = txp.ids[:i]
+		txp.alloctx = txp.alloctx[:i]
 	}
 	f.mergeSpans(m)
 }
 
-// pageSeenByTxs tests whether a page allocated at the allocTxid and
-// freed at the freeTxid can be seen by any read-only transaction.
-func pageSeenByTxs(allocTxid, freeTxid txid, txids []txid) bool {
+// firstPageUnseenByTxs returns the index of the first page, which is
+// allocated at the allocTxid and freed at the freeTxid, and can not be
+// seen by any read-only transaction.
+func firstPageUnseenByTxs(allocTxids []txid, freeTxid txid, txids []txid) int {
 	// Consider that if allocTxid <= txid < freeTxid, the page can be
 	// seen by the read-only transaction.
 
-	// Find the earliest transaction since the page has been allocated.
-	i := sort.Search(len(txids), func(i int) bool {
-		return txids[i] >= allocTxid
-	})
-	if i == len(txids) {
-		// No transaction can see the page.
-		return false
+	// Find the latest transaction started before pages have been freed at the freeTxid.
+	j := -1 + sort.Search(len(txids), func(i int) bool { return txids[i] >= freeTxid })
+	if j < 0 {
+		// No transaction can see pages freed at the freeTxid.
+		return 0
 	}
-	txid := txids[i]
-	if txid >= freeTxid {
-		// The page has been freed before the transaction can see it.
-		return false
-	}
-	return true
+
+	// Find the first page allocated after the latest transaction has been started.
+	txid := txids[j]
+	k := sort.Search(len(allocTxids), func(i int) bool { return allocTxids[i] > txid })
+	return k
 }
 
 // rollback removes the pages from a given pending tx.
