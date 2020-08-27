@@ -34,7 +34,7 @@ func TestMain(m *testing.M) {
 	fmt.Fprintln(os.Stderr, "seed:", qseed)
 	fmt.Fprintf(os.Stderr, "quick settings: count=%v, items=%v, ksize=%v, vsize=%v\n", qcount, qmaxitems, qmaxksize, qmaxvsize)
 
-	m.Run()
+	os.Exit(m.Run())
 }
 
 func qconfig() *quick.Config {
