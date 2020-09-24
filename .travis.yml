@@ -7,6 +7,7 @@ go:
 - 1.12
 
 before_install:
+- go get -v golang.org/x/sys/unix
 - go get -v honnef.co/go/tools/...
 - go get -v github.com/kisielk/errcheck
 
