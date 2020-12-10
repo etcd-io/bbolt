@@ -1122,7 +1122,7 @@ func TestDB_Batch(t *testing.T) {
 
 	// Iterate over multiple updates in separate goroutines.
 	n := 2
-	ch := make(chan error)
+	ch := make(chan error, n)
 	for i := 0; i < n; i++ {
 		go func(i int) {
 			ch <- db.Batch(func(tx *bolt.Tx) error {
