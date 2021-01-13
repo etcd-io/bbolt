@@ -914,6 +914,7 @@ Below is a list of public, open source projects that use Bolt:
   simple tx and key scans.
 * [cayley](https://github.com/google/cayley) - Cayley is an open-source graph database using Bolt as optional backend.
 * [ChainStore](https://github.com/pressly/chainstore) - Simple key-value interface to a variety of storage engines organized as a chain of operations.
+* [🌰 Chestnut](https://github.com/jrapoport/chestnut) - Chestnut is encrypted storage for Go.
 * [Consul](https://github.com/hashicorp/consul) - Consul is service discovery and configuration made easy. Distributed, highly available, and datacenter-aware.
 * [DVID](https://github.com/janelia-flyem/dvid) - Added Bolt as optional storage engine and testing it against Basho-tuned leveldb.
 * [dcrwallet](https://github.com/decred/dcrwallet) - A wallet for the Decred cryptocurrency.
