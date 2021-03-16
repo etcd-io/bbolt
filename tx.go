@@ -393,7 +393,7 @@ func (tx *Tx) CopyFile(path string, mode os.FileMode) error {
 		return err
 	}
 
-	err = tx.Copy(f)
+	_, err = tx.WriteTo(f)
 	if err != nil {
 		_ = f.Close()
 		return err
