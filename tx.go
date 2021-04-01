@@ -188,7 +188,6 @@ func (tx *Tx) Commit() error {
 	}
 
 	// If strict mode is enabled then perform a consistency check.
-	// Only the first consistency error is reported in the panic.
 	if tx.db.StrictMode {
 		ch := tx.Check()
 		var errs []string
