@@ -41,7 +41,7 @@ func (f *freelist) hashmapAllocate(txid txid, n int) pgid {
 
 		for pid := range bm {
 			// remove the initial
-			f.delSpan(pid, size))
+			f.delSpan(pid, size)
 
 			f.allocs[pid] = txid
 
