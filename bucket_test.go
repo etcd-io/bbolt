@@ -1185,6 +1185,10 @@ func TestBucket_Put_ValueTooLarge(t *testing.T) {
 
 // Ensure a bucket can calculate stats.
 func TestBucket_Stats(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode")
+	}
+
 	db := MustOpenDB()
 	defer db.MustClose()
 
