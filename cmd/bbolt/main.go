@@ -882,7 +882,7 @@ func (cmd *PagesCommand) Run(args ...string) error {
 	fmt.Fprintln(cmd.Stdout, "ID       TYPE       ITEMS  OVRFLW")
 	fmt.Fprintln(cmd.Stdout, "======== ========== ====== ======")
 
-	return db.Update(func(tx *bolt.Tx) error {
+	return db.View(func(tx *bolt.Tx) error {
 		var id int
 		for {
 			p, err := tx.Page(id)
