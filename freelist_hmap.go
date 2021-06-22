@@ -8,7 +8,11 @@ import (
 
 // hashmapFreeCount returns count of free pages(hashmap version)
 func (f *freelist) hashmapFreeCount() int {
-	// use the forwardMap to get the total count
+	_assertVerify(func() bool { return int(f.freePagesCount) == f.hashmapFreeCountSlow() }, "freePagesCount is out of sync with free pages map")
+	return int(f.freePagesCount)
+}
+
+func (f *freelist) hashmapFreeCountSlow() int {
 	count := 0
 	for _, size := range f.forwardMap {
 		count += int(size)
@@ -142,6 +146,7 @@ func (f *freelist) addSpan(start common.Pgid, size uint64) {
 	}
 
 	f.freemaps[size][start] = struct{}{}
+	f.freePagesCount += size
 }
 
 func (f *freelist) delSpan(start common.Pgid, size uint64) {
@@ -151,6 +156,7 @@ func (f *freelist) delSpan(start common.Pgid, size uint64) {
 	if len(f.freemaps[size]) == 0 {
 		delete(f.freemaps, size)
 	}
+	f.freePagesCount -= size
 }
 
 // initial from pgids using when use hashmap version
@@ -162,6 +168,8 @@ func (f *freelist) init(pgids []common.Pgid) {
 
 	size := uint64(1)
 	start := pgids[0]
+	// reset the counter when freelist init
+	f.freePagesCount = 0
 
 	if !sort.SliceIsSorted([]common.Pgid(pgids), func(i, j int) bool { return pgids[i] < pgids[j] }) {
 		panic("pgids not sorted")
