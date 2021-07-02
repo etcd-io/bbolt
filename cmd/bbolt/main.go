@@ -1387,7 +1387,7 @@ func (cmd *BenchCommand) runWrites(db *bolt.DB, options *BenchOptions, results *
 	}
 
 	finishChan := make(chan interface{})
-	go checkProgress(results, finishChan)
+	go cmd.checkProgress(results, finishChan)
 	defer close(finishChan)
 
 	t := time.Now()
@@ -1519,7 +1519,7 @@ func (cmd *BenchCommand) runReads(db *bolt.DB, options *BenchOptions, results *B
 	}
 
 	finishChan := make(chan interface{})
-	go checkProgress(results, finishChan)
+	go cmd.checkProgress(results, finishChan)
 	defer close(finishChan)
 
 	t := time.Now()
@@ -1611,7 +1611,7 @@ func (cmd *BenchCommand) runReadsSequentialNested(db *bolt.DB, options *BenchOpt
 	})
 }
 
-func checkProgress(results *BenchResults, finishChan chan interface{}) {
+func (cmd *BenchCommand) checkProgress(results *BenchResults, finishChan chan interface{}) {
 	ticker := time.Tick(time.Second)
 	lastCompleted, lastTime := int64(0), time.Now()
 	for {
@@ -1620,7 +1620,7 @@ func checkProgress(results *BenchResults, finishChan chan interface{}) {
 			return
 		case t := <-ticker:
 			completed, taken := results.CompletedOps, t.Sub(lastTime)
-			fmt.Printf("Completed %d requests, %3.1f/s \n",
+			fmt.Fprintf(cmd.Stdout, "Completed %d requests, %3.1f/s \n",
 				completed, float64(completed-lastCompleted)*float64(int64(time.Second))/float64(int64(taken)),
 			)
 			lastCompleted, lastTime = completed, t
