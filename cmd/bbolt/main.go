@@ -1620,8 +1620,8 @@ func (cmd *BenchCommand) checkProgress(results *BenchResults, finishChan chan in
 			return
 		case t := <-ticker:
 			completed, taken := results.CompletedOps, t.Sub(lastTime)
-			fmt.Fprintf(cmd.Stderr, "Completed %d requests, %3.1f/s \n",
-				completed, float64(completed-lastCompleted)*float64(int64(time.Second))/float64(int64(taken)),
+			fmt.Fprintf(cmd.Stderr, "Completed %d requests, %d/s \n",
+				completed, ((completed-lastCompleted)*int64(time.Second))/int64(taken),
 			)
 			lastCompleted, lastTime = completed, t
 		}
