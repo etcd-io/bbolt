@@ -1298,7 +1298,7 @@ func (cmd *BenchCommand) Run(args ...string) error {
 
 	// Remove path if "-work" is not set. Otherwise keep path.
 	if options.Work {
-		fmt.Fprintf(cmd.Stdout, "work: %s\n", options.Path)
+		fmt.Fprintf(cmd.Stderr, "work: %s\n", options.Path)
 	} else {
 		defer os.Remove(options.Path)
 	}
@@ -1313,13 +1313,13 @@ func (cmd *BenchCommand) Run(args ...string) error {
 
 	// Write to the database.
 	writeResults := BenchResults{int64(0), 0}
-	fmt.Fprintf(cmd.Stdout, "starting write benchmark.\n")
+	fmt.Fprintf(cmd.Stderr, "starting write benchmark.\n")
 	if err := cmd.runWrites(db, options, &writeResults); err != nil {
 		return fmt.Errorf("write: %v", err)
 	}
 
 	readResults := BenchResults{int64(0), 0}
-	fmt.Fprintf(cmd.Stdout, "starting read benchmark.\n")
+	fmt.Fprintf(cmd.Stderr, "starting read benchmark.\n")
 	// Read from the database.
 	if err := cmd.runReads(db, options, &readResults); err != nil {
 		return fmt.Errorf("bench: read: %s", err)
@@ -1620,7 +1620,7 @@ func (cmd *BenchCommand) checkProgress(results *BenchResults, finishChan chan in
 			return
 		case t := <-ticker:
 			completed, taken := results.CompletedOps, t.Sub(lastTime)
-			fmt.Fprintf(cmd.Stdout, "Completed %d requests, %3.1f/s \n",
+			fmt.Fprintf(cmd.Stderr, "Completed %d requests, %3.1f/s \n",
 				completed, float64(completed-lastCompleted)*float64(int64(time.Second))/float64(int64(taken)),
 			)
 			lastCompleted, lastTime = completed, t
