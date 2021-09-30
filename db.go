@@ -505,8 +505,10 @@ func (db *DB) init() error {
 	if _, err := db.ops.writeAt(buf, 0); err != nil {
 		return err
 	}
-	if err := fdatasync(db); err != nil {
-		return err
+	if !db.NoSync || IgnoreNoSync {
+		if err := fdatasync(db); err != nil {
+			return err
+		}
 	}
 	db.filesz = len(buf)
 
@@ -1017,8 +1019,10 @@ func (db *DB) grow(sz int) error {
 				return fmt.Errorf("file resize error: %s", err)
 			}
 		}
-		if err := db.file.Sync(); err != nil {
-			return fmt.Errorf("file sync error: %s", err)
+		if !db.NoSync || IgnoreNoSync {
+			if err := db.file.Sync(); err != nil {
+				return fmt.Errorf("file sync error: %s", err)
+			}
 		}
 		if db.Mlock {
 			// unlock old file and lock new one
