@@ -202,7 +202,7 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 	db.AllocSize = DefaultAllocSize
 
 	flag := os.O_RDWR
-	if options.ReadOnly {
+	if options.ReadOnly || (mode&0222 == 0) {
 		flag = os.O_RDONLY
 		db.readOnly = true
 	}
