@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"hash/fnv"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
@@ -158,7 +157,7 @@ func TestOpen_ErrVersionMismatch(t *testing.T) {
 	}
 
 	// Read data file.
-	buf, err := ioutil.ReadFile(path)
+	buf, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +167,7 @@ func TestOpen_ErrVersionMismatch(t *testing.T) {
 	meta0.version++
 	meta1 := (*meta)(unsafe.Pointer(&buf[pageSize+pageHeaderSize]))
 	meta1.version++
-	if err := ioutil.WriteFile(path, buf, 0666); err != nil {
+	if err := os.WriteFile(path, buf, 0666); err != nil {
 		t.Fatal(err)
 	}
 
@@ -195,7 +194,7 @@ func TestOpen_ErrChecksum(t *testing.T) {
 	}
 
 	// Read data file.
-	buf, err := ioutil.ReadFile(path)
+	buf, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +204,7 @@ func TestOpen_ErrChecksum(t *testing.T) {
 	meta0.pgid++
 	meta1 := (*meta)(unsafe.Pointer(&buf[pageSize+pageHeaderSize]))
 	meta1.pgid++
-	if err := ioutil.WriteFile(path, buf, 0666); err != nil {
+	if err := os.WriteFile(path, buf, 0666); err != nil {
 		t.Fatal(err)
 	}
 
@@ -643,7 +642,7 @@ func TestDB_Concurrent_WriteTo(t *testing.T) {
 	wg.Add(wtxs * rtxs)
 	f := func(tx *bolt.Tx) {
 		defer wg.Done()
-		f, err := ioutil.TempFile("", "bolt-")
+		f, err := os.CreateTemp("", "bolt-")
 		if err != nil {
 			panic(err)
 		}
@@ -1747,7 +1746,7 @@ func (db *DB) CopyTempFile() {
 
 // tempfile returns a temporary file path.
 func tempfile() string {
-	f, err := ioutil.TempFile("", "bolt-")
+	f, err := os.CreateTemp("", "bolt-")
 	if err != nil {
 		panic(err)
 	}
