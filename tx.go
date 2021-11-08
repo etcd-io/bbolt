@@ -1,6 +1,7 @@
 package bbolt
 
 import (
+	"crypto/sha1"
 	"fmt"
 	"io"
 	"os"
@@ -482,6 +483,20 @@ func (tx *Tx) checkBucket(b *Bucket, reachable map[pgid]*page, freed map[pgid]bo
 			ch <- fmt.Errorf("page %d: invalid type: %s", int(p.id), p.typ())
 		}
 	})
+
+	// Check all the keys in this bucket, and raise an error if there are duplicated keys.
+	cachedKeys := map[[sha1.Size]byte][]byte{}
+	b.ForEach(func(key, _ []byte) error {
+		sha1Key := sha1.Sum(key)
+		if val, ok := cachedKeys[sha1Key]; ok {
+			ch <- fmt.Errorf("duplicated key: %q found", val)
+		} else {
+			cachedKeys[sha1Key] = key
+		}
+		return nil
+	})
+	// clear the map
+	cachedKeys = map[[sha1.Size]byte][]byte{}
 
 	// Check each bucket within this bucket.
 	_ = b.ForEach(func(k, v []byte) error {
