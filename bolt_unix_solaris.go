@@ -61,7 +61,7 @@ func mmap(db *DB, sz int) error {
 	}
 
 	// Advise the kernel that the mmap is accessed randomly.
-	if err := unix.Madvise(b, syscall.MADV_RANDOM); err != nil {
+	if err := mmapRandom(b); err != nil {
 		return fmt.Errorf("madvise: %s", err)
 	}
 
@@ -70,6 +70,16 @@ func mmap(db *DB, sz int) error {
 	db.data = (*[maxMapSize]byte)(unsafe.Pointer(&b[0]))
 	db.datasz = sz
 	return nil
+}
+
+// mmapRandom tells the OS to expect random access of pages in our mmap
+func mmapRandom(b []byte) error {
+	return unix.Madvise(b, syscall.MADV_RANDOM)
+}
+
+// mmapRandom tells the OS to expect sequential access of pages in our mmap
+func mmapSequential(b []byte) error {
+	return unix.Madvise(b, syscall.MADV_SEQUENTIAL)
 }
 
 // munmap unmaps a DB's data file from memory.

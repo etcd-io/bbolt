@@ -87,6 +87,11 @@ type DB struct {
 	// The default type is array
 	FreelistType FreelistType
 
+	// When true, and NoFreelistSync is also true, building the freelist is
+	// done by scanning all pages in order of how they're stored on disk,
+	// instead of the default behaviour of scanning pages in tree order.
+	SeqFreelistLoad bool
+
 	// When true, skips the truncate call when growing the database.
 	// Setting this to true is only safe on non-ext3/ext4 systems.
 	// Skipping truncation avoids preallocation of hard drive space and
@@ -195,6 +200,7 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 	db.NoFreelistSync = options.NoFreelistSync
 	db.FreelistType = options.FreelistType
 	db.Mlock = options.Mlock
+	db.SeqFreelistLoad = options.SeqFreelistLoad
 
 	// Set default values for later DB operations.
 	db.MaxBatchSize = DefaultMaxBatchSize
@@ -290,7 +296,10 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 		return db, nil
 	}
 
-	db.loadFreelist()
+	if err := db.loadFreelist(); err != nil {
+		_ = db.close()
+		return nil, err
+	}
 
 	// Flush freelist when transitioning from no sync to sync so
 	// NoFreelistSync unaware boltdb can open the db later.
@@ -312,18 +321,27 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 // loadFreelist reads the freelist if it is synced, or reconstructs it
 // by scanning the DB if it is not synced. It assumes there are no
 // concurrent accesses being made to the freelist.
-func (db *DB) loadFreelist() {
+func (db *DB) loadFreelist() error {
+	var err error
 	db.freelistLoad.Do(func() {
 		db.freelist = newFreelist(db.FreelistType)
-		if !db.hasSyncedFreelist() {
-			// Reconstruct free list by scanning the DB.
-			db.freelist.readIDs(db.freepages())
-		} else {
-			// Read free list from freelist page.
+		switch {
+		case db.hasSyncedFreelist():
 			db.freelist.read(db.page(db.meta().freelist))
+		case db.SeqFreelistLoad:
+			err = mmapSequential(db.dataref)
+			if err != nil {
+				return
+			}
+			db.freelist.readIDs(db.freepagesSeq())
+			err = mmapRandom(db.dataref)
+		default:
+			db.freelist.readIDs(db.freepages())
 		}
+
 		db.stats.FreePageN = db.freelist.free_count()
 	})
+	return err
 }
 
 func (db *DB) hasSyncedFreelist() bool {
@@ -1068,6 +1086,85 @@ func (db *DB) freepages() []pgid {
 	return fids
 }
 
+type pagesum struct {
+	children []pgid
+	overflow int
+}
+
+// freepagesSeq is an alternate implementation of freepages which makes freepage
+// scanning sequential.  This is generally going to be perform better but there
+// are two costs: first, we have to be able to hold a few bytes per page in memory
+// initially, in order to keep track of what we find while scanning.  Second,
+// unlike the default freepages algorithm, we read every non-overflow page,
+// including ones that have already been freed.
+func (db *DB) freepagesSeq() []pgid {
+	tx, err := db.beginTx()
+	defer func() {
+		err = tx.Rollback()
+		if err != nil {
+			panic("freepages: failed to rollback tx")
+		}
+	}()
+	if err != nil {
+		panic("freepages: failed to open read only tx")
+	}
+	// Note that `pages` may contain invalid data: we're populating it based
+	// on all pages, including ones that have actually been freed.  We don't
+	// know which pages have been freed until we've traversed all buckets from
+	// their roots and observed which pages aren't reachable from any of those.
+	pages := make(map[pgid]pagesum)
+	for i := pgid(2); i < db.meta().pgid; i++ {
+		p := db.page(i)
+		ps := pagesum{overflow: int(p.overflow)}
+		if (p.flags&branchPageFlag) != 0 && p.count > 0 {
+			ps.children = make([]pgid, p.count)
+			for b := 0; b < int(p.count); b++ {
+				elem := p.branchPageElement(uint16(b))
+				ps.children[b] = elem.pgid
+			}
+		}
+		i += pgid(p.overflow)
+		pages[i] = ps
+	}
+
+	canreach := make(map[pgid]struct{})
+	forEachBucket(&tx.root, 0, func(b *Bucket, i int) {
+		forEachPage(pages, b.root, 0, func(id pgid, i int) {
+			//fmt.Printf("%d ", id)
+			for i := pgid(0); i <= pgid(pages[id].overflow); i++ {
+				canreach[id+i] = struct{}{}
+			}
+		})
+	})
+
+	var fids []pgid
+	for i := pgid(2); i < db.meta().pgid; i++ {
+		if _, ok := canreach[i]; !ok {
+			fids = append(fids, i)
+		}
+	}
+	return fids
+}
+
+func forEachBucket(b *Bucket, depth int, fn func(*Bucket, int)) {
+	_ = b.ForEach(func(k, v []byte) error {
+		fn(b, depth)
+		if child := b.Bucket(k); child != nil {
+			fn(child, depth+1)
+		}
+		return nil
+	})
+}
+
+func forEachPage(pages map[pgid]pagesum, pgid pgid, depth int, fn func(pgid, int)) {
+	fn(pgid, depth)
+
+	mykids := pages[pgid].children
+	for i := 0; i < len(mykids); i++ {
+		forEachPage(pages, mykids[i], depth+1, fn)
+	}
+}
+
 // Options represents the options that can be set when opening a database.
 type Options struct {
 	// Timeout is the amount of time to wait to obtain a file lock.
@@ -1122,6 +1219,10 @@ type Options struct {
 	// It prevents potential page faults, however
 	// used memory can't be reclaimed. (UNIX only)
 	Mlock bool
+
+	// SeqFreelistLoad enables a more sequential algorithm for loading the freelist
+	// when NoFreelistSync is set.
+	SeqFreelistLoad bool
 }
 
 // DefaultOptions represent the options used if nil options are passed into Open().

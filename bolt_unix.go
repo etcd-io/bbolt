@@ -1,3 +1,4 @@
+//go:build !windows && !plan9 && !solaris && !aix
 // +build !windows,!plan9,!solaris,!aix
 
 package bbolt
@@ -57,16 +58,35 @@ func mmap(db *DB, sz int) error {
 	}
 
 	// Advise the kernel that the mmap is accessed randomly.
-	err = unix.Madvise(b, syscall.MADV_RANDOM)
-	if err != nil && err != syscall.ENOSYS {
-		// Ignore not implemented error in kernel because it still works.
-		return fmt.Errorf("madvise: %s", err)
+	err = mmapRandom(b)
+	if err != nil {
+		return err
 	}
 
 	// Save the original byte slice and convert to a byte array pointer.
 	db.dataref = b
 	db.data = (*[maxMapSize]byte)(unsafe.Pointer(&b[0]))
 	db.datasz = sz
+	return nil
+}
+
+// mmapRandom tells the OS to expect random access of pages in our mmap
+func mmapRandom(b []byte) error {
+	err := unix.Madvise(b, syscall.MADV_RANDOM)
+	if err != nil && err != syscall.ENOSYS {
+		// Ignore not implemented error in kernel because it still works.
+		return fmt.Errorf("madvise: %s", err)
+	}
+	return nil
+}
+
+// mmapRandom tells the OS to expect sequential access of pages in our mmap
+func mmapSequential(b []byte) error {
+	err := unix.Madvise(b, syscall.MADV_SEQUENTIAL)
+	if err != nil && err != syscall.ENOSYS {
+		// Ignore not implemented error in kernel because it still works.
+		return fmt.Errorf("madvise: %s", err)
+	}
 	return nil
 }
 
