@@ -26,7 +26,7 @@ and setting values. That's it.
 [gh_ben]: https://github.com/benbjohnson
 [bolt]: https://github.com/boltdb/bolt
 [hyc_symas]: https://twitter.com/hyc_symas
-[lmdb]: http://symas.com/mdb/
+[lmdb]: http://symas.com/lmdb/
 
 ## Project Status
 
