@@ -1979,7 +1979,7 @@ func (cmd *CompactCommand) Run(args ...string) (err error) {
 	initialSize := fi.Size()
 
 	// Open source database.
-	src, err := bolt.Open(cmd.SrcPath, 0444, nil)
+	src, err := bolt.Open(cmd.SrcPath, 0444, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
