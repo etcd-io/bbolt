@@ -2,7 +2,6 @@ package bbolt
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -12,7 +11,7 @@ import (
 func createDb(t *testing.T) (*DB, func()) {
 	// First, create a temporary directory to be used for the duration of
 	// this test.
-	tempDirName, err := ioutil.TempDir("", "bboltmemtest")
+	tempDirName, err := os.MkdirTemp("", "bboltmemtest")
 	if err != nil {
 		t.Fatalf("error creating temp dir: %v", err)
 	}

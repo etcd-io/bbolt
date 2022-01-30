@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"strconv"
@@ -265,7 +264,7 @@ func NewMain() *Main {
 // MustOpen creates a Bolt database in a temporary location.
 func MustOpen(mode os.FileMode, options *bolt.Options) *DB {
 	// Create temporary path.
-	f, _ := ioutil.TempFile("", "bolt-")
+	f, _ := os.CreateTemp("", "bolt-")
 	f.Close()
 	os.Remove(f.Name())
 
