@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"hash/fnv"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
@@ -66,6 +65,10 @@ func TestOpen(t *testing.T) {
 // Regression validation for https://github.com/etcd-io/bbolt/pull/122.
 // Tests multiple goroutines simultaneously opening a database.
 func TestOpen_MultipleGoroutines(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode")
+	}
+
 	const (
 		instances  = 30
 		iterations = 30
@@ -73,6 +76,7 @@ func TestOpen_MultipleGoroutines(t *testing.T) {
 	path := tempfile()
 	defer os.RemoveAll(path)
 	var wg sync.WaitGroup
+	errCh := make(chan error, iterations*instances)
 	for iteration := 0; iteration < iterations; iteration++ {
 		for instance := 0; instance < instances; instance++ {
 			wg.Add(1)
@@ -80,14 +84,22 @@ func TestOpen_MultipleGoroutines(t *testing.T) {
 				defer wg.Done()
 				db, err := bolt.Open(path, 0600, nil)
 				if err != nil {
-					t.Fatal(err)
+					errCh <- err
+					return
 				}
 				if err := db.Close(); err != nil {
-					t.Fatal(err)
+					errCh <- err
+					return
 				}
 			}()
 		}
 		wg.Wait()
+	}
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			t.Fatalf("error from inside goroutine: %v", err)
+		}
 	}
 }
 
@@ -145,7 +157,7 @@ func TestOpen_ErrVersionMismatch(t *testing.T) {
 	}
 
 	// Read data file.
-	buf, err := ioutil.ReadFile(path)
+	buf, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +167,7 @@ func TestOpen_ErrVersionMismatch(t *testing.T) {
 	meta0.version++
 	meta1 := (*meta)(unsafe.Pointer(&buf[pageSize+pageHeaderSize]))
 	meta1.version++
-	if err := ioutil.WriteFile(path, buf, 0666); err != nil {
+	if err := os.WriteFile(path, buf, 0666); err != nil {
 		t.Fatal(err)
 	}
 
@@ -182,7 +194,7 @@ func TestOpen_ErrChecksum(t *testing.T) {
 	}
 
 	// Read data file.
-	buf, err := ioutil.ReadFile(path)
+	buf, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +204,7 @@ func TestOpen_ErrChecksum(t *testing.T) {
 	meta0.pgid++
 	meta1 := (*meta)(unsafe.Pointer(&buf[pageSize+pageHeaderSize]))
 	meta1.pgid++
-	if err := ioutil.WriteFile(path, buf, 0666); err != nil {
+	if err := os.WriteFile(path, buf, 0666); err != nil {
 		t.Fatal(err)
 	}
 
@@ -382,7 +394,7 @@ func TestOpen_FileTooSmall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db, err = bolt.Open(path, 0666, nil)
+	_, err = bolt.Open(path, 0666, nil)
 	if err == nil || err.Error() != "file size too small" {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -428,19 +440,20 @@ func TestDB_Open_InitialMmapSize(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	done := make(chan struct{})
+	done := make(chan error, 1)
 
 	go func() {
-		if err := wtx.Commit(); err != nil {
-			t.Fatal(err)
-		}
-		done <- struct{}{}
+		err := wtx.Commit()
+		done <- err
 	}()
 
 	select {
 	case <-time.After(5 * time.Second):
 		t.Errorf("unexpected that the reader blocks writer")
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	if err := rtx.Rollback(); err != nil {
@@ -629,7 +642,7 @@ func TestDB_Concurrent_WriteTo(t *testing.T) {
 	wg.Add(wtxs * rtxs)
 	f := func(tx *bolt.Tx) {
 		defer wg.Done()
-		f, err := ioutil.TempFile("", "bolt-")
+		f, err := os.CreateTemp("", "bolt-")
 		if err != nil {
 			panic(err)
 		}
@@ -698,18 +711,19 @@ func testDB_Close_PendingTx(t *testing.T, writable bool) {
 	}
 
 	// Open update in separate goroutine.
-	done := make(chan struct{})
+	done := make(chan error, 1)
 	go func() {
-		if err := db.Close(); err != nil {
-			t.Fatal(err)
-		}
-		close(done)
+		err := db.Close()
+		done <- err
 	}()
 
 	// Ensure database hasn't closed.
 	time.Sleep(100 * time.Millisecond)
 	select {
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Errorf("error from inside goroutine: %v", err)
+		}
 		t.Fatal("database closed too early")
 	default:
 	}
@@ -727,7 +741,10 @@ func testDB_Close_PendingTx(t *testing.T, writable bool) {
 	// Ensure database closed now.
 	time.Sleep(100 * time.Millisecond)
 	select {
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("error from inside goroutine: %v", err)
+		}
 	default:
 		t.Fatal("database did not close")
 	}
@@ -1108,7 +1125,7 @@ func TestDB_Batch(t *testing.T) {
 
 	// Iterate over multiple updates in separate goroutines.
 	n := 2
-	ch := make(chan error)
+	ch := make(chan error, n)
 	for i := 0; i < n; i++ {
 		go func(i int) {
 			ch <- db.Batch(func(tx *bolt.Tx) error {
@@ -1358,7 +1375,7 @@ func ExampleDB_View() {
 	// John's last name is doe.
 }
 
-func ExampleDB_Begin_ReadOnly() {
+func ExampleDB_Begin() {
 	// Open the database.
 	db, err := bolt.Open(tempfile(), 0666, nil)
 	if err != nil {
@@ -1520,6 +1537,7 @@ func BenchmarkDBBatchManual10x100(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		start := make(chan struct{})
 		var wg sync.WaitGroup
+		errCh := make(chan error, 10)
 
 		for major := 0; major < 10; major++ {
 			wg.Add(1)
@@ -1542,13 +1560,18 @@ func BenchmarkDBBatchManual10x100(b *testing.B) {
 					}
 					return nil
 				}
-				if err := db.Update(insert100); err != nil {
-					b.Fatal(err)
-				}
+				err := db.Update(insert100)
+				errCh <- err
 			}(uint32(major))
 		}
 		close(start)
 		wg.Wait()
+		close(errCh)
+		for err := range errCh {
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
 	}
 
 	b.StopTimer()
@@ -1723,7 +1746,7 @@ func (db *DB) CopyTempFile() {
 
 // tempfile returns a temporary file path.
 func tempfile() string {
-	f, err := ioutil.TempFile("", "bolt-")
+	f, err := os.CreateTemp("", "bolt-")
 	if err != nil {
 		panic(err)
 	}
