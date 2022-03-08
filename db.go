@@ -217,13 +217,14 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 		db.openFile = os.OpenFile
 	}
 
+	// if file name is ":memory:", work memory only mode, like sqlite
 	if path == ":memory:" {
 		db.memOnly = true
 	}
 
 	// Open data file and separate sync handler for metadata writes.
-	var err error
 	if !db.memOnly {
+		var err error
 		if db.file, err = db.openFile(path, flag|os.O_CREATE, mode); err != nil {
 			_ = db.close()
 			return nil, err
@@ -263,10 +264,12 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 	// Initialize the database if it doesn't exist.
 	var info os.FileInfo
 	if !db.memOnly {
+		var err error
 		if info, err = db.file.Stat(); err != nil {
 			return nil, err
 		}
 	}
+
 	if db.memOnly || info.Size() == 0 {
 		// Initialize new files with meta pages.
 		if err := db.init(); err != nil {

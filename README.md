@@ -109,6 +109,8 @@ your disk and represents a consistent snapshot of your data.
 
 To open your database, simply use the `bolt.Open()` function:
 
+> if file name is ":memory:", the database stored in memory, just like sqlite
+
 ```go
 package main
 
