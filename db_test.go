@@ -173,7 +173,7 @@ func TestOpen_ErrVersionMismatch(t *testing.T) {
 
 	// Reopen data file.
 	if _, err := bolt.Open(path, 0666, nil); err != bolt.ErrVersionMismatch {
-		t.Fatalf("unexpected error: %s", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -528,6 +528,30 @@ func TestOpen_BigPage(t *testing.T) {
 
 	if db1sz, db2sz := fileSize(db1.f), fileSize(db2.f); db1sz >= db2sz {
 		t.Errorf("expected %d < %d", db1sz, db2sz)
+	}
+}
+
+// TestOpen_MemoryOnly checks the database uses memory storage
+// changing MemOnly.
+func TestOpen_MemoryOnly(t *testing.T) {
+	db := MustOpenWithOption(&bolt.Options{MemOnly: true})
+	defer db.MustClose()
+
+	if err := db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucket([]byte("widgets"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := b.Put([]byte("foo"), []byte("bar")); err != nil {
+			t.Fatal(err)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := db.DB.Close(); err != nil {
+		t.Fatal(err)
 	}
 }
 

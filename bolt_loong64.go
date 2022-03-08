@@ -1,4 +1,4 @@
-// +build loong64
+//go:build loong64
 
 package bbolt
 

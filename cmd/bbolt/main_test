@@ -261,14 +261,9 @@ func NewMain() *Main {
 	return m
 }
 
-// MustOpen creates a Bolt database in a temporary location.
+// MustOpen creates a Bolt database in memory
 func MustOpen(mode os.FileMode, options *bolt.Options) *DB {
-	// Create temporary path.
-	f, _ := os.CreateTemp("", "bolt-")
-	f.Close()
-	os.Remove(f.Name())
-
-	db, err := bolt.Open(f.Name(), mode, options)
+	db, err := bolt.Open(":memory:", mode, options)
 	if err != nil {
 		panic(err.Error())
 	}
