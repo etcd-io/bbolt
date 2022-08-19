@@ -329,6 +329,16 @@ set to a key which is different than the key not existing.
 
 Use the `Bucket.Delete()` function to delete a key from the bucket.
 
+```go
+db.Update(func (tx *bolt.Tx) error {
+    b := tx.Bucket([]byte("MyBucket"))
+    b.Delete([]byte("answer"))
+    return nil
+})
+```
+
+This will delete the key `answers` from the bucket `MyBucket`.
+
 Please note that values returned from `Get()` are only valid while the
 transaction is open. If you need to use a value outside of the transaction
 then you must use `copy()` to copy it to another byte slice.
