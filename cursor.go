@@ -60,6 +60,17 @@ func (c *Cursor) Last() (key []byte, value []byte) {
 	ref.index = ref.count() - 1
 	c.stack = append(c.stack, ref)
 	c.last()
+
+	// If this is an empty page (calling Delete may result in empty pages)
+	// we call prev to find the last page that is not empty
+	for len(c.stack) > 0 && c.stack[len(c.stack)-1].count() == 0 {
+		c.prev()
+	}
+
+	if len(c.stack) == 0 {
+		return nil, nil
+	}
+
 	k, v, flags := c.keyValue()
 	if (flags & uint32(bucketLeafFlag)) != 0 {
 		return k, nil
@@ -84,26 +95,7 @@ func (c *Cursor) Next() (key []byte, value []byte) {
 // The returned key and value are only valid for the life of the transaction.
 func (c *Cursor) Prev() (key []byte, value []byte) {
 	_assert(c.bucket.tx.db != nil, "tx closed")
-
-	// Attempt to move back one element until we're successful.
-	// Move up the stack as we hit the beginning of each page in our stack.
-	for i := len(c.stack) - 1; i >= 0; i-- {
-		elem := &c.stack[i]
-		if elem.index > 0 {
-			elem.index--
-			break
-		}
-		c.stack = c.stack[:i]
-	}
-
-	// If we've hit the end then return nil.
-	if len(c.stack) == 0 {
-		return nil, nil
-	}
-
-	// Move down the stack to find the last element of the last leaf under this branch.
-	c.last()
-	k, v, flags := c.keyValue()
+	k, v, flags := c.prev()
 	if (flags & uint32(bucketLeafFlag)) != 0 {
 		return k, nil
 	}
@@ -241,6 +233,30 @@ func (c *Cursor) next() (key []byte, value []byte, flags uint32) {
 
 		return c.keyValue()
 	}
+}
+
+// prev moves the cursor to the previous item in the bucket and returns its key and value.
+// If the cursor is at the beginning of the bucket then a nil key and value are returned.
+func (c *Cursor) prev() (key []byte, value []byte, flags uint32) {
+	// Attempt to move back one element until we're successful.
+	// Move up the stack as we hit the beginning of each page in our stack.
+	for i := len(c.stack) - 1; i >= 0; i-- {
+		elem := &c.stack[i]
+		if elem.index > 0 {
+			elem.index--
+			break
+		}
+		c.stack = c.stack[:i]
+	}
+
+	// If we've hit the end then return nil.
+	if len(c.stack) == 0 {
+		return nil, nil, 0
+	}
+
+	// Move down the stack to find the last element of the last leaf under this branch.
+	c.last()
+	return c.keyValue()
 }
 
 // search recursively performs a binary search against a given page/node until it finds a given key.
