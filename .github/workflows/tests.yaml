@@ -11,6 +11,5 @@ jobs:
     - run: make fmt
     - run: make race
     - run: make test
-    # Enable when fixed (same as make lint)
-    # - name: golangci-lint
-    #   uses: golangci/golangci-lint-action@v2
+    - name: golangci-lint
+      uses: golangci/golangci-lint-action@v3

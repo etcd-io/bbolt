@@ -574,7 +574,7 @@ func (tx *Tx) write() error {
 		for i := range buf {
 			buf[i] = 0
 		}
-		tx.db.pagePool.Put(buf)
+		tx.db.pagePool.Put(buf) //nolint:staticcheck
 	}
 
 	return nil

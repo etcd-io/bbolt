@@ -108,10 +108,10 @@ func skipOnMemlockLimitBelow(t *testing.T, memlockLimitRequest uint64) {
 	}
 
 	if info.Cur < memlockLimitRequest {
-		t.Skip(fmt.Sprintf(
-			"skipping as RLIMIT_MEMLOCK is unsufficient: %v < %v",
+		t.Skipf(
+			"skipping as RLIMIT_MEMLOCK is insufficient: %v < %v",
 			info.Cur,
 			memlockLimitRequest,
-		))
+		)
 	}
 }
