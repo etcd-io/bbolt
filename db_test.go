@@ -30,15 +30,15 @@ const pageHeaderSize = 16
 
 // meta represents a simplified version of a database meta page for testing.
 type meta struct {
-	_        uint32
-	version  uint32
-	_        uint32
-	_        uint32
-	_        [16]byte
-	_        uint64
-	pgid     uint64
-	_        uint64
-	_        uint64
+	_       uint32
+	version uint32
+	_       uint32
+	_       uint32
+	_       [16]byte
+	_       uint64
+	pgid    uint64
+	_       uint64
+	_       uint64
 }
 
 // Ensure that a database can be opened without error.
