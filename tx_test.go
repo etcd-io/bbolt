@@ -57,7 +57,10 @@ func TestTx_Check_ReadOnly(t *testing.T) {
 		}
 	}
 	// Close the view transaction
-	tx.Rollback()
+	err = tx.Rollback()
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 // Ensure that committing a closed transaction returns an error.
@@ -112,7 +115,10 @@ func TestTx_Commit_ErrTxNotWritable(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Close the view transaction
-	tx.Rollback()
+	err = tx.Rollback()
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 // Ensure that a transaction can retrieve a cursor on the root bucket.

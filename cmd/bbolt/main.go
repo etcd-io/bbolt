@@ -1631,7 +1631,11 @@ func (cmd *BenchCommand) startProfiling(options *BenchOptions) {
 			fmt.Fprintf(cmd.Stderr, "bench: could not create cpu profile %q: %v\n", options.CPUProfile, err)
 			os.Exit(1)
 		}
-		pprof.StartCPUProfile(cpuprofile)
+		err = pprof.StartCPUProfile(cpuprofile)
+		if err != nil {
+			fmt.Fprintf(cmd.Stderr, "bench: could not start cpu profile %q: %v\n", options.CPUProfile, err)
+			os.Exit(1)
+		}
 	}
 
 	// Start memory profiling.
@@ -1664,13 +1668,19 @@ func (cmd *BenchCommand) stopProfiling() {
 	}
 
 	if memprofile != nil {
-		pprof.Lookup("heap").WriteTo(memprofile, 0)
+		err := pprof.Lookup("heap").WriteTo(memprofile, 0)
+		if err != nil {
+			fmt.Fprintf(cmd.Stderr, "bench: could not write mem profile")
+		}
 		memprofile.Close()
 		memprofile = nil
 	}
 
 	if blockprofile != nil {
-		pprof.Lookup("block").WriteTo(blockprofile, 0)
+		err := pprof.Lookup("block").WriteTo(blockprofile, 0)
+		if err != nil {
+			fmt.Fprintf(cmd.Stderr, "bench: could not write block profile")
+		}
 		blockprofile.Close()
 		blockprofile = nil
 		runtime.SetBlockProfileRate(0)
