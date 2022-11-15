@@ -332,8 +332,8 @@ Use the `Bucket.Delete()` function to delete a key from the bucket.
 ```go
 db.Update(func (tx *bolt.Tx) error {
     b := tx.Bucket([]byte("MyBucket"))
-    b.Delete([]byte("answer"))
-    return nil
+    err := b.Delete([]byte("answer"))
+    return err
 })
 ```
 
