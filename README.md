@@ -327,7 +327,7 @@ exists then it will return its byte slice value. If it doesn't exist then it
 will return `nil`. It's important to note that you can have a zero-length value
 set to a key which is different than the key not existing.
 
-Use the `Bucket.Delete()` function to delete a key from the bucket.
+Use the `Bucket.Delete()` function to delete a key from the bucket:
 
 ```go
 db.Update(func (tx *bolt.Tx) error {
