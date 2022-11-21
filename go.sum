@@ -1,2 +1,4 @@
 golang.org/x/sys v0.2.0 h1:ljd4t30dBnAvMZaQCevtY0xLLD0A+bRZXbgLMLU1F/A=
 golang.org/x/sys v0.2.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.2.1-0.20221110211117-d684c6f88669 h1:pvmSpBoSG0gD2LLPAX15QHPig8xsbU0tu1sSAmResqk=
+golang.org/x/sys v0.2.1-0.20221110211117-d684c6f88669/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
