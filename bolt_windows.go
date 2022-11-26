@@ -82,6 +82,8 @@ func mmap(db *DB, sz int) error {
 	// Create the memory map.
 	addr, errno := syscall.MapViewOfFile(h, syscall.FILE_MAP_READ, 0, 0, 0)
 	if addr == 0 {
+		// Do our best and report error returned from MapViewOfFile.
+		_ = syscall.CloseHandle(h)
 		return os.NewSyscallError("MapViewOfFile", errno)
 	}
 
