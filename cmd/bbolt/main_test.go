@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	bolt "go.etcd.io/bbolt"
+	main "go.etcd.io/bbolt/cmd/bbolt"
 )
 
 // Ensure the "info" command can print information about a database.
