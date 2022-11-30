@@ -507,6 +507,53 @@ func TestCursor_First_EmptyPages(t *testing.T) {
 	}
 }
 
+// Ensure that a cursor can skip over empty pages that have been deleted.
+func TestCursor_Last_EmptyPages(t *testing.T) {
+	db := MustOpenDB()
+	defer db.MustClose()
+
+	// Create 1000 keys in the "widgets" bucket.
+	if err := db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucket([]byte("widgets"))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for i := 0; i < 1000; i++ {
+			if err := b.Put(u64tob(uint64(i)), []byte{}); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Delete last 800 elements to ensure last page is empty
+	if err := db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("widgets"))
+		for i := 200; i < 1000; i++ {
+			if err := b.Delete(u64tob(uint64(i))); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		c := b.Cursor()
+		var n int
+		for k, _ := c.Last(); k != nil; k, _ = c.Prev() {
+			n++
+		}
+		if n != 200 {
+			t.Fatalf("unexpected key count: %d", n)
+		}
+
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // Ensure that a Tx can iterate over all elements in a bucket.
 func TestCursor_QuickCheck(t *testing.T) {
 	f := func(items testdata) bool {
