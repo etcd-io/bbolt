@@ -527,30 +527,30 @@ func (cmd *PageItemCommand) leafPageElement(pageBytes []byte, index uint16) (*le
 	return p.leafPageElement(index), nil
 }
 
-
-// writeBytes writes the byte to the writer. Supported formats: ascii-encoded, hex, bytes.
-func writeBytes(w io.Writer, b []byte, format string) error {
+// formatBytes converts bytes into string according to format.
+// Supported formats: ascii-encoded, hex, bytes.
+func formatBytes(b []byte, format string) (string, error) {
 	switch format {
 	case "ascii-encoded":
-		_, err := fmt.Fprintf(w, "%q", b)
-		if err != nil {
-			return err
-		}
-		_, err = fmt.Fprintf(w, "\n")
-		return err
+		return fmt.Sprintf("%q", b), nil
 	case "hex":
-		_, err := fmt.Fprintf(w, "%x", b)
-		if err != nil {
-			return err
-		}
-		_, err = fmt.Fprintf(w, "\n")
-		return err
+		return fmt.Sprintf("%q", b), nil
 	case "bytes":
-		_, err := w.Write(b)
-		return err
+		return fmt.Sprintf("%s", b), nil
 	default:
-		return fmt.Errorf("writeBytes: unsupported format: %s", format)
+		return "", fmt.Errorf("formatBytes: unsupported format: %s", format)
 	}
+}
+
+// writelnBytes writes the byte to the writer. Supported formats: ascii-encoded, hex, bytes.
+// Terminates the write with a new line symbol;
+func writelnBytes(w io.Writer, b []byte, format string) error {
+	str, err := formatBytes(b, format)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(w, str)
+	return err
 }
 
 // PrintLeafItemKey writes the bytes of a leaf element's key.
@@ -559,7 +559,7 @@ func (cmd *PageItemCommand) PrintLeafItemKey(w io.Writer, pageBytes []byte, inde
 	if err != nil {
 		return err
 	}
-	return writeBytes(w, e.key(), format)
+	return writelnBytes(w, e.key(), format)
 }
 
 // PrintLeafItemKey writes the bytes of a leaf element's value.
@@ -568,7 +568,7 @@ func (cmd *PageItemCommand) PrintLeafItemValue(w io.Writer, pageBytes []byte, in
 	if err != nil {
 		return err
 	}
-	return writeBytes(w, e.value(), format)
+	return writelnBytes(w, e.value(), format)
 }
 
 // Usage returns the help message.
@@ -1145,7 +1145,7 @@ func newKeysCommand(m *Main) *KeysCommand {
 func (cmd *KeysCommand) Run(args ...string) error {
 	// Parse flags.
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
-	optionsFormat:=fs.String("format", "bytes", "Output format. One of: ascii-encoded|hex|bytes (default: bytes)")
+	optionsFormat := fs.String("format", "bytes", "Output format. One of: ascii-encoded|hex|bytes (default: bytes)")
 	help := fs.Bool("h", false, "")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -1188,11 +1188,7 @@ func (cmd *KeysCommand) Run(args ...string) error {
 
 		// Iterate over each key.
 		return lastbucket.ForEach(func(key, _ []byte) error {
-			writeBytes(cmd.Stdout, key, *optionsFormat)
-			if *optionsFormat=="bytes" {
-				// Preserving the legacy behavior of separation with '\n'
-				fmt.Fprintln(cmd.Stdout)
-			}
+			writelnBytes(cmd.Stdout, key, *optionsFormat)
 			return nil
 		})
 	})
@@ -1200,7 +1196,8 @@ func (cmd *KeysCommand) Run(args ...string) error {
 
 // Usage returns the help message.
 // TODO: Use https://pkg.go.dev/flag#FlagSet.PrintDefaults to print supported
-//       flags.
+//
+//	flags.
 func (cmd *KeysCommand) Usage() string {
 	return strings.TrimLeft(`
 usage: bolt keys PATH [BUCKET...]
@@ -1281,7 +1278,7 @@ func (cmd *GetCommand) Run(args ...string) error {
 		// Find value for given key.
 		val := lastbucket.Get([]byte(key))
 		if val == nil {
-			return fmt.Errorf("Error %w for key: %q hex: \"%x\"", ErrKeyNotFound, key, string(key));
+			return fmt.Errorf("Error %w for key: %q hex: \"%x\"", ErrKeyNotFound, key, string(key))
 		}
 
 		fmt.Fprintln(cmd.Stdout, string(val))
