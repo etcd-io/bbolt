@@ -527,8 +527,9 @@ func (cmd *PageItemCommand) leafPageElement(pageBytes []byte, index uint16) (*le
 	return p.leafPageElement(index), nil
 }
 
+
 // writeBytes writes the byte to the writer. Supported formats: ascii-encoded, hex, bytes.
-func (cmd *PageItemCommand) writeBytes(w io.Writer, b []byte, format string) error {
+func writeBytes(w io.Writer, b []byte, format string) error {
 	switch format {
 	case "ascii-encoded":
 		_, err := fmt.Fprintf(w, "%q", b)
@@ -558,7 +559,7 @@ func (cmd *PageItemCommand) PrintLeafItemKey(w io.Writer, pageBytes []byte, inde
 	if err != nil {
 		return err
 	}
-	return cmd.writeBytes(w, e.key(), format)
+	return writeBytes(w, e.key(), format)
 }
 
 // PrintLeafItemKey writes the bytes of a leaf element's value.
@@ -567,7 +568,7 @@ func (cmd *PageItemCommand) PrintLeafItemValue(w io.Writer, pageBytes []byte, in
 	if err != nil {
 		return err
 	}
-	return cmd.writeBytes(w, e.value(), format)
+	return writeBytes(w, e.value(), format)
 }
 
 // Usage returns the help message.
@@ -1144,6 +1145,7 @@ func newKeysCommand(m *Main) *KeysCommand {
 func (cmd *KeysCommand) Run(args ...string) error {
 	// Parse flags.
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	optionsFormat:=fs.String("format", "bytes", "Output format. One of: ascii-encoded|hex|bytes (default: bytes)")
 	help := fs.Bool("h", false, "")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -1186,18 +1188,31 @@ func (cmd *KeysCommand) Run(args ...string) error {
 
 		// Iterate over each key.
 		return lastbucket.ForEach(func(key, _ []byte) error {
-			fmt.Fprintln(cmd.Stdout, string(key))
+			writeBytes(cmd.Stdout, key, *optionsFormat)
+			if *optionsFormat=="bytes" {
+				// Preserving the legacy behavior of separation with '\n'
+				fmt.Fprintln(cmd.Stdout)
+			}
 			return nil
 		})
 	})
 }
 
 // Usage returns the help message.
+// TODO: Use https://pkg.go.dev/flag#FlagSet.PrintDefaults to print supported
+//       flags.
 func (cmd *KeysCommand) Usage() string {
 	return strings.TrimLeft(`
 usage: bolt keys PATH [BUCKET...]
 
 Print a list of keys in the given (sub)bucket.
+=======
+
+Options:
+	--format
+		Output format. One of: ascii-encoded|hex|bytes (default=bytes)
+
+Print a list of keys in the given bucket.
 `, "\n")
 }
 
@@ -1266,7 +1281,7 @@ func (cmd *GetCommand) Run(args ...string) error {
 		// Find value for given key.
 		val := lastbucket.Get([]byte(key))
 		if val == nil {
-			return ErrKeyNotFound
+			return fmt.Errorf("Error %w for key: %q hex: \"%x\"", ErrKeyNotFound, key, string(key));
 		}
 
 		fmt.Fprintln(cmd.Stdout, string(val))
