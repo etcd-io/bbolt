@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -534,11 +535,22 @@ func formatBytes(b []byte, format string) (string, error) {
 	case "ascii-encoded":
 		return fmt.Sprintf("%q", b), nil
 	case "hex":
-		return fmt.Sprintf("%q", b), nil
+		return fmt.Sprintf("%x", b), nil
 	case "bytes":
 		return fmt.Sprintf("%s", b), nil
 	default:
 		return "", fmt.Errorf("formatBytes: unsupported format: %s", format)
+	}
+}
+
+func parseBytes(str string, format string) ([]byte, error) {
+	switch format {
+	case "ascii-encoded":
+		return []byte(str), nil
+	case "hex":
+		return hex.DecodeString(str)
+	default:
+		return nil, fmt.Errorf("parseBytes: unsupported format: %s", format)
 	}
 }
 
@@ -1233,6 +1245,10 @@ func newGetCommand(m *Main) *GetCommand {
 func (cmd *GetCommand) Run(args ...string) error {
 	// Parse flags.
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	var parseFormat string
+	var format string
+	fs.StringVar(&parseFormat, "parse-format", "ascii-encoded", "Output format. One of: ascii-encoded|hex")
+	fs.StringVar(&format, "format", "bytes", "Output format. One of: ascii-encoded|hex|bytes (default: bytes)")
 	help := fs.Bool("h", false, "")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -1243,14 +1259,18 @@ func (cmd *GetCommand) Run(args ...string) error {
 
 	// Require database path, bucket and key.
 	relevantArgs := fs.Args()
-	path, buckets, key := relevantArgs[0], relevantArgs[1:len(relevantArgs)-1], relevantArgs[len(relevantArgs)-1]
+	path, buckets := relevantArgs[0], relevantArgs[1:len(relevantArgs)-1]
+	key, err := parseBytes(relevantArgs[len(relevantArgs)-1], parseFormat)
+	if err != nil {
+		return err
+	}
 	if path == "" {
 		return ErrPathRequired
 	} else if _, err := os.Stat(path); os.IsNotExist(err) {
 		return ErrFileNotFound
 	} else if len(buckets) == 0 {
 		return ErrBucketRequired
-	} else if key == "" {
+	} else if len(key) == 0 {
 		return ErrKeyRequired
 	}
 
@@ -1276,13 +1296,13 @@ func (cmd *GetCommand) Run(args ...string) error {
 		}
 
 		// Find value for given key.
-		val := lastbucket.Get([]byte(key))
+		val := lastbucket.Get(key)
 		if val == nil {
 			return fmt.Errorf("Error %w for key: %q hex: \"%x\"", ErrKeyNotFound, key, string(key))
 		}
 
-		fmt.Fprintln(cmd.Stdout, string(val))
-		return nil
+		// TODO: In this particular case, it would be better to not terminate with '\n'
+		return writelnBytes(cmd.Stdout, val, format)
 	})
 }
 
