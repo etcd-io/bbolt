@@ -537,7 +537,7 @@ func formatBytes(b []byte, format string) (string, error) {
 	case "hex":
 		return fmt.Sprintf("%x", b), nil
 	case "bytes":
-		return fmt.Sprintf("%s", b), nil
+		return string(b), nil
 	default:
 		return "", fmt.Errorf("formatBytes: unsupported format: %s", format)
 	}
@@ -1200,16 +1200,13 @@ func (cmd *KeysCommand) Run(args ...string) error {
 
 		// Iterate over each key.
 		return lastbucket.ForEach(func(key, _ []byte) error {
-			writelnBytes(cmd.Stdout, key, *optionsFormat)
-			return nil
+			return writelnBytes(cmd.Stdout, key, *optionsFormat)
 		})
 	})
 }
 
 // Usage returns the help message.
-// TODO: Use https://pkg.go.dev/flag#FlagSet.PrintDefaults to print supported
-//
-//	flags.
+// TODO: Use https://pkg.go.dev/flag#FlagSet.PrintDefaults to print supported flags.
 func (cmd *KeysCommand) Usage() string {
 	return strings.TrimLeft(`
 usage: bolt keys PATH [BUCKET...]
@@ -1217,7 +1214,8 @@ usage: bolt keys PATH [BUCKET...]
 Print a list of keys in the given (sub)bucket.
 =======
 
-Options:
+Additional options include:
+
 	--format
 		Output format. One of: ascii-encoded|hex|bytes (default=bytes)
 
@@ -1247,7 +1245,7 @@ func (cmd *GetCommand) Run(args ...string) error {
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	var parseFormat string
 	var format string
-	fs.StringVar(&parseFormat, "parse-format", "ascii-encoded", "Output format. One of: ascii-encoded|hex")
+	fs.StringVar(&parseFormat, "parse-format", "ascii-encoded", "Input format. One of: ascii-encoded|hex (default: ascii-encoded)")
 	fs.StringVar(&format, "format", "bytes", "Output format. One of: ascii-encoded|hex|bytes (default: bytes)")
 	help := fs.Bool("h", false, "")
 	if err := fs.Parse(args); err != nil {
@@ -1312,6 +1310,13 @@ func (cmd *GetCommand) Usage() string {
 usage: bolt get PATH [BUCKET..] KEY
 
 Print the value of the given key in the given (sub)bucket.
+
+Additional options include:
+
+	--format
+		Output format. One of: ascii-encoded|hex|bytes (default=bytes)
+	--parse-format
+		Input format (of key). One of: ascii-encoded|hex (default=ascii-encoded)"
 `, "\n")
 }
 
