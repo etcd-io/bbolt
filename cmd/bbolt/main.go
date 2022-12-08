@@ -64,6 +64,9 @@ var (
 // PageHeaderSize represents the size of the bolt.page header.
 const PageHeaderSize = 16
 
+// Represents a marker value to indicate that a file (meta page) is a Bolt DB.
+const magic uint32 = 0xED0CDAED
+
 func main() {
 	m := NewMain()
 	if err := m.Run(os.Args[1:]...); err == ErrUsage {
@@ -334,7 +337,7 @@ func (cmd *DumpCommand) Run(args ...string) error {
 	}
 
 	// Read page ids.
-	pageIDs, err := atois(fs.Args()[1:])
+	pageIDs, err := stringToPages(fs.Args()[1:])
 	if err != nil {
 		return err
 	} else if len(pageIDs) == 0 {
@@ -342,7 +345,7 @@ func (cmd *DumpCommand) Run(args ...string) error {
 	}
 
 	// Open database to retrieve page size.
-	pageSize, err := ReadPageSize(path)
+	pageSize, _, err := ReadPageAndHWMSize(path)
 	if err != nil {
 		return err
 	}
@@ -362,7 +365,7 @@ func (cmd *DumpCommand) Run(args ...string) error {
 		}
 
 		// Print page to stdout.
-		if err := cmd.PrintPage(cmd.Stdout, f, pageID, pageSize); err != nil {
+		if err := cmd.PrintPage(cmd.Stdout, f, pageID, uint64(pageSize)); err != nil {
 			return err
 		}
 	}
@@ -371,22 +374,22 @@ func (cmd *DumpCommand) Run(args ...string) error {
 }
 
 // PrintPage prints a given page as hexadecimal.
-func (cmd *DumpCommand) PrintPage(w io.Writer, r io.ReaderAt, pageID int, pageSize int) error {
+func (cmd *DumpCommand) PrintPage(w io.Writer, r io.ReaderAt, pageID uint64, pageSize uint64) error {
 	const bytesPerLineN = 16
 
 	// Read page into buffer.
 	buf := make([]byte, pageSize)
-	addr := pageID * pageSize
+	addr := pageID * uint64(pageSize)
 	if n, err := r.ReadAt(buf, int64(addr)); err != nil {
 		return err
-	} else if n != pageSize {
+	} else if uint64(n) != pageSize {
 		return io.ErrUnexpectedEOF
 	}
 
 	// Write out to writer in 16-byte lines.
 	var prev []byte
 	var skipped bool
-	for offset := 0; offset < pageSize; offset += bytesPerLineN {
+	for offset := uint64(0); offset < pageSize; offset += bytesPerLineN {
 		// Retrieve current 16-byte line.
 		line := buf[offset : offset+bytesPerLineN]
 		isLastLine := (offset == (pageSize - bytesPerLineN))
@@ -476,13 +479,13 @@ func (cmd *PageItemCommand) Run(args ...string) error {
 	}
 
 	// Read page id.
-	pageID, err := strconv.Atoi(fs.Arg(1))
+	pageID, err := strconv.ParseUint(fs.Arg(1), 10, 64)
 	if err != nil {
 		return err
 	}
 
 	// Read item id.
-	itemID, err := strconv.Atoi(fs.Arg(2))
+	itemID, err := strconv.ParseUint(fs.Arg(2), 10, 64)
 	if err != nil {
 		return err
 	}
@@ -625,7 +628,7 @@ func (cmd *PageCommand) Run(args ...string) error {
 	}
 
 	// Read page ids.
-	pageIDs, err := atois(fs.Args()[1:])
+	pageIDs, err := stringToPages(fs.Args()[1:])
 	if err != nil {
 		return err
 	} else if len(pageIDs) == 0 {
@@ -1772,9 +1775,9 @@ func isPrintable(s string) bool {
 
 // ReadPage reads page info & full page data from a path.
 // This is not transactionally safe.
-func ReadPage(path string, pageID int) (*page, []byte, error) {
+func ReadPage(path string, pageID uint64) (*page, []byte, error) {
 	// Find page size.
-	pageSize, err := ReadPageSize(path)
+	pageSize, hwm, err := ReadPageAndHWMSize(path)
 	if err != nil {
 		return nil, nil, fmt.Errorf("read page size: %s", err)
 	}
@@ -1796,46 +1799,62 @@ func ReadPage(path string, pageID int) (*page, []byte, error) {
 
 	// Determine total number of blocks.
 	p := (*page)(unsafe.Pointer(&buf[0]))
+	if p.id != pgid(pageID) {
+		return nil, nil, fmt.Errorf("error: %w due to unexpected page id: %d != %d", ErrCorrupt, p.id, pageID)
+	}
 	overflowN := p.overflow
+	if overflowN >= uint32(hwm)-3 { // we exclude 2 meta pages and the current page.
+		return nil, nil, fmt.Errorf("error: %w, page claims to have %d overflow pages (>=hwm=%d). Interrupting to avoid risky OOM", ErrCorrupt, overflowN, hwm)
+	}
 
 	// Re-read entire page (with overflow) into buffer.
-	buf = make([]byte, (int(overflowN)+1)*pageSize)
+	buf = make([]byte, (uint64(overflowN)+1)*pageSize)
 	if n, err := f.ReadAt(buf, int64(pageID*pageSize)); err != nil {
 		return nil, nil, err
 	} else if n != len(buf) {
 		return nil, nil, io.ErrUnexpectedEOF
 	}
 	p = (*page)(unsafe.Pointer(&buf[0]))
+	if p.id != pgid(pageID) {
+		return nil, nil, fmt.Errorf("error: %w due to unexpected page id: %d != %d", ErrCorrupt, p.id, pageID)
+	}
 
 	return p, buf, nil
 }
 
-// ReadPageSize reads page size a path.
+// ReadPageAndHWMSize reads page size and HWM (id of the last+1 page).
 // This is not transactionally safe.
-func ReadPageSize(path string) (int, error) {
+func ReadPageAndHWMSize(path string) (uint64, pgid, error) {
 	// Open database file.
 	f, err := os.Open(path)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	defer f.Close()
 
 	// Read 4KB chunk.
 	buf := make([]byte, 4096)
 	if _, err := io.ReadFull(f, buf); err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 
 	// Read page size from metadata.
 	m := (*meta)(unsafe.Pointer(&buf[PageHeaderSize]))
-	return int(m.pageSize), nil
+	if m.magic != magic {
+		return 0, 0, fmt.Errorf("the meta page has wrong (unexpected) magic")
+	}
+	return uint64(m.pageSize), pgid(m.pgid), nil
 }
 
-// atois parses a slice of strings into integers.
-func atois(strs []string) ([]int, error) {
-	var a []int
+func stringToPage(str string) (uint64, error) {
+	return strconv.ParseUint(str, 10, 64)
+}
+
+// stringToPages parses a slice of strings into page ids.
+func stringToPages(strs []string) ([]uint64, error) {
+	var a []uint64
 	for _, str := range strs {
-		i, err := strconv.Atoi(str)
+		i, err := stringToPage(str)
 		if err != nil {
 			return nil, err
 		}
@@ -1872,7 +1891,7 @@ type meta struct {
 	flags    uint32
 	root     bucket
 	freelist pgid
-	pgid     pgid
+	pgid     pgid // High Water Mark (id of next added page if the file growths)
 	txid     txid
 	checksum uint64
 }
