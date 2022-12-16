@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -527,29 +528,41 @@ func (cmd *PageItemCommand) leafPageElement(pageBytes []byte, index uint16) (*le
 	return p.leafPageElement(index), nil
 }
 
-// writeBytes writes the byte to the writer. Supported formats: ascii-encoded, hex, bytes.
-func (cmd *PageItemCommand) writeBytes(w io.Writer, b []byte, format string) error {
+// formatBytes converts bytes into string according to format.
+// Supported formats: ascii-encoded, hex, bytes.
+func formatBytes(b []byte, format string) (string, error) {
 	switch format {
 	case "ascii-encoded":
-		_, err := fmt.Fprintf(w, "%q", b)
-		if err != nil {
-			return err
-		}
-		_, err = fmt.Fprintf(w, "\n")
-		return err
+		return fmt.Sprintf("%q", b), nil
 	case "hex":
-		_, err := fmt.Fprintf(w, "%x", b)
-		if err != nil {
-			return err
-		}
-		_, err = fmt.Fprintf(w, "\n")
-		return err
+		return fmt.Sprintf("%x", b), nil
 	case "bytes":
-		_, err := w.Write(b)
-		return err
+		return string(b), nil
 	default:
-		return fmt.Errorf("writeBytes: unsupported format: %s", format)
+		return "", fmt.Errorf("formatBytes: unsupported format: %s", format)
 	}
+}
+
+func parseBytes(str string, format string) ([]byte, error) {
+	switch format {
+	case "ascii-encoded":
+		return []byte(str), nil
+	case "hex":
+		return hex.DecodeString(str)
+	default:
+		return nil, fmt.Errorf("parseBytes: unsupported format: %s", format)
+	}
+}
+
+// writelnBytes writes the byte to the writer. Supported formats: ascii-encoded, hex, bytes.
+// Terminates the write with a new line symbol;
+func writelnBytes(w io.Writer, b []byte, format string) error {
+	str, err := formatBytes(b, format)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(w, str)
+	return err
 }
 
 // PrintLeafItemKey writes the bytes of a leaf element's key.
@@ -558,7 +571,7 @@ func (cmd *PageItemCommand) PrintLeafItemKey(w io.Writer, pageBytes []byte, inde
 	if err != nil {
 		return err
 	}
-	return cmd.writeBytes(w, e.key(), format)
+	return writelnBytes(w, e.key(), format)
 }
 
 // PrintLeafItemKey writes the bytes of a leaf element's value.
@@ -567,7 +580,7 @@ func (cmd *PageItemCommand) PrintLeafItemValue(w io.Writer, pageBytes []byte, in
 	if err != nil {
 		return err
 	}
-	return cmd.writeBytes(w, e.value(), format)
+	return writelnBytes(w, e.value(), format)
 }
 
 // Usage returns the help message.
@@ -1144,6 +1157,7 @@ func newKeysCommand(m *Main) *KeysCommand {
 func (cmd *KeysCommand) Run(args ...string) error {
 	// Parse flags.
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	optionsFormat := fs.String("format", "bytes", "Output format. One of: ascii-encoded|hex|bytes (default: bytes)")
 	help := fs.Bool("h", false, "")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -1186,18 +1200,26 @@ func (cmd *KeysCommand) Run(args ...string) error {
 
 		// Iterate over each key.
 		return lastbucket.ForEach(func(key, _ []byte) error {
-			fmt.Fprintln(cmd.Stdout, string(key))
-			return nil
+			return writelnBytes(cmd.Stdout, key, *optionsFormat)
 		})
 	})
 }
 
 // Usage returns the help message.
+// TODO: Use https://pkg.go.dev/flag#FlagSet.PrintDefaults to print supported flags.
 func (cmd *KeysCommand) Usage() string {
 	return strings.TrimLeft(`
 usage: bolt keys PATH [BUCKET...]
 
 Print a list of keys in the given (sub)bucket.
+=======
+
+Additional options include:
+
+	--format
+		Output format. One of: ascii-encoded|hex|bytes (default=bytes)
+
+Print a list of keys in the given bucket.
 `, "\n")
 }
 
@@ -1221,6 +1243,10 @@ func newGetCommand(m *Main) *GetCommand {
 func (cmd *GetCommand) Run(args ...string) error {
 	// Parse flags.
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	var parseFormat string
+	var format string
+	fs.StringVar(&parseFormat, "parse-format", "ascii-encoded", "Input format. One of: ascii-encoded|hex (default: ascii-encoded)")
+	fs.StringVar(&format, "format", "bytes", "Output format. One of: ascii-encoded|hex|bytes (default: bytes)")
 	help := fs.Bool("h", false, "")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -1231,14 +1257,18 @@ func (cmd *GetCommand) Run(args ...string) error {
 
 	// Require database path, bucket and key.
 	relevantArgs := fs.Args()
-	path, buckets, key := relevantArgs[0], relevantArgs[1:len(relevantArgs)-1], relevantArgs[len(relevantArgs)-1]
+	path, buckets := relevantArgs[0], relevantArgs[1:len(relevantArgs)-1]
+	key, err := parseBytes(relevantArgs[len(relevantArgs)-1], parseFormat)
+	if err != nil {
+		return err
+	}
 	if path == "" {
 		return ErrPathRequired
 	} else if _, err := os.Stat(path); os.IsNotExist(err) {
 		return ErrFileNotFound
 	} else if len(buckets) == 0 {
 		return ErrBucketRequired
-	} else if key == "" {
+	} else if len(key) == 0 {
 		return ErrKeyRequired
 	}
 
@@ -1264,13 +1294,13 @@ func (cmd *GetCommand) Run(args ...string) error {
 		}
 
 		// Find value for given key.
-		val := lastbucket.Get([]byte(key))
+		val := lastbucket.Get(key)
 		if val == nil {
-			return ErrKeyNotFound
+			return fmt.Errorf("Error %w for key: %q hex: \"%x\"", ErrKeyNotFound, key, string(key))
 		}
 
-		fmt.Fprintln(cmd.Stdout, string(val))
-		return nil
+		// TODO: In this particular case, it would be better to not terminate with '\n'
+		return writelnBytes(cmd.Stdout, val, format)
 	})
 }
 
@@ -1280,6 +1310,13 @@ func (cmd *GetCommand) Usage() string {
 usage: bolt get PATH [BUCKET..] KEY
 
 Print the value of the given key in the given (sub)bucket.
+
+Additional options include:
+
+	--format
+		Output format. One of: ascii-encoded|hex|bytes (default=bytes)
+	--parse-format
+		Input format (of key). One of: ascii-encoded|hex (default=ascii-encoded)"
 `, "\n")
 }
 
