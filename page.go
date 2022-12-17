@@ -2,6 +2,7 @@ package bbolt
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"sort"
 	"unsafe"
@@ -51,6 +52,12 @@ func (p *page) typ() string {
 // meta returns a pointer to the metadata section of the page.
 func (p *page) meta() *meta {
 	return (*meta)(unsafeAdd(unsafe.Pointer(p), unsafe.Sizeof(*p)))
+}
+
+func (p *page) fastCheck(id pgid) {
+	if p.id != id {
+		log.Panicf("Page expected to be: %v, but self identifies as %v", id, p.id)
+	}
 }
 
 // leafPageElement retrieves the leaf node by index
