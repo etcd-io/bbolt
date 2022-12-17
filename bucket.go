@@ -402,7 +402,7 @@ func (b *Bucket) Stats() BucketStats {
 	if b.root == 0 {
 		s.InlineBucketN += 1
 	}
-	b.forEachPage(func(p *page, depth int) {
+	b.forEachPage(func(p *page, depth int, pgstack []pgid) {
 		if (p.flags & leafPageFlag) != 0 {
 			s.KeyN += int(p.count)
 
@@ -477,15 +477,15 @@ func (b *Bucket) Stats() BucketStats {
 }
 
 // forEachPage iterates over every page in a bucket, including inline pages.
-func (b *Bucket) forEachPage(fn func(*page, int)) {
+func (b *Bucket) forEachPage(fn func(*page, int, []pgid)) {
 	// If we have an inline page then just use that.
 	if b.page != nil {
-		fn(b.page, 0)
+		fn(b.page, 0, []pgid{b.root})
 		return
 	}
 
 	// Otherwise traverse the page hierarchy.
-	b.tx.forEachPage(b.root, 0, fn)
+	b.tx.forEachPage(b.root, fn)
 }
 
 // forEachPageNode iterates over every page (or node) in a bucket.

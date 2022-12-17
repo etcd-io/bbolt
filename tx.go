@@ -461,16 +461,16 @@ func (tx *Tx) checkBucket(b *Bucket, reachable map[pgid]*page, freed map[pgid]bo
 	}
 
 	// Check every page used by this bucket.
-	b.tx.forEachPage(b.root, 0, func(p *page, _ int) {
+	b.tx.forEachPage(b.root, func(p *page, _ int, stack []pgid) {
 		if p.id > tx.meta.pgid {
-			ch <- fmt.Errorf("page %d: out of bounds: %d", int(p.id), int(b.tx.meta.pgid))
+			ch <- fmt.Errorf("page %d: out of bounds: %d (stack: %v)", int(p.id), int(b.tx.meta.pgid), stack)
 		}
 
 		// Ensure each page is only referenced once.
 		for i := pgid(0); i <= pgid(p.overflow); i++ {
 			var id = p.id + i
 			if _, ok := reachable[id]; ok {
-				ch <- fmt.Errorf("page %d: multiple references", int(id))
+				ch <- fmt.Errorf("page %d: multiple references (stack: %v)", int(id), stack)
 			}
 			reachable[id] = p
 		}
@@ -479,7 +479,7 @@ func (tx *Tx) checkBucket(b *Bucket, reachable map[pgid]*page, freed map[pgid]bo
 		if freed[p.id] {
 			ch <- fmt.Errorf("page %d: reachable freed", int(p.id))
 		} else if (p.flags&branchPageFlag) == 0 && (p.flags&leafPageFlag) == 0 {
-			ch <- fmt.Errorf("page %d: invalid type: %s", int(p.id), p.typ())
+			ch <- fmt.Errorf("page %d: invalid type: %s (stack: %v)", int(p.id), p.typ(), stack)
 		}
 	})
 
@@ -618,17 +618,23 @@ func (tx *Tx) page(id pgid) *page {
 }
 
 // forEachPage iterates over every page within a given page and executes a function.
-func (tx *Tx) forEachPage(pgid pgid, depth int, fn func(*page, int)) {
-	p := tx.page(pgid)
+func (tx *Tx) forEachPage(pgidnum pgid, fn func(*page, int, []pgid)) {
+	stack := make([]pgid, 10)
+	stack[0] = pgidnum
+	tx.forEachPageInternal(stack[:1], fn)
+}
+
+func (tx *Tx) forEachPageInternal(pgidstack []pgid, fn func(*page, int, []pgid)) {
+	p := tx.page(pgidstack[len(pgidstack)-1])
 
 	// Execute function.
-	fn(p, depth)
+	fn(p, len(pgidstack)-1, pgidstack)
 
 	// Recursively loop over children.
 	if (p.flags & branchPageFlag) != 0 {
 		for i := 0; i < int(p.count); i++ {
 			elem := p.branchPageElement(uint16(i))
-			tx.forEachPage(elem.pgid, depth+1, fn)
+			tx.forEachPageInternal(append(pgidstack, elem.pgid), fn)
 		}
 	}
 }
