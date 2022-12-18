@@ -31,6 +31,9 @@ func (cmd *PageCommand) Run(args ...string) error {
 	// Parse flags.
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	help := fs.Bool("h", false, "")
+	all := fs.Bool("all", false, "list all pages")
+	formatValue := fs.String("format-value", "auto", "One of: "+FORMAT_MODES+" . Applies to values on the leaf page.")
+
 	if err := fs.Parse(args); err != nil {
 		return err
 	} else if *help {
@@ -46,56 +49,92 @@ func (cmd *PageCommand) Run(args ...string) error {
 		return ErrFileNotFound
 	}
 
-	// Read page ids.
-	pageIDs, err := stringToPages(fs.Args()[1:])
-	if err != nil {
-		return err
-	} else if len(pageIDs) == 0 {
-		return ErrPageIDRequired
+	if !*all {
+		// Read page ids.
+		pageIDs, err := stringToPages(fs.Args()[1:])
+		if err != nil {
+			return err
+		} else if len(pageIDs) == 0 {
+			return ErrPageIDRequired
+		}
+		cmd.printPages(pageIDs, path, formatValue)
+	} else {
+		cmd.printAllPages(path, formatValue)
 	}
+	return nil
+}
 
-	// Open database file handler.
-	f, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = f.Close() }()
-
+func (cmd *PageCommand) printPages(pageIDs []uint64, path string, formatValue *string) {
 	// Print each page listed.
 	for i, pageID := range pageIDs {
 		// Print a separator.
 		if i > 0 {
 			fmt.Fprintln(cmd.Stdout, "===============================================")
 		}
-
-		// Retrieve page info and page size.
-		p, buf, err := ReadPage(path, pageID)
-		if err != nil {
-			return err
-		}
-
-		// Print basic page info.
-		fmt.Fprintf(cmd.Stdout, "Page ID:    %d\n", p.id)
-		fmt.Fprintf(cmd.Stdout, "Page Type:  %s\n", p.Type())
-		fmt.Fprintf(cmd.Stdout, "Total Size: %d bytes\n", len(buf))
-
-		// Print type-specific data.
-		switch p.Type() {
-		case "meta":
-			err = cmd.PrintMeta(cmd.Stdout, buf)
-		case "leaf":
-			err = cmd.PrintLeaf(cmd.Stdout, buf)
-		case "branch":
-			err = cmd.PrintBranch(cmd.Stdout, buf)
-		case "freelist":
-			err = cmd.PrintFreelist(cmd.Stdout, buf)
-		}
-		if err != nil {
-			return err
+		_, err2 := cmd.printPage(path, pageID, *formatValue)
+		if err2 != nil {
+			fmt.Fprintf(cmd.Stdout, "Prining page %d failed: %s. Continuuing...\n", pageID, err2)
 		}
 	}
+}
 
-	return nil
+func (cmd *PageCommand) printAllPages(path string, formatValue *string) {
+	_, hwm, err := ReadPageAndHWMSize(path)
+	if err != nil {
+		fmt.Fprintf(cmd.Stdout, "cannot read number of pages: %v", err)
+	}
+
+	// Print each page listed.
+	for pageID := uint64(0); pageID < uint64(hwm); {
+		// Print a separator.
+		if pageID > 0 {
+			fmt.Fprintln(cmd.Stdout, "===============================================")
+		}
+		overflow, err2 := cmd.printPage(path, pageID, *formatValue)
+		if err2 != nil {
+			fmt.Fprintf(cmd.Stdout, "Prining page %d failed: %s. Continuuing...\n", pageID, err2)
+			pageID++
+		} else {
+			pageID += uint64(overflow) + 1
+		}
+	}
+}
+
+// printPage prints given page to cmd.Stdout and returns error or number of interpreted pages.
+func (cmd *PageCommand) printPage(path string, pageID uint64, formatValue string) (numPages uint32, reterr error) {
+	defer func() {
+		if err := recover(); err != nil {
+			reterr = fmt.Errorf("%s", err)
+		}
+	}()
+
+	// Retrieve page info and page size.
+	p, buf, err := ReadPage(path, pageID)
+	if err != nil {
+		return 0, err
+	}
+
+	// Print basic page info.
+	fmt.Fprintf(cmd.Stdout, "Page ID:    %d\n", p.id)
+	fmt.Fprintf(cmd.Stdout, "Page Type:  %s\n", p.Type())
+	fmt.Fprintf(cmd.Stdout, "Total Size: %d bytes\n", len(buf))
+	fmt.Fprintf(cmd.Stdout, "Overflow pages: %d\n", p.overflow)
+
+	// Print type-specific data.
+	switch p.Type() {
+	case "meta":
+		err = cmd.PrintMeta(cmd.Stdout, buf)
+	case "leaf":
+		err = cmd.PrintLeaf(cmd.Stdout, buf, formatValue)
+	case "branch":
+		err = cmd.PrintBranch(cmd.Stdout, buf)
+	case "freelist":
+		err = cmd.PrintFreelist(cmd.Stdout, buf)
+	}
+	if err != nil {
+		return 0, err
+	}
+	return p.overflow, nil
 }
 
 // PrintMeta prints the data from the meta page.
@@ -114,7 +153,7 @@ func (cmd *PageCommand) PrintMeta(w io.Writer, buf []byte) error {
 }
 
 // PrintLeaf prints the data for a leaf page.
-func (cmd *PageCommand) PrintLeaf(w io.Writer, buf []byte) error {
+func (cmd *PageCommand) PrintLeaf(w io.Writer, buf []byte, formatValue string) error {
 	p := (*page)(unsafe.Pointer(&buf[0]))
 
 	// Print number of items.
@@ -138,10 +177,12 @@ func (cmd *PageCommand) PrintLeaf(w io.Writer, buf []byte) error {
 		if (e.flags & uint32(bucketLeafFlag)) != 0 {
 			b := (*bucket)(unsafe.Pointer(&e.value()[0]))
 			v = fmt.Sprintf("<pgid=%d,seq=%d>", b.root, b.sequence)
-		} else if isPrintable(string(e.value())) {
-			v = fmt.Sprintf("%q", string(e.value()))
 		} else {
-			v = fmt.Sprintf("%x", string(e.value()))
+			var err error
+			v, err = formatBytes(e.value(), formatValue)
+			if err != nil {
+				return err
+			}
 		}
 
 		fmt.Fprintf(w, "%s: %s\n", k, v)
@@ -251,6 +292,14 @@ func (cmd *PageCommand) PrintPage(w io.Writer, r io.ReaderAt, pageID int, pageSi
 func (cmd *PageCommand) Usage() string {
 	return strings.TrimLeft(`
 usage: bolt page PATH pageid [pageid...]
+   or: bolt page --all PATH
+
+Additional options include:
+
+	--all
+		prints all pages (only skips pages that were considered successful overflow pages) 
+	--format-value=`+FORMAT_MODES+` (default: auto)
+		prints values (on the leaf page) using the given format.
 
 Page prints one or more pages in human readable format.
 `, "\n")

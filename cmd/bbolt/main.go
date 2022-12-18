@@ -458,7 +458,7 @@ func (cmd *PageItemCommand) Run(args ...string) error {
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	fs.BoolVar(&options.keyOnly, "key-only", false, "Print only the key")
 	fs.BoolVar(&options.valueOnly, "value-only", false, "Print only the value")
-	fs.StringVar(&options.format, "format", "ascii-encoded", "Output format. One of: ascii-encoded|hex|bytes")
+	fs.StringVar(&options.format, "format", "ascii-encoded", "Output format. One of: "+FORMAT_MODES)
 	fs.BoolVar(&options.help, "h", false, "")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -531,6 +531,8 @@ func (cmd *PageItemCommand) leafPageElement(pageBytes []byte, index uint16) (*le
 	return p.leafPageElement(index), nil
 }
 
+const FORMAT_MODES = "auto|ascii-encoded|hex|bytes|redacted"
+
 // formatBytes converts bytes into string according to format.
 // Supported formats: ascii-encoded, hex, bytes.
 func formatBytes(b []byte, format string) (string, error) {
@@ -541,6 +543,14 @@ func formatBytes(b []byte, format string) (string, error) {
 		return fmt.Sprintf("%x", b), nil
 	case "bytes":
 		return string(b), nil
+	case "auto":
+		if isPrintable(string(b)) {
+			return string(b), nil
+		} else {
+			return fmt.Sprintf("%x", b), nil
+		}
+	case "redacted":
+		return fmt.Sprintf("<redacted len:%d>", len(b)), nil
 	default:
 		return "", fmt.Errorf("formatBytes: unsupported format: %s", format)
 	}
@@ -557,7 +567,7 @@ func parseBytes(str string, format string) ([]byte, error) {
 	}
 }
 
-// writelnBytes writes the byte to the writer. Supported formats: ascii-encoded, hex, bytes.
+// writelnBytes writes the byte to the writer. Supported formats: ascii-encoded, hex, bytes, auto, redacted.
 // Terminates the write with a new line symbol;
 func writelnBytes(w io.Writer, b []byte, format string) error {
 	str, err := formatBytes(b, format)
@@ -598,7 +608,7 @@ Additional options include:
 	--value-only
 		Print only the value
 	--format
-		Output format. One of: ascii-encoded|hex|bytes (default=ascii-encoded)
+		Output format. One of: `+FORMAT_MODES+` (default=ascii-encoded)
 
 page-item prints a page item key and value.
 `, "\n")
@@ -914,7 +924,7 @@ func newKeysCommand(m *Main) *KeysCommand {
 func (cmd *KeysCommand) Run(args ...string) error {
 	// Parse flags.
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
-	optionsFormat := fs.String("format", "bytes", "Output format. One of: ascii-encoded|hex|bytes (default: bytes)")
+	optionsFormat := fs.String("format", "bytes", "Output format. One of: "+FORMAT_MODES+" (default: bytes)")
 	help := fs.Bool("h", false, "")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -974,7 +984,7 @@ Print a list of keys in the given (sub)bucket.
 Additional options include:
 
 	--format
-		Output format. One of: ascii-encoded|hex|bytes (default=bytes)
+		Output format. One of: `+FORMAT_MODES+` (default=bytes)
 
 Print a list of keys in the given bucket.
 `, "\n")
@@ -1003,7 +1013,7 @@ func (cmd *GetCommand) Run(args ...string) error {
 	var parseFormat string
 	var format string
 	fs.StringVar(&parseFormat, "parse-format", "ascii-encoded", "Input format. One of: ascii-encoded|hex (default: ascii-encoded)")
-	fs.StringVar(&format, "format", "bytes", "Output format. One of: ascii-encoded|hex|bytes (default: bytes)")
+	fs.StringVar(&format, "format", "bytes", "Output format. One of: "+FORMAT_MODES+" (default: bytes)")
 	help := fs.Bool("h", false, "")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -1071,7 +1081,7 @@ Print the value of the given key in the given (sub)bucket.
 Additional options include:
 
 	--format
-		Output format. One of: ascii-encoded|hex|bytes (default=bytes)
+		Output format. One of: `+FORMAT_MODES+` (default=bytes)
 	--parse-format
 		Input format (of key). One of: ascii-encoded|hex (default=ascii-encoded)"
 `, "\n")
@@ -1702,15 +1712,15 @@ type page struct {
 	ptr      uintptr
 }
 
-// DO NOT EDIT. Copied from the "bolt" package.
 func (p *page) Type() string {
-	if (p.flags & branchPageFlag) != 0 {
+	// For now all flags are exclusive,so let's be strict with expectations.
+	if p.flags == branchPageFlag {
 		return "branch"
-	} else if (p.flags & leafPageFlag) != 0 {
+	} else if p.flags == leafPageFlag {
 		return "leaf"
-	} else if (p.flags & metaPageFlag) != 0 {
+	} else if p.flags == metaPageFlag {
 		return "meta"
-	} else if (p.flags & freelistPageFlag) != 0 {
+	} else if p.flags == freelistPageFlag {
 		return "freelist"
 	}
 	return fmt.Sprintf("unknown<%02x>", p.flags)
