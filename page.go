@@ -2,7 +2,6 @@ package bbolt
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"sort"
 	"unsafe"
@@ -55,9 +54,13 @@ func (p *page) meta() *meta {
 }
 
 func (p *page) fastCheck(id pgid) {
-	if p.id != id {
-		log.Panicf("Page expected to be: %v, but self identifies as %v", id, p.id)
-	}
+	_assert(p.id == id, "Page expected to be: %v, but self identifies as %v", id, p.id)
+	// Only one flag of page-type can be set.
+	_assert(p.flags == branchPageFlag ||
+		p.flags == leafPageFlag ||
+		p.flags == metaPageFlag ||
+		p.flags == freelistPageFlag,
+		"page %v: has unexpected type/flags: %x", p.id, p.flags)
 }
 
 // leafPageElement retrieves the leaf node by index

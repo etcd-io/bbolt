@@ -191,9 +191,9 @@ func (n *node) read(p *page) {
 func (n *node) write(p *page) {
 	// Initialize page.
 	if n.isLeaf {
-		p.flags |= leafPageFlag
+		p.flags = leafPageFlag
 	} else {
-		p.flags |= branchPageFlag
+		p.flags = branchPageFlag
 	}
 
 	if len(n.inodes) >= 0xFFFF {
