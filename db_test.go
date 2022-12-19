@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"go.etcd.io/bbolt/internal/btesting"
 	"hash/fnv"
 	"log"
 	"math/rand"
@@ -218,40 +219,29 @@ func TestOpen_ErrChecksum(t *testing.T) {
 // https://github.com/boltdb/bolt/issues/291
 func TestOpen_Size(t *testing.T) {
 	// Open a data file.
-	db := MustOpenDB()
-	path := db.Path()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	pagesize := db.Info().PageSize
 
 	// Insert until we get above the minimum 4MB size.
-	if err := db.Update(func(tx *bolt.Tx) error {
-		b, _ := tx.CreateBucketIfNotExists([]byte("data"))
-		for i := 0; i < 10000; i++ {
-			if err := b.Put([]byte(fmt.Sprintf("%04d", i)), make([]byte, 1000)); err != nil {
-				t.Fatal(err)
-			}
-		}
-		return nil
-	}); err != nil {
+	err := db.Fill([]byte("data"), 1, 10000,
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
+		func(tx int, k int) []byte { return make([]byte, 1000) },
+	)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Close database and grab the size.
-	if err := db.DB.Close(); err != nil {
-		t.Fatal(err)
-	}
+	path := db.Path()
+	db.MustClose()
+
 	sz := fileSize(path)
 	if sz == 0 {
 		t.Fatalf("unexpected new file size: %d", sz)
 	}
 
-	// Reopen database, update, and check size again.
-	db0, err := bolt.Open(path, 0666, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db0.Update(func(tx *bolt.Tx) error {
+	db.MustReopen()
+	if err := db.Update(func(tx *bolt.Tx) error {
 		if err := tx.Bucket([]byte("data")).Put([]byte{0}, []byte{0}); err != nil {
 			t.Fatal(err)
 		}
@@ -259,7 +249,7 @@ func TestOpen_Size(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := db0.Close(); err != nil {
+	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
 	newSz := fileSize(path)
@@ -1627,11 +1617,13 @@ type DB struct {
 }
 
 // MustOpenDB returns a new, open DB at a temporary location.
+// Deprecated: Please use btesting.MustCreateDB(...).
 func MustOpenDB() *DB {
 	return MustOpenWithOption(nil)
 }
 
 // MustOpenDBWithOption returns a new, open DB at a temporary location with given options.
+// Deprecated: Please use btesting.MustCreateWithOption(...).
 func MustOpenWithOption(o *bolt.Options) *DB {
 	f := tempfile()
 	if o == nil {
@@ -1653,6 +1645,16 @@ func MustOpenWithOption(o *bolt.Options) *DB {
 		f:  f,
 		o:  o,
 	}
+}
+
+// Closes the DB without removing the file.
+// Allows for Reopen().
+func (db *DB) CloseTemporarily() error {
+	if err := db.DB.Close(); err != nil {
+		return err
+	}
+	db.DB = nil
+	return nil
 }
 
 // Close closes the database and deletes the underlying file.
