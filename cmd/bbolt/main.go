@@ -207,7 +207,7 @@ func (cmd *CheckCommand) Run(args ...string) error {
 	// Perform consistency check.
 	return db.View(func(tx *bolt.Tx) error {
 		var count int
-		for err := range tx.Check() {
+		for err := range tx.Check(CmdKeyValueStringer()) {
 			fmt.Fprintln(cmd.Stdout, err)
 			count++
 		}
@@ -1688,4 +1688,26 @@ Additional options include:
 		Specifies the maximum size of individual transactions.
 		Defaults to 64KB.
 `, "\n")
+}
+
+type cmdKeyValueStringer struct{}
+
+func (_ cmdKeyValueStringer) KeyToString(key []byte) string {
+	if isPrintable(string(key)) {
+		return string(key)
+	} else {
+		return hex.EncodeToString(key)
+	}
+}
+
+func (_ cmdKeyValueStringer) ValueToString(value []byte) string {
+	if isPrintable(string(value)) {
+		return string(value)
+	} else {
+		return hex.EncodeToString(value)
+	}
+}
+
+func CmdKeyValueStringer() bolt.KeyValueStringer {
+	return cmdKeyValueStringer{}
 }

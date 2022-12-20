@@ -48,7 +48,8 @@ func TestTx_Check_ReadOnly(t *testing.T) {
 	numChecks := 2
 	errc := make(chan error, numChecks)
 	check := func() {
-		errc <- <-tx.Check()
+		err, _ := <-tx.Check(bolt.HexKeyValueStringer())
+		errc <- err
 	}
 	// Ensure the freelist is not reloaded and does not race.
 	for i := 0; i < numChecks; i++ {
