@@ -142,7 +142,7 @@ func (p *Page) Type() string {
 	} else if (p.flags & leafPageFlag) != 0 {
 		return "leaf"
 	} else if (p.flags & metaPageFlag) != 0 {
-		return "Meta"
+		return "meta"
 	} else if (p.flags & freelistPageFlag) != 0 {
 		return "freelist"
 	}
