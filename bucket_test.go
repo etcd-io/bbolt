@@ -13,6 +13,7 @@ import (
 	"testing"
 	"testing/quick"
 
+	"github.com/stretchr/testify/assert"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -390,7 +391,8 @@ func TestBucket_Delete_FreelistOverflow(t *testing.T) {
 	defer db.MustClose()
 
 	k := make([]byte, 16)
-	for i := uint64(0); i < 10000; i++ {
+	// The bigger the pages - the more values we need to write.
+	for i := uint64(0); i < 2*uint64(db.Info().PageSize); i++ {
 		if err := db.Update(func(tx *bolt.Tx) error {
 			b, err := tx.CreateBucketIfNotExists([]byte("0"))
 			if err != nil {
@@ -1209,8 +1211,9 @@ func TestBucket_Stats(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	longKeyLength := 10*db.Info().PageSize + 17
 	if err := db.Update(func(tx *bolt.Tx) error {
-		if err := tx.Bucket([]byte("woojits")).Put(bigKey, []byte(strings.Repeat("*", 10000))); err != nil {
+		if err := tx.Bucket([]byte("woojits")).Put(bigKey, []byte(strings.Repeat("*", longKeyLength))); err != nil {
 			t.Fatal(err)
 		}
 		return nil
@@ -1220,54 +1223,53 @@ func TestBucket_Stats(t *testing.T) {
 
 	db.MustCheck()
 
+	pageSize2stats := map[int]bolt.BucketStats{
+		4096: {
+			BranchPageN:     1,
+			BranchOverflowN: 0,
+			LeafPageN:       7,
+			LeafOverflowN:   10,
+			KeyN:            501,
+			Depth:           2,
+			BranchAlloc:     4096,
+			BranchInuse:     149,
+			LeafAlloc:       69632,
+			LeafInuse: 0 +
+				7*16 + // leaf page header (x LeafPageN)
+				501*16 + // leaf elements
+				500*3 + len(bigKey) + // leaf keys
+				1*10 + 2*90 + 3*400 + longKeyLength, // leaf values: 10 * 1digit, 90*2digits, ...
+			BucketN:           1,
+			InlineBucketN:     0,
+			InlineBucketInuse: 0},
+		16384: {
+			BranchPageN:     1,
+			BranchOverflowN: 0,
+			LeafPageN:       3,
+			LeafOverflowN:   10,
+			KeyN:            501,
+			Depth:           2,
+			BranchAlloc:     16384,
+			BranchInuse:     73,
+			LeafAlloc:       212992,
+			LeafInuse: 0 +
+				3*16 + // leaf page header (x LeafPageN)
+				501*16 + // leaf elements
+				500*3 + len(bigKey) + // leaf keys
+				1*10 + 2*90 + 3*400 + longKeyLength, // leaf values: 10 * 1digit, 90*2digits, ...
+			BucketN:           1,
+			InlineBucketN:     0,
+			InlineBucketInuse: 0},
+	}
+
 	if err := db.View(func(tx *bolt.Tx) error {
 		stats := tx.Bucket([]byte("woojits")).Stats()
-		if stats.BranchPageN != 1 {
-			t.Fatalf("unexpected BranchPageN: %d", stats.BranchPageN)
-		} else if stats.BranchOverflowN != 0 {
-			t.Fatalf("unexpected BranchOverflowN: %d", stats.BranchOverflowN)
-		} else if stats.LeafPageN != 7 {
-			t.Fatalf("unexpected LeafPageN: %d", stats.LeafPageN)
-		} else if stats.LeafOverflowN != 2 {
-			t.Fatalf("unexpected LeafOverflowN: %d", stats.LeafOverflowN)
-		} else if stats.KeyN != 501 {
-			t.Fatalf("unexpected KeyN: %d", stats.KeyN)
-		} else if stats.Depth != 2 {
-			t.Fatalf("unexpected Depth: %d", stats.Depth)
+		t.Logf("Stats: %#v", stats)
+		if expected, ok := pageSize2stats[db.Info().PageSize]; ok {
+			assert.EqualValues(t, expected, stats, "stats differs from expectations")
+		} else {
+			t.Skipf("No expectations for page size: %d", db.Info().PageSize)
 		}
-
-		branchInuse := 16     // branch page header
-		branchInuse += 7 * 16 // branch elements
-		branchInuse += 7 * 3  // branch keys (6 3-byte keys)
-		if stats.BranchInuse != branchInuse {
-			t.Fatalf("unexpected BranchInuse: %d", stats.BranchInuse)
-		}
-
-		leafInuse := 7 * 16                      // leaf page header
-		leafInuse += 501 * 16                    // leaf elements
-		leafInuse += 500*3 + len(bigKey)         // leaf keys
-		leafInuse += 1*10 + 2*90 + 3*400 + 10000 // leaf values
-		if stats.LeafInuse != leafInuse {
-			t.Fatalf("unexpected LeafInuse: %d", stats.LeafInuse)
-		}
-
-		// Only check allocations for 4KB pages.
-		if db.Info().PageSize == 4096 {
-			if stats.BranchAlloc != 4096 {
-				t.Fatalf("unexpected BranchAlloc: %d", stats.BranchAlloc)
-			} else if stats.LeafAlloc != 36864 {
-				t.Fatalf("unexpected LeafAlloc: %d", stats.LeafAlloc)
-			}
-		}
-
-		if stats.BucketN != 1 {
-			t.Fatalf("unexpected BucketN: %d", stats.BucketN)
-		} else if stats.InlineBucketN != 0 {
-			t.Fatalf("unexpected InlineBucketN: %d", stats.InlineBucketN)
-		} else if stats.InlineBucketInuse != 0 {
-			t.Fatalf("unexpected InlineBucketInuse: %d", stats.InlineBucketInuse)
-		}
-
 		return nil
 	}); err != nil {
 		t.Fatal(err)
@@ -1599,42 +1601,45 @@ func TestBucket_Stats_Large(t *testing.T) {
 
 	db.MustCheck()
 
+	pageSize2stats := map[int]bolt.BucketStats{
+		4096: {
+			BranchPageN:       13,
+			BranchOverflowN:   0,
+			LeafPageN:         1196,
+			LeafOverflowN:     0,
+			KeyN:              100000,
+			Depth:             3,
+			BranchAlloc:       53248,
+			BranchInuse:       25257,
+			LeafAlloc:         4898816,
+			LeafInuse:         2596916,
+			BucketN:           1,
+			InlineBucketN:     0,
+			InlineBucketInuse: 0},
+		16384: {
+			BranchPageN:       1,
+			BranchOverflowN:   0,
+			LeafPageN:         292,
+			LeafOverflowN:     0,
+			KeyN:              100000,
+			Depth:             2,
+			BranchAlloc:       16384,
+			BranchInuse:       6094,
+			LeafAlloc:         4784128,
+			LeafInuse:         2582452,
+			BucketN:           1,
+			InlineBucketN:     0,
+			InlineBucketInuse: 0},
+	}
+
 	if err := db.View(func(tx *bolt.Tx) error {
 		stats := tx.Bucket([]byte("widgets")).Stats()
-		if stats.BranchPageN != 13 {
-			t.Fatalf("unexpected BranchPageN: %d", stats.BranchPageN)
-		} else if stats.BranchOverflowN != 0 {
-			t.Fatalf("unexpected BranchOverflowN: %d", stats.BranchOverflowN)
-		} else if stats.LeafPageN != 1196 {
-			t.Fatalf("unexpected LeafPageN: %d", stats.LeafPageN)
-		} else if stats.LeafOverflowN != 0 {
-			t.Fatalf("unexpected LeafOverflowN: %d", stats.LeafOverflowN)
-		} else if stats.KeyN != 100000 {
-			t.Fatalf("unexpected KeyN: %d", stats.KeyN)
-		} else if stats.Depth != 3 {
-			t.Fatalf("unexpected Depth: %d", stats.Depth)
-		} else if stats.BranchInuse != 25257 {
-			t.Fatalf("unexpected BranchInuse: %d", stats.BranchInuse)
-		} else if stats.LeafInuse != 2596916 {
-			t.Fatalf("unexpected LeafInuse: %d", stats.LeafInuse)
+		t.Logf("Stats: %#v", stats)
+		if expected, ok := pageSize2stats[db.Info().PageSize]; ok {
+			assert.EqualValues(t, expected, stats, "stats differs from expectations")
+		} else {
+			t.Skipf("No expectations for page size: %d", db.Info().PageSize)
 		}
-
-		if db.Info().PageSize == 4096 {
-			if stats.BranchAlloc != 53248 {
-				t.Fatalf("unexpected BranchAlloc: %d", stats.BranchAlloc)
-			} else if stats.LeafAlloc != 4898816 {
-				t.Fatalf("unexpected LeafAlloc: %d", stats.LeafAlloc)
-			}
-		}
-
-		if stats.BucketN != 1 {
-			t.Fatalf("unexpected BucketN: %d", stats.BucketN)
-		} else if stats.InlineBucketN != 0 {
-			t.Fatalf("unexpected InlineBucketN: %d", stats.InlineBucketN)
-		} else if stats.InlineBucketInuse != 0 {
-			t.Fatalf("unexpected InlineBucketInuse: %d", stats.InlineBucketInuse)
-		}
-
 		return nil
 	}); err != nil {
 		t.Fatal(err)
