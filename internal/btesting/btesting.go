@@ -3,6 +3,7 @@ package btesting
 import (
 	"flag"
 	"fmt"
+	"github.com/stretchr/testify/require"
 	bolt "go.etcd.io/bbolt"
 	"os"
 	"path/filepath"
@@ -36,15 +37,15 @@ func MustCreateDBWithOption(t testing.TB, o *bolt.Options) *DB {
 }
 
 func MustOpenDBWithOption(t testing.TB, f string, o *bolt.Options) *DB {
+	t.Logf("Opening bbolt DB at: %s", f)
 	if o == nil {
 		o = bolt.DefaultOptions
 	}
 
-	freelistType := bolt.FreelistMapType
-	if env := os.Getenv(TestFreelistType); env == string(bolt.FreelistArrayType) {
-		freelistType = bolt.FreelistArrayType
+	freelistType := bolt.FreelistArrayType
+	if env := os.Getenv(TestFreelistType); env == string(bolt.FreelistMapType) {
+		freelistType = bolt.FreelistMapType
 	}
-	o.FreelistType = freelistType
 
 	o.FreelistType = freelistType
 
@@ -77,7 +78,7 @@ func (db *DB) Close() error {
 		if *statsFlag {
 			db.PrintStats()
 		}
-
+		db.t.Logf("Closing bbolt DB at: %s", db.f)
 		err := db.DB.Close()
 		if err != nil {
 			return err
@@ -87,11 +88,16 @@ func (db *DB) Close() error {
 	return nil
 }
 
-// MustClose closes the database and deletes the underlying file. Panic on error.
+// MustClose closes the database but does NOT delete the underlying file.
 func (db *DB) MustClose() {
 	if err := db.Close(); err != nil {
 		panic(err)
 	}
+}
+
+func (db *DB) MustDeleteFile() {
+	err := os.Remove(db.Path())
+	require.NoError(db.t, err)
 }
 
 func (db *DB) SetOptions(o *bolt.Options) {
@@ -103,6 +109,7 @@ func (db *DB) MustReopen() {
 	if db.DB != nil {
 		panic("Please call Close() before MustReopen()")
 	}
+	db.t.Logf("Reopening bbolt DB at: %s", db.f)
 	indb, err := bolt.Open(db.Path(), 0666, db.o)
 	if err != nil {
 		panic(err)
