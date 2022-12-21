@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"log"
 	"math/rand"
 	"os"
@@ -13,7 +15,6 @@ import (
 	"testing"
 	"testing/quick"
 
-	"github.com/stretchr/testify/assert"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -1005,57 +1006,133 @@ func TestBucket_ForEach(t *testing.T) {
 	db := MustOpenDB()
 	defer db.MustClose()
 
-	if err := db.Update(func(tx *bolt.Tx) error {
-		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("foo"), []byte("0000")); err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("baz"), []byte("0001")); err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("bar"), []byte("0002")); err != nil {
-			t.Fatal(err)
-		}
+	type kv struct {
+		k []byte
+		v []byte
+	}
 
-		var index int
-		if err := b.ForEach(func(k, v []byte) error {
-			switch index {
-			case 0:
-				if !bytes.Equal(k, []byte("bar")) {
-					t.Fatalf("unexpected key: %v", k)
-				} else if !bytes.Equal(v, []byte("0002")) {
-					t.Fatalf("unexpected value: %v", v)
-				}
-			case 1:
-				if !bytes.Equal(k, []byte("baz")) {
-					t.Fatalf("unexpected key: %v", k)
-				} else if !bytes.Equal(v, []byte("0001")) {
-					t.Fatalf("unexpected value: %v", v)
-				}
-			case 2:
-				if !bytes.Equal(k, []byte("foo")) {
-					t.Fatalf("unexpected key: %v", k)
-				} else if !bytes.Equal(v, []byte("0000")) {
-					t.Fatalf("unexpected value: %v", v)
-				}
-			}
-			index++
+	expectedItems := []kv{
+		{k: []byte("bar"), v: []byte("0002")},
+		{k: []byte("baz"), v: []byte("0001")},
+		{k: []byte("csubbucket"), v: nil},
+		{k: []byte("foo"), v: []byte("0000")},
+	}
+
+	verifyReads := func(b *bolt.Bucket) {
+		var items []kv
+		err := b.ForEach(func(k, v []byte) error {
+			items = append(items, kv{k: k, v: v})
 			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
+		assert.NoErrorf(t, err, "b.ForEach failed")
+		assert.Equal(t, expectedItems, items, "what we iterated (ForEach) is not what we put")
+	}
 
-		if index != 3 {
-			t.Fatalf("unexpected index: %d", index)
-		}
+	err := db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucket([]byte("widgets"))
+		require.NoError(t, err, "bucket creation failed")
+
+		require.NoErrorf(t, b.Put([]byte("foo"), []byte("0000")), "put 'foo' failed")
+		require.NoErrorf(t, b.Put([]byte("baz"), []byte("0001")), "put 'baz' failed")
+		require.NoErrorf(t, b.Put([]byte("bar"), []byte("0002")), "put 'bar' failed")
+		_, err = b.CreateBucket([]byte("csubbucket"))
+		require.NoErrorf(t, err, "creation of subbucket failed")
+
+		verifyReads(b)
 
 		return nil
-	}); err != nil {
-		t.Fatal(err)
+	})
+	require.NoErrorf(t, err, "db.Update failed")
+	err = db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("widgets"))
+		require.NotNil(t, b, "bucket opening failed")
+		verifyReads(b)
+		return nil
+	})
+	assert.NoErrorf(t, err, "db.View failed")
+}
+
+func TestBucket_ForEachBucket(t *testing.T) {
+	db := MustOpenDB()
+	defer db.MustClose()
+
+	expectedItems := [][]byte{
+		[]byte("csubbucket"),
+		[]byte("zsubbucket"),
 	}
+
+	verifyReads := func(b *bolt.Bucket) {
+		var items [][]byte
+		err := b.ForEachBucket(func(k []byte) error {
+			items = append(items, k)
+			return nil
+		})
+		assert.NoErrorf(t, err, "b.ForEach failed")
+		assert.Equal(t, expectedItems, items, "what we iterated (ForEach) is not what we put")
+	}
+
+	err := db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucket([]byte("widgets"))
+		require.NoError(t, err, "bucket creation failed")
+
+		require.NoErrorf(t, b.Put([]byte("foo"), []byte("0000")), "put 'foo' failed")
+		_, err = b.CreateBucket([]byte("zsubbucket"))
+		require.NoErrorf(t, err, "creation of subbucket failed")
+		require.NoErrorf(t, b.Put([]byte("baz"), []byte("0001")), "put 'baz' failed")
+		require.NoErrorf(t, b.Put([]byte("bar"), []byte("0002")), "put 'bar' failed")
+		_, err = b.CreateBucket([]byte("csubbucket"))
+		require.NoErrorf(t, err, "creation of subbucket failed")
+
+		verifyReads(b)
+
+		return nil
+	})
+	assert.NoErrorf(t, err, "db.Update failed")
+	err = db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("widgets"))
+		require.NotNil(t, b, "bucket opening failed")
+		verifyReads(b)
+		return nil
+	})
+	assert.NoErrorf(t, err, "db.View failed")
+}
+
+func TestBucket_ForEachBucket_NoBuckets(t *testing.T) {
+	db := MustOpenDB()
+	defer db.MustClose()
+
+	verifyReads := func(b *bolt.Bucket) {
+		var items [][]byte
+		err := b.ForEachBucket(func(k []byte) error {
+			items = append(items, k)
+			return nil
+		})
+		assert.NoErrorf(t, err, "b.ForEach failed")
+		assert.Emptyf(t, items, "what we iterated (ForEach) is not what we put")
+	}
+
+	err := db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucket([]byte("widgets"))
+		require.NoError(t, err, "bucket creation failed")
+
+		require.NoErrorf(t, b.Put([]byte("foo"), []byte("0000")), "put 'foo' failed")
+		require.NoErrorf(t, err, "creation of subbucket failed")
+		require.NoErrorf(t, b.Put([]byte("baz"), []byte("0001")), "put 'baz' failed")
+		require.NoErrorf(t, err, "creation of subbucket failed")
+
+		verifyReads(b)
+
+		return nil
+	})
+	require.NoErrorf(t, err, "db.Update failed")
+
+	err = db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("widgets"))
+		require.NotNil(t, b, "bucket opening failed")
+		verifyReads(b)
+		return nil
+	})
+	assert.NoErrorf(t, err, "db.View failed")
 }
 
 // Ensure a database can stop iteration early.

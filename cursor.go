@@ -30,10 +30,18 @@ func (c *Cursor) Bucket() *Bucket {
 // The returned key and value are only valid for the life of the transaction.
 func (c *Cursor) First() (key []byte, value []byte) {
 	_assert(c.bucket.tx.db != nil, "tx closed")
+	k, v, flags := c.first()
+	if (flags & uint32(bucketLeafFlag)) != 0 {
+		return k, nil
+	}
+	return k, v
+}
+
+func (c *Cursor) first() (key []byte, value []byte, flags uint32) {
 	c.stack = c.stack[:0]
 	p, n := c.bucket.pageNode(c.bucket.root)
 	c.stack = append(c.stack, elemRef{page: p, node: n, index: 0})
-	c.first()
+	c.goToFirstElementOnTheStack()
 
 	// If we land on an empty page then move to the next value.
 	// https://github.com/boltdb/bolt/issues/450
@@ -43,10 +51,9 @@ func (c *Cursor) First() (key []byte, value []byte) {
 
 	k, v, flags := c.keyValue()
 	if (flags & uint32(bucketLeafFlag)) != 0 {
-		return k, nil
+		return k, nil, flags
 	}
-	return k, v
-
+	return k, v, flags
 }
 
 // Last moves the cursor to the last item in the bucket and returns its key and value.
@@ -155,7 +162,7 @@ func (c *Cursor) seek(seek []byte) (key []byte, value []byte, flags uint32) {
 }
 
 // first moves the cursor to the first leaf element under the last page in the stack.
-func (c *Cursor) first() {
+func (c *Cursor) goToFirstElementOnTheStack() {
 	for {
 		// Exit when we hit a leaf page.
 		var ref = &c.stack[len(c.stack)-1]
@@ -223,7 +230,7 @@ func (c *Cursor) next() (key []byte, value []byte, flags uint32) {
 		// Otherwise start from where we left off in the stack and find the
 		// first element of the first leaf page.
 		c.stack = c.stack[:i+1]
-		c.first()
+		c.goToFirstElementOnTheStack()
 
 		// If this is an empty page then restart and move back up the stack.
 		// https://github.com/boltdb/bolt/issues/450

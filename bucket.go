@@ -229,11 +229,9 @@ func (b *Bucket) DeleteBucket(key []byte) error {
 
 	// Recursively delete all child buckets.
 	child := b.Bucket(key)
-	err := child.ForEach(func(k, v []byte) error {
-		if _, _, childFlags := child.Cursor().seek(k); (childFlags & bucketLeafFlag) != 0 {
-			if err := child.DeleteBucket(k); err != nil {
-				return fmt.Errorf("delete bucket: %s", err)
-			}
+	err := child.ForEachBucket(func(k []byte) error {
+		if err := child.DeleteBucket(k); err != nil {
+			return fmt.Errorf("delete bucket: %s", err)
 		}
 		return nil
 	})
@@ -394,7 +392,22 @@ func (b *Bucket) ForEach(fn func(k, v []byte) error) error {
 	return nil
 }
 
-// Stat returns stats on a bucket.
+func (b *Bucket) ForEachBucket(fn func(k []byte) error) error {
+	if b.tx.db == nil {
+		return ErrTxClosed
+	}
+	c := b.Cursor()
+	for k, _, flags := c.first(); k != nil; k, _, flags = c.next() {
+		if flags&bucketLeafFlag != 0 {
+			if err := fn(k); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// Stats returns stats on a bucket.
 func (b *Bucket) Stats() BucketStats {
 	var s, subStats BucketStats
 	pageSize := b.tx.db.pageSize
@@ -461,7 +474,7 @@ func (b *Bucket) Stats() BucketStats {
 
 		// Keep track of maximum page depth.
 		if depth+1 > s.Depth {
-			s.Depth = (depth + 1)
+			s.Depth = depth + 1
 		}
 	})
 

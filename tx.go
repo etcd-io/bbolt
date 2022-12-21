@@ -484,7 +484,7 @@ func (tx *Tx) checkBucket(b *Bucket, reachable map[pgid]*page, freed map[pgid]bo
 	})
 
 	// Check each bucket within this bucket.
-	_ = b.ForEach(func(k, v []byte) error {
+	_ = b.ForEachBucket(func(k []byte) error {
 		if child := b.Bucket(k); child != nil {
 			tx.checkBucket(child, reachable, freed, ch)
 		}
