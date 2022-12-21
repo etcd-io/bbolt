@@ -107,6 +107,8 @@ func (c *Cursor) Prev() (key []byte, value []byte) {
 // follow, a nil key is returned.
 // The returned key and value are only valid for the life of the transaction.
 func (c *Cursor) Seek(seek []byte) (key []byte, value []byte) {
+	_assert(c.bucket.tx.db != nil, "tx closed")
+
 	k, v, flags := c.seek(seek)
 
 	// If we ended up after the last element of a page then move to the next one.
@@ -144,8 +146,6 @@ func (c *Cursor) Delete() error {
 // seek moves the cursor to a given key and returns it.
 // If the key does not exist then the next key is used.
 func (c *Cursor) seek(seek []byte) (key []byte, value []byte, flags uint32) {
-	_assert(c.bucket.tx.db != nil, "tx closed")
-
 	// Start from root page/node and traverse to correct page.
 	c.stack = c.stack[:0]
 	c.search(seek, c.bucket.root)
