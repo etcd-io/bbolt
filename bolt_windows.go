@@ -62,24 +62,28 @@ func funlock(db *DB) error {
 // mmap memory maps a DB's data file.
 // Based on: https://github.com/edsrzf/mmap-go
 func mmap(db *DB, sz int) error {
+	var sizelo, sizehi uint32
+
 	if !db.readOnly {
 		// Truncate the database to the size of the mmap.
 		if err := db.file.Truncate(int64(sz)); err != nil {
 			return fmt.Errorf("truncate: %s", err)
 		}
+		sizehi = uint32(sz >> 32)
+		sizelo = uint32(sz) & 0xffffffff
 	}
 
 	// Open a file mapping handle.
-	sizelo := uint32(sz >> 32)
-	sizehi := uint32(sz) & 0xffffffff
-	h, errno := syscall.CreateFileMapping(syscall.Handle(db.file.Fd()), nil, syscall.PAGE_READONLY, sizelo, sizehi, nil)
+	h, errno := syscall.CreateFileMapping(syscall.Handle(db.file.Fd()), nil, syscall.PAGE_READONLY, sizehi, sizelo, nil)
 	if h == 0 {
 		return os.NewSyscallError("CreateFileMapping", errno)
 	}
 
 	// Create the memory map.
-	addr, errno := syscall.MapViewOfFile(h, syscall.FILE_MAP_READ, 0, 0, uintptr(sz))
+	addr, errno := syscall.MapViewOfFile(h, syscall.FILE_MAP_READ, 0, 0, 0)
 	if addr == 0 {
+		// Do our best and report error returned from MapViewOfFile.
+		_ = syscall.CloseHandle(h)
 		return os.NewSyscallError("MapViewOfFile", errno)
 	}
 
