@@ -188,12 +188,16 @@ func (n *node) read(p *page) {
 }
 
 // write writes the items onto one or more pages.
+// The page should have p.id (might be 0 for meta or bucket-inline page) and p.overflow set
+// and the rest should be zeroed.
 func (n *node) write(p *page) {
+	_assert(p.count == 0 && p.flags == 0, "node cannot be written into a not empty page")
+
 	// Initialize page.
 	if n.isLeaf {
-		p.flags |= leafPageFlag
+		p.flags = leafPageFlag
 	} else {
-		p.flags |= branchPageFlag
+		p.flags = branchPageFlag
 	}
 
 	if len(n.inodes) >= 0xFFFF {

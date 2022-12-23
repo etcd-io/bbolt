@@ -609,12 +609,15 @@ func (tx *Tx) page(id pgid) *page {
 	// Check the dirty pages first.
 	if tx.pages != nil {
 		if p, ok := tx.pages[id]; ok {
+			p.fastCheck(id)
 			return p
 		}
 	}
 
 	// Otherwise return directly from the mmap.
-	return tx.db.page(id)
+	p := tx.db.page(id)
+	p.fastCheck(id)
+	return p
 }
 
 // forEachPage iterates over every page within a given page and executes a function.
