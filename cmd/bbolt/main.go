@@ -202,7 +202,7 @@ func (cmd *CheckCommand) Run(args ...string) error {
 	}
 
 	// Open database.
-	db, err := bolt.Open(path, 0666, nil)
+	db, err := bolt.Open(path, 0666, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
@@ -279,7 +279,7 @@ func (cmd *InfoCommand) Run(args ...string) error {
 	}
 
 	// Open the database.
-	db, err := bolt.Open(path, 0666, nil)
+	db, err := bolt.Open(path, 0666, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
@@ -651,7 +651,7 @@ func (cmd *PagesCommand) Run(args ...string) error {
 	}
 
 	// Open database.
-	db, err := bolt.Open(path, 0666, nil)
+	db, err := bolt.Open(path, 0666, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
@@ -745,7 +745,7 @@ func (cmd *StatsCommand) Run(args ...string) error {
 	}
 
 	// Open database.
-	db, err := bolt.Open(path, 0666, nil)
+	db, err := bolt.Open(path, 0666, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
@@ -880,7 +880,7 @@ func (cmd *BucketsCommand) Run(args ...string) error {
 	}
 
 	// Open database.
-	db, err := bolt.Open(path, 0666, nil)
+	db, err := bolt.Open(path, 0666, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
@@ -945,7 +945,7 @@ func (cmd *KeysCommand) Run(args ...string) error {
 	}
 
 	// Open database.
-	db, err := bolt.Open(path, 0666, nil)
+	db, err := bolt.Open(path, 0666, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
@@ -1040,7 +1040,7 @@ func (cmd *GetCommand) Run(args ...string) error {
 	}
 
 	// Open database.
-	db, err := bolt.Open(path, 0666, nil)
+	db, err := bolt.Open(path, 0666, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}

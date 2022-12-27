@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	bolt "go.etcd.io/bbolt"
 	main "go.etcd.io/bbolt/cmd/bbolt"
 )
@@ -20,6 +21,8 @@ func TestInfoCommand_Run(t *testing.T) {
 	db := MustOpen(0666, nil)
 	db.DB.Close()
 	defer db.Close()
+
+	defer requireDBNoChange(t, dbData(t, db.Path), db.Path)
 
 	// Run the info command.
 	m := NewMain()
@@ -38,6 +41,8 @@ func TestStatsCommand_Run_EmptyDatabase(t *testing.T) {
 	db := MustOpen(0666, nil)
 	defer db.Close()
 	db.DB.Close()
+
+	defer requireDBNoChange(t, dbData(t, db.Path), db.Path)
 
 	// Generate expected result.
 	exp := "Aggregate statistics for 0 buckets\n\n" +
@@ -116,6 +121,8 @@ func TestStatsCommand_Run(t *testing.T) {
 	}
 	db.DB.Close()
 
+	defer requireDBNoChange(t, dbData(t, db.Path), db.Path)
+
 	// Generate expected result.
 	exp := "Aggregate statistics for 3 buckets\n\n" +
 		"Page count statistics\n" +
@@ -163,6 +170,8 @@ func TestBucketsCommand_Run(t *testing.T) {
 	}
 	db.DB.Close()
 
+	defer requireDBNoChange(t, dbData(t, db.Path), db.Path)
+
 	expected := "bar\nbaz\nfoo\n"
 
 	// Run the command.
@@ -197,6 +206,8 @@ func TestKeysCommand_Run(t *testing.T) {
 		t.Fatal(err)
 	}
 	db.DB.Close()
+
+	defer requireDBNoChange(t, dbData(t, db.Path), db.Path)
 
 	expected := "foo-0\nfoo-1\nfoo-2\n"
 
@@ -233,6 +244,8 @@ func TestGetCommand_Run(t *testing.T) {
 		t.Fatal(err)
 	}
 	db.DB.Close()
+
+	defer requireDBNoChange(t, dbData(t, db.Path), db.Path)
 
 	expected := "val-foo-1\n"
 
@@ -420,7 +433,7 @@ func fillBucket(b *bolt.Bucket, prefix []byte) error {
 }
 
 func chkdb(path string) ([]byte, error) {
-	db, err := bolt.Open(path, 0666, nil)
+	db, err := bolt.Open(path, 0666, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		return nil, err
 	}
@@ -452,4 +465,18 @@ func walkBucket(parent *bolt.Bucket, k []byte, v []byte, w io.Writer) error {
 		}
 		return walkBucket(parent, k, v, w)
 	})
+}
+
+func dbData(t *testing.T, filePath string) []byte {
+	data, err := os.ReadFile(filePath)
+	require.NoError(t, err)
+	return data
+}
+
+func requireDBNoChange(t *testing.T, oldData []byte, filePath string) {
+	newData, err := os.ReadFile(filePath)
+	require.NoError(t, err)
+
+	noChange := bytes.Equal(oldData, newData)
+	require.True(t, noChange)
 }
