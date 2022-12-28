@@ -3,13 +3,13 @@ package bbolt_test
 import (
 	"bytes"
 	"fmt"
-	"go.etcd.io/bbolt/internal/btesting"
 	"math/rand"
 	"sync"
 	"sync/atomic"
 	"testing"
 
 	bolt "go.etcd.io/bbolt"
+	"go.etcd.io/bbolt/internal/btesting"
 )
 
 func TestSimulate_1op_1p(t *testing.T)     { testSimulate(t, nil, 1, 1, 1) }

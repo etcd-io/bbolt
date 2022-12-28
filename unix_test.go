@@ -5,11 +5,12 @@ package bbolt_test
 
 import (
 	"fmt"
-	"go.etcd.io/bbolt/internal/btesting"
 	"testing"
 
-	bolt "go.etcd.io/bbolt"
 	"golang.org/x/sys/unix"
+
+	bolt "go.etcd.io/bbolt"
+	"go.etcd.io/bbolt/internal/btesting"
 )
 
 func TestMlock_DbOpen(t *testing.T) {

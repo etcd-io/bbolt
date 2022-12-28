@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"go.etcd.io/bbolt/internal/btesting"
 	"log"
 	"os"
 	"testing"
 
 	bolt "go.etcd.io/bbolt"
+	"go.etcd.io/bbolt/internal/btesting"
 )
 
 // TestTx_Check_ReadOnly tests consistency checking on a ReadOnly database.

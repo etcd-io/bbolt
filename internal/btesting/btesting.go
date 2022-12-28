@@ -3,13 +3,15 @@ package btesting
 import (
 	"flag"
 	"fmt"
-	"github.com/stretchr/testify/require"
-	bolt "go.etcd.io/bbolt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+
+	bolt "go.etcd.io/bbolt"
 )
 
 var statsFlag = flag.Bool("stats", false, "show performance stats")

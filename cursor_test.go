@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"go.etcd.io/bbolt/internal/btesting"
 	"log"
 	"os"
 	"reflect"
@@ -13,6 +12,7 @@ import (
 	"testing/quick"
 
 	bolt "go.etcd.io/bbolt"
+	"go.etcd.io/bbolt/internal/btesting"
 )
 
 // Ensure that a cursor can return a reference to the bucket that created it.
