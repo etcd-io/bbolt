@@ -254,21 +254,9 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 			return nil, err
 		}
 	} else {
-		// Read the first meta page to determine the page size.
-		var buf [0x1000]byte
-		// If we can't read the page size, but can read a page, assume
-		// it's the same as the OS or one given -- since that's how the
-		// page size was chosen in the first place.
-		//
-		// If the first page is invalid and this OS uses a different
-		// page size than what the database was created with then we
-		// are out of luck and cannot access the database.
-		//
-		// TODO: scan for next page
-		if bw, err := db.file.ReadAt(buf[:], 0); err == nil && bw == len(buf) {
-			if m := db.pageInBuffer(buf[:], 0).meta(); m.validate() == nil {
-				db.pageSize = int(m.pageSize)
-			}
+		// try to get the page size from the metadata pages
+		if pgSize, err := db.getPageSize(); err == nil {
+			db.pageSize = pgSize
 		} else {
 			_ = db.close()
 			return nil, ErrInvalid
@@ -309,6 +297,95 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 
 	// Mark the database as opened and return.
 	return db, nil
+}
+
+// getPageSize reads the pageSize from the meta pages. It tries
+// to read the first meta page firstly. If the first page is invalid,
+// then it tries to read the second page using the default page size.
+func (db *DB) getPageSize() (int, error) {
+	var (
+		meta0CanRead, meta1CanRead bool
+	)
+
+	// Read the first meta page to determine the page size.
+	if pgSize, canRead, err := db.getPageSizeFromFirstMeta(); err != nil {
+		// We cannot read the page size from page 0, but can read page 0.
+		meta0CanRead = canRead
+	} else {
+		return pgSize, nil
+	}
+
+	// Read the second meta page to determine the page size.
+	if pgSize, canRead, err := db.getPageSizeFromSecondMeta(); err != nil {
+		// We cannot read the page size from page 1, but can read page 1.
+		meta1CanRead = canRead
+	} else {
+		return pgSize, nil
+	}
+
+	// If we can't read the page size from both pages, but can read
+	// either page, then we assume it's the same as the OS or the one
+	// given, since that's how the page size was chosen in the first place.
+	//
+	// If both pages are invalid, and (this OS uses a different page size
+	// from what the database was created with or the given page size is
+	// different from what the database was created with), then we are out
+	// of luck and cannot access the database.
+	if meta0CanRead || meta1CanRead {
+		return db.pageSize, nil
+	}
+
+	return 0, ErrInvalid
+}
+
+// getPageSizeFromFirstMeta reads the pageSize from the first meta page
+func (db *DB) getPageSizeFromFirstMeta() (int, bool, error) {
+	var buf [0x1000]byte
+	var metaCanRead bool
+	if bw, err := db.file.ReadAt(buf[:], 0); err == nil && bw == len(buf) {
+		metaCanRead = true
+		if m := db.pageInBuffer(buf[:], 0).meta(); m.validate() == nil {
+			return int(m.pageSize), metaCanRead, nil
+		}
+	}
+	return 0, metaCanRead, ErrInvalid
+}
+
+// getPageSizeFromSecondMeta reads the pageSize from the second meta page
+func (db *DB) getPageSizeFromSecondMeta() (int, bool, error) {
+	var (
+		fileSize    int64
+		metaCanRead bool
+	)
+
+	// get the db file size
+	if info, err := db.file.Stat(); err != nil {
+		return 0, metaCanRead, err
+	} else {
+		fileSize = info.Size()
+	}
+
+	// We need to read the second meta page, so we should skip the first page;
+	// but we don't know the exact page size yet, it's chicken & egg problem.
+	// The solution is to try all the possible page sizes, which starts from 1KB
+	// and until 16MB (1024<<14) or the end of the db file
+	//
+	// TODO: should we support larger page size?
+	for i := 0; i <= 14; i++ {
+		var buf [0x1000]byte
+		var pos int64 = 1024 << uint(i)
+		if pos >= fileSize-1024 {
+			break
+		}
+		if bw, err := db.file.ReadAt(buf[:], pos); err == nil && bw == len(buf) {
+			metaCanRead = true
+			if m := db.pageInBuffer(buf[:], 0).meta(); m.validate() == nil {
+				return int(m.pageSize), metaCanRead, nil
+			}
+		}
+	}
+
+	return 0, metaCanRead, ErrInvalid
 }
 
 // loadFreelist reads the freelist if it is synced, or reconstructs it
