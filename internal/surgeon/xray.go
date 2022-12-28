@@ -8,6 +8,7 @@ package surgeon
 import (
 	"bytes"
 	"fmt"
+
 	"go.etcd.io/bbolt/internal/guts_cli"
 )
 

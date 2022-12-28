@@ -7,7 +7,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"go.etcd.io/bbolt/internal/guts_cli"
 	"io"
 	"math/rand"
 	"os"
@@ -19,6 +18,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 	"unsafe"
+
+	"go.etcd.io/bbolt/internal/guts_cli"
 
 	bolt "go.etcd.io/bbolt"
 )

@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"go.etcd.io/bbolt/internal/guts_cli"
 	"io"
 	"os"
 	"strings"
+
+	"go.etcd.io/bbolt/internal/guts_cli"
 )
 
 // PageCommand represents the "page" command execution.
