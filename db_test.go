@@ -291,7 +291,7 @@ func TestOpen_Size_Large(t *testing.T) {
 	}
 
 	// Close database and grab the size.
-	if err := db.DB.Close(); err != nil {
+	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
 	sz := fileSize(path)
@@ -463,7 +463,7 @@ func TestDB_Open_ReadOnly(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.DB.Close(); err != nil {
+	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -556,9 +556,6 @@ func TestOpen_RecoverFreeList(t *testing.T) {
 	if err := tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.DB.Close(); err != nil {
-		t.Fatal(err)
-	}
 	db.MustClose()
 
 	// Record freelist count from opening with NoFreelistSync.
@@ -566,9 +563,6 @@ func TestOpen_RecoverFreeList(t *testing.T) {
 	freepages := db.Stats().FreePageN
 	if freepages == 0 {
 		t.Fatalf("no free pages on NoFreelistSync reopen")
-	}
-	if err := db.DB.Close(); err != nil {
-		t.Fatal(err)
 	}
 	db.MustClose()
 

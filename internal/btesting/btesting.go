@@ -52,9 +52,7 @@ func MustOpenDBWithOption(t testing.TB, f string, o *bolt.Options) *DB {
 	o.FreelistType = freelistType
 
 	db, err := bolt.Open(f, 0666, o)
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 	resDB := &DB{
 		DB: db,
 		f:  f,
@@ -92,9 +90,8 @@ func (db *DB) Close() error {
 
 // MustClose closes the database but does NOT delete the underlying file.
 func (db *DB) MustClose() {
-	if err := db.Close(); err != nil {
-		panic(err)
-	}
+	err := db.Close()
+	require.NoError(db.t, err)
 }
 
 func (db *DB) MustDeleteFile() {
@@ -113,15 +110,13 @@ func (db *DB) MustReopen() {
 	}
 	db.t.Logf("Reopening bbolt DB at: %s", db.f)
 	indb, err := bolt.Open(db.Path(), 0666, db.o)
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(db.t, err)
 	db.DB = indb
 }
 
 // MustCheck runs a consistency check on the database and panics if any errors are found.
 func (db *DB) MustCheck() {
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		// Collect all the errors.
 		var errors []error
 		for err := range tx.Check() {
@@ -134,9 +129,8 @@ func (db *DB) MustCheck() {
 		// If errors occurred, copy the DB and print the errors.
 		if len(errors) > 0 {
 			var path = filepath.Join(db.t.TempDir(), "db.backup")
-			if err := tx.CopyFile(path, 0600); err != nil {
-				panic(err)
-			}
+			err := tx.CopyFile(path, 0600)
+			require.NoError(db.t, err)
 
 			// Print errors.
 			fmt.Print("\n\n")
@@ -152,9 +146,8 @@ func (db *DB) MustCheck() {
 		}
 
 		return nil
-	}); err != nil && err != bolt.ErrDatabaseNotOpen {
-		panic(err)
-	}
+	})
+	require.NoError(db.t, err)
 }
 
 // Fill - fills the DB using numTx transactions and numKeysPerTx.
@@ -185,11 +178,10 @@ func (db *DB) Path() string {
 // CopyTempFile copies a database to a temporary file.
 func (db *DB) CopyTempFile() {
 	path := filepath.Join(db.t.TempDir(), "db.copy")
-	if err := db.View(func(tx *bolt.Tx) error {
+	err := db.View(func(tx *bolt.Tx) error {
 		return tx.CopyFile(path, 0600)
-	}); err != nil {
-		panic(err)
-	}
+	})
+	require.NoError(db.t, err)
 	fmt.Println("db copied to: ", path)
 }
 
