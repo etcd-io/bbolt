@@ -7,16 +7,17 @@ import (
 	"fmt"
 	"testing"
 
-	bolt "go.etcd.io/bbolt"
 	"golang.org/x/sys/unix"
+
+	bolt "go.etcd.io/bbolt"
+	"go.etcd.io/bbolt/internal/btesting"
 )
 
 func TestMlock_DbOpen(t *testing.T) {
 	// 32KB
 	skipOnMemlockLimitBelow(t, 32*1024)
 
-	db := MustOpenWithOption(&bolt.Options{Mlock: true})
-	defer db.MustClose()
+	btesting.MustCreateDBWithOption(t, &bolt.Options{Mlock: true})
 }
 
 // Test change between "empty" (16KB) and "non-empty" db
@@ -24,8 +25,7 @@ func TestMlock_DbCanGrow_Small(t *testing.T) {
 	// 32KB
 	skipOnMemlockLimitBelow(t, 32*1024)
 
-	db := MustOpenWithOption(&bolt.Options{Mlock: true})
-	defer db.MustClose()
+	db := btesting.MustCreateDBWithOption(t, &bolt.Options{Mlock: true})
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte("bucket"))
@@ -58,25 +58,24 @@ func TestMlock_DbCanGrow_Big(t *testing.T) {
 	chunksBefore := 64
 	chunksAfter := 64
 
-	db := MustOpenWithOption(&bolt.Options{Mlock: true})
-	defer db.MustClose()
+	db := btesting.MustCreateDBWithOption(t, &bolt.Options{Mlock: true})
 
 	for chunk := 0; chunk < chunksBefore; chunk++ {
 		insertChunk(t, db, chunk)
 	}
-	dbSize := fileSize(db.f)
+	dbSize := fileSize(db.Path())
 
 	for chunk := 0; chunk < chunksAfter; chunk++ {
 		insertChunk(t, db, chunksBefore+chunk)
 	}
-	newDbSize := fileSize(db.f)
+	newDbSize := fileSize(db.Path())
 
 	if newDbSize <= dbSize {
 		t.Errorf("db didn't grow: %v <= %v", newDbSize, dbSize)
 	}
 }
 
-func insertChunk(t *testing.T, db *DB, chunkId int) {
+func insertChunk(t *testing.T, db *btesting.DB, chunkId int) {
 	chunkSize := 1024
 
 	if err := db.Update(func(tx *bolt.Tx) error {

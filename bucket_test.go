@@ -15,13 +15,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	bolt "go.etcd.io/bbolt"
+	"go.etcd.io/bbolt/internal/btesting"
 )
 
 // Ensure that a bucket that gets a non-existent key returns nil.
 func TestBucket_Get_NonExistent(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
@@ -39,8 +40,7 @@ func TestBucket_Get_NonExistent(t *testing.T) {
 
 // Ensure that a bucket can read a value that is not flushed yet.
 func TestBucket_Get_FromNode(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
@@ -61,8 +61,7 @@ func TestBucket_Get_FromNode(t *testing.T) {
 
 // Ensure that a bucket retrieved via Get() returns a nil.
 func TestBucket_Get_IncompatibleValue(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 	if err := db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucket([]byte("widgets"))
 		if err != nil {
@@ -87,8 +86,7 @@ func TestBucket_Get_IncompatibleValue(t *testing.T) {
 //
 // https://github.com/boltdb/bolt/issues/544
 func TestBucket_Get_Capacity(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	// Write key to a bucket.
 	if err := db.Update(func(tx *bolt.Tx) error {
@@ -125,8 +123,7 @@ func TestBucket_Get_Capacity(t *testing.T) {
 
 // Ensure that a bucket can write a key/value.
 func TestBucket_Put(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 	if err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
 		if err != nil {
@@ -148,8 +145,7 @@ func TestBucket_Put(t *testing.T) {
 
 // Ensure that a bucket can rewrite a key in the same transaction.
 func TestBucket_Put_Repeat(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 	if err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
 		if err != nil {
@@ -174,8 +170,7 @@ func TestBucket_Put_Repeat(t *testing.T) {
 
 // Ensure that a bucket can write a bunch of large values.
 func TestBucket_Put_Large(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	count, factor := 100, 200
 	if err := db.Update(func(tx *bolt.Tx) error {
@@ -216,8 +211,7 @@ func TestDB_Put_VeryLarge(t *testing.T) {
 	n, batchN := 400000, 200000
 	ksize, vsize := 8, 500
 
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	for i := 0; i < n; i += batchN {
 		if err := db.Update(func(tx *bolt.Tx) error {
@@ -241,8 +235,7 @@ func TestDB_Put_VeryLarge(t *testing.T) {
 
 // Ensure that a setting a value on a key with a bucket value returns an error.
 func TestBucket_Put_IncompatibleValue(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		b0, err := tx.CreateBucket([]byte("widgets"))
@@ -264,8 +257,7 @@ func TestBucket_Put_IncompatibleValue(t *testing.T) {
 
 // Ensure that a setting a value while the transaction is closed returns an error.
 func TestBucket_Put_Closed(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 	tx, err := db.Begin(true)
 	if err != nil {
 		t.Fatal(err)
@@ -287,8 +279,7 @@ func TestBucket_Put_Closed(t *testing.T) {
 
 // Ensure that setting a value on a read-only bucket returns an error.
 func TestBucket_Put_ReadOnly(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
@@ -312,8 +303,7 @@ func TestBucket_Put_ReadOnly(t *testing.T) {
 
 // Ensure that a bucket can delete an existing key.
 func TestBucket_Delete(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
@@ -337,8 +327,7 @@ func TestBucket_Delete(t *testing.T) {
 
 // Ensure that deleting a large set of keys will work correctly.
 func TestBucket_Delete_Large(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
@@ -388,8 +377,7 @@ func TestBucket_Delete_FreelistOverflow(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	k := make([]byte, 16)
 	// The bigger the pages - the more values we need to write.
@@ -436,9 +424,7 @@ func TestBucket_Delete_FreelistOverflow(t *testing.T) {
 	}
 
 	// Free page count should be preserved on reopen.
-	if err := db.DB.Close(); err != nil {
-		t.Fatal(err)
-	}
+	db.MustClose()
 	db.MustReopen()
 	if reopenFreePages := db.Stats().FreePageN; freePages != reopenFreePages {
 		t.Fatalf("expected %d free pages, got %+v", freePages, db.Stats())
@@ -447,8 +433,7 @@ func TestBucket_Delete_FreelistOverflow(t *testing.T) {
 
 // Ensure that deleting of non-existing key is a no-op.
 func TestBucket_Delete_NonExisting(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
@@ -480,8 +465,7 @@ func TestBucket_Delete_NonExisting(t *testing.T) {
 
 // Ensure that accessing and updating nested buckets is ok across transactions.
 func TestBucket_Nested(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		// Create a widgets bucket.
@@ -567,8 +551,7 @@ func TestBucket_Nested(t *testing.T) {
 
 // Ensure that deleting a bucket using Delete() returns an error.
 func TestBucket_Delete_Bucket(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 	if err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
 		if err != nil {
@@ -588,8 +571,7 @@ func TestBucket_Delete_Bucket(t *testing.T) {
 
 // Ensure that deleting a key on a read-only bucket returns an error.
 func TestBucket_Delete_ReadOnly(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
@@ -612,8 +594,7 @@ func TestBucket_Delete_ReadOnly(t *testing.T) {
 
 // Ensure that a deleting value while the transaction is closed returns an error.
 func TestBucket_Delete_Closed(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	tx, err := db.Begin(true)
 	if err != nil {
@@ -635,8 +616,7 @@ func TestBucket_Delete_Closed(t *testing.T) {
 
 // Ensure that deleting a bucket causes nested buckets to be deleted.
 func TestBucket_DeleteBucket_Nested(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		widgets, err := tx.CreateBucket([]byte("widgets"))
@@ -667,8 +647,7 @@ func TestBucket_DeleteBucket_Nested(t *testing.T) {
 
 // Ensure that deleting a bucket causes nested buckets to be deleted after they have been committed.
 func TestBucket_DeleteBucket_Nested2(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		widgets, err := tx.CreateBucket([]byte("widgets"))
@@ -734,8 +713,7 @@ func TestBucket_DeleteBucket_Nested2(t *testing.T) {
 // Ensure that deleting a child bucket with multiple pages causes all pages to get collected.
 // NOTE: Consistency check in bolt_test.DB.Close() will panic if pages not freed properly.
 func TestBucket_DeleteBucket_Large(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		widgets, err := tx.CreateBucket([]byte("widgets"))
@@ -770,8 +748,7 @@ func TestBucket_DeleteBucket_Large(t *testing.T) {
 
 // Ensure that a simple value retrieved via Bucket() returns a nil.
 func TestBucket_Bucket_IncompatibleValue(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		widgets, err := tx.CreateBucket([]byte("widgets"))
@@ -793,8 +770,7 @@ func TestBucket_Bucket_IncompatibleValue(t *testing.T) {
 
 // Ensure that creating a bucket on an existing non-bucket key returns an error.
 func TestBucket_CreateBucket_IncompatibleValue(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 	if err := db.Update(func(tx *bolt.Tx) error {
 		widgets, err := tx.CreateBucket([]byte("widgets"))
 		if err != nil {
@@ -815,8 +791,7 @@ func TestBucket_CreateBucket_IncompatibleValue(t *testing.T) {
 
 // Ensure that deleting a bucket on an existing non-bucket key returns an error.
 func TestBucket_DeleteBucket_IncompatibleValue(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		widgets, err := tx.CreateBucket([]byte("widgets"))
@@ -837,8 +812,7 @@ func TestBucket_DeleteBucket_IncompatibleValue(t *testing.T) {
 
 // Ensure bucket can set and update its sequence number.
 func TestBucket_Sequence(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		bkt, err := tx.CreateBucket([]byte("0"))
@@ -879,8 +853,7 @@ func TestBucket_Sequence(t *testing.T) {
 
 // Ensure that a bucket can return an autoincrementing sequence.
 func TestBucket_NextSequence(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		widgets, err := tx.CreateBucket([]byte("widgets"))
@@ -922,8 +895,7 @@ func TestBucket_NextSequence(t *testing.T) {
 // the only thing updated on the bucket.
 // https://github.com/boltdb/bolt/issues/296
 func TestBucket_NextSequence_Persist(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
@@ -958,8 +930,7 @@ func TestBucket_NextSequence_Persist(t *testing.T) {
 
 // Ensure that retrieving the next sequence on a read-only bucket returns an error.
 func TestBucket_NextSequence_ReadOnly(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
@@ -983,8 +954,7 @@ func TestBucket_NextSequence_ReadOnly(t *testing.T) {
 
 // Ensure that retrieving the next sequence for a bucket on a closed database return an error.
 func TestBucket_NextSequence_Closed(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 	tx, err := db.Begin(true)
 	if err != nil {
 		t.Fatal(err)
@@ -1003,8 +973,7 @@ func TestBucket_NextSequence_Closed(t *testing.T) {
 
 // Ensure a user can loop over all key/value pairs in a bucket.
 func TestBucket_ForEach(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	type kv struct {
 		k []byte
@@ -1053,8 +1022,7 @@ func TestBucket_ForEach(t *testing.T) {
 }
 
 func TestBucket_ForEachBucket(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	expectedItems := [][]byte{
 		[]byte("csubbucket"),
@@ -1098,8 +1066,7 @@ func TestBucket_ForEachBucket(t *testing.T) {
 }
 
 func TestBucket_ForEachBucket_NoBuckets(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	verifyReads := func(b *bolt.Bucket) {
 		var items [][]byte
@@ -1137,8 +1104,7 @@ func TestBucket_ForEachBucket_NoBuckets(t *testing.T) {
 
 // Ensure a database can stop iteration early.
 func TestBucket_ForEach_ShortCircuit(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 	if err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
 		if err != nil {
@@ -1176,8 +1142,7 @@ func TestBucket_ForEach_ShortCircuit(t *testing.T) {
 
 // Ensure that looping over a bucket on a closed database returns an error.
 func TestBucket_ForEach_Closed(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	tx, err := db.Begin(true)
 	if err != nil {
@@ -1200,8 +1165,7 @@ func TestBucket_ForEach_Closed(t *testing.T) {
 
 // Ensure that an error is returned when inserting with an empty key.
 func TestBucket_Put_EmptyKey(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
@@ -1222,8 +1186,7 @@ func TestBucket_Put_EmptyKey(t *testing.T) {
 
 // Ensure that an error is returned when inserting with a key that's too large.
 func TestBucket_Put_KeyTooLarge(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 	if err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
 		if err != nil {
@@ -1245,8 +1208,7 @@ func TestBucket_Put_ValueTooLarge(t *testing.T) {
 		t.Skip("not enough RAM for test")
 	}
 
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
@@ -1268,8 +1230,7 @@ func TestBucket_Stats(t *testing.T) {
 		t.Skip("skipping test in short mode")
 	}
 
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	// Add bucket with fewer keys but one big value.
 	bigKey := []byte("really-big-value")
@@ -1361,8 +1322,7 @@ func TestBucket_Stats_RandomFill(t *testing.T) {
 		t.Skip("invalid page size for test")
 	}
 
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	// Add a set of values in random order. It will be the same random
 	// order so we can maintain consistency between test runs.
@@ -1423,8 +1383,7 @@ func TestBucket_Stats_RandomFill(t *testing.T) {
 
 // Ensure a bucket can calculate stats.
 func TestBucket_Stats_Small(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		// Add a bucket that fits on a single root leaf.
@@ -1487,8 +1446,7 @@ func TestBucket_Stats_Small(t *testing.T) {
 }
 
 func TestBucket_Stats_EmptyBucket(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		// Add a bucket that fits on a single root leaf.
@@ -1547,8 +1505,7 @@ func TestBucket_Stats_EmptyBucket(t *testing.T) {
 
 // Ensure a bucket can calculate stats.
 func TestBucket_Stats_Nested(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("foo"))
@@ -1653,8 +1610,7 @@ func TestBucket_Stats_Large(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	var index int
 	for i := 0; i < 100; i++ {
@@ -1731,7 +1687,7 @@ func TestBucket_Put_Single(t *testing.T) {
 
 	index := 0
 	if err := quick.Check(func(items testdata) bool {
-		db := MustOpenDB()
+		db := btesting.MustCreateDB(t)
 		defer db.MustClose()
 
 		m := make(map[string][]byte)
@@ -1788,7 +1744,7 @@ func TestBucket_Put_Multiple(t *testing.T) {
 	}
 
 	if err := quick.Check(func(items testdata) bool {
-		db := MustOpenDB()
+		db := btesting.MustCreateDB(t)
 		defer db.MustClose()
 
 		// Bulk insert all values.
@@ -1841,7 +1797,7 @@ func TestBucket_Delete_Quick(t *testing.T) {
 	}
 
 	if err := quick.Check(func(items testdata) bool {
-		db := MustOpenDB()
+		db := btesting.MustCreateDB(t)
 		defer db.MustClose()
 
 		// Bulk insert all values.

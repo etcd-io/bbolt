@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	bolt "go.etcd.io/bbolt"
+	"go.etcd.io/bbolt/internal/btesting"
 )
 
 func TestSimulate_1op_1p(t *testing.T)     { testSimulate(t, nil, 1, 1, 1) }
@@ -43,8 +44,7 @@ func testSimulate(t *testing.T, openOption *bolt.Options, round, threadCount, pa
 	var versions = make(map[int]*QuickDB)
 	versions[1] = NewQuickDB()
 
-	db := MustOpenWithOption(openOption)
-	defer db.MustClose()
+	db := btesting.MustCreateDBWithOption(t, openOption)
 
 	var mutex sync.Mutex
 
@@ -146,6 +146,9 @@ func testSimulate(t *testing.T, openOption *bolt.Options, round, threadCount, pa
 		}
 
 		db.MustClose()
+		// I have doubts the DB drop is indented here (as 'versions' is not being reset).
+		// But I'm preserving for now the original behavior.
+		db.MustDeleteFile()
 		db.MustReopen()
 	}
 

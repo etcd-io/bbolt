@@ -12,12 +12,12 @@ import (
 	"testing/quick"
 
 	bolt "go.etcd.io/bbolt"
+	"go.etcd.io/bbolt/internal/btesting"
 )
 
 // Ensure that a cursor can return a reference to the bucket that created it.
 func TestCursor_Bucket(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 	if err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
 		if err != nil {
@@ -34,8 +34,7 @@ func TestCursor_Bucket(t *testing.T) {
 
 // Ensure that a Tx cursor can seek to the appropriate keys.
 func TestCursor_Seek(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 	if err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
 		if err != nil {
@@ -104,8 +103,7 @@ func TestCursor_Seek(t *testing.T) {
 }
 
 func TestCursor_Delete(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	const count = 1000
 
@@ -167,8 +165,7 @@ func TestCursor_Delete(t *testing.T) {
 //
 // Related: https://github.com/boltdb/bolt/pull/187
 func TestCursor_Seek_Large(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	var count = 10000
 
@@ -231,8 +228,7 @@ func TestCursor_Seek_Large(t *testing.T) {
 
 // Ensure that a cursor can iterate over an empty bucket without error.
 func TestCursor_EmptyBucket(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 	if err := db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucket([]byte("widgets"))
 		return err
@@ -256,8 +252,7 @@ func TestCursor_EmptyBucket(t *testing.T) {
 
 // Ensure that a Tx cursor can reverse iterate over an empty bucket without error.
 func TestCursor_EmptyBucketReverse(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucket([]byte("widgets"))
@@ -281,8 +276,7 @@ func TestCursor_EmptyBucketReverse(t *testing.T) {
 
 // Ensure that a Tx cursor can iterate over a single root with a couple elements.
 func TestCursor_Iterate_Leaf(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
@@ -352,8 +346,7 @@ func TestCursor_Iterate_Leaf(t *testing.T) {
 
 // Ensure that a Tx cursor can iterate in reverse over a single root with a couple elements.
 func TestCursor_LeafRootReverse(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
@@ -416,8 +409,7 @@ func TestCursor_LeafRootReverse(t *testing.T) {
 
 // Ensure that a Tx cursor can restart from the beginning.
 func TestCursor_Restart(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
@@ -462,8 +454,7 @@ func TestCursor_Restart(t *testing.T) {
 
 // Ensure that a cursor can skip over empty pages that have been deleted.
 func TestCursor_First_EmptyPages(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	// Create 1000 keys in the "widgets" bucket.
 	if err := db.Update(func(tx *bolt.Tx) error {
@@ -509,8 +500,7 @@ func TestCursor_First_EmptyPages(t *testing.T) {
 
 // Ensure that a cursor can skip over empty pages that have been deleted.
 func TestCursor_Last_EmptyPages(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	// Create 1000 keys in the "widgets" bucket.
 	if err := db.Update(func(tx *bolt.Tx) error {
@@ -557,7 +547,7 @@ func TestCursor_Last_EmptyPages(t *testing.T) {
 // Ensure that a Tx can iterate over all elements in a bucket.
 func TestCursor_QuickCheck(t *testing.T) {
 	f := func(items testdata) bool {
-		db := MustOpenDB()
+		db := btesting.MustCreateDB(t)
 		defer db.MustClose()
 
 		// Bulk insert all values.
@@ -615,7 +605,7 @@ func TestCursor_QuickCheck(t *testing.T) {
 // Ensure that a transaction can iterate over all elements in a bucket in reverse.
 func TestCursor_QuickCheck_Reverse(t *testing.T) {
 	f := func(items testdata) bool {
-		db := MustOpenDB()
+		db := btesting.MustCreateDB(t)
 		defer db.MustClose()
 
 		// Bulk insert all values.
@@ -671,8 +661,7 @@ func TestCursor_QuickCheck_Reverse(t *testing.T) {
 
 // Ensure that a Tx cursor can iterate over subbuckets.
 func TestCursor_QuickCheck_BucketsOnly(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
@@ -713,8 +702,7 @@ func TestCursor_QuickCheck_BucketsOnly(t *testing.T) {
 
 // Ensure that a Tx cursor can reverse iterate over subbuckets.
 func TestCursor_QuickCheck_BucketsOnly_Reverse(t *testing.T) {
-	db := MustOpenDB()
-	defer db.MustClose()
+	db := btesting.MustCreateDB(t)
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
