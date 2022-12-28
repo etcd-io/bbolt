@@ -228,7 +228,7 @@ func TestOpen_ReadPageSize_FromMeta1_OS(t *testing.T) {
 	}
 
 	// Read data file.
-	buf, err := ioutil.ReadFile(path)
+	buf, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +236,7 @@ func TestOpen_ReadPageSize_FromMeta1_OS(t *testing.T) {
 	// Rewrite first meta page.
 	meta0 := (*meta)(unsafe.Pointer(&buf[pageHeaderSize]))
 	meta0.pgid++
-	if err := ioutil.WriteFile(path, buf, 0666); err != nil {
+	if err := os.WriteFile(path, buf, 0666); err != nil {
 		t.Fatal(err)
 	}
 
@@ -270,7 +270,7 @@ func TestOpen_ReadPageSize_FromMeta1_Given(t *testing.T) {
 		}
 
 		// Read data file.
-		buf, err := ioutil.ReadFile(path)
+		buf, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -278,7 +278,7 @@ func TestOpen_ReadPageSize_FromMeta1_Given(t *testing.T) {
 		// Rewrite meta pages.
 		meta0 := (*meta)(unsafe.Pointer(&buf[pageHeaderSize]))
 		meta0.pgid++
-		if err := ioutil.WriteFile(path, buf, 0666); err != nil {
+		if err := os.WriteFile(path, buf, 0666); err != nil {
 			t.Fatal(err)
 		}
 
