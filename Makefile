@@ -14,12 +14,12 @@ lint:
 	golangci-lint run ./...
 
 test:
-	TEST_FREELIST_TYPE=hashmap go test -timeout 20m -v -coverprofile cover.out -covermode atomic
+	TEST_FREELIST_TYPE=hashmap go test -timeout 30m -v -coverprofile cover.out -covermode atomic
 	TEST_FREELIST_TYPE=hashmap go test -v ./cmd/bbolt
 
 	@echo "array freelist test"
 
-	@TEST_FREELIST_TYPE=array go test -timeout 20m -v -coverprofile cover.out -covermode atomic
+	@TEST_FREELIST_TYPE=array go test -timeout 30m -v -coverprofile cover.out -covermode atomic
 	@TEST_FREELIST_TYPE=array go test -v ./cmd/bbolt
 
 .PHONY: race fmt test lint
