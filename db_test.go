@@ -234,9 +234,8 @@ func TestOpen_ReadPageSize_FromMeta1_OS(t *testing.T) {
 	}
 
 	// Reopen data file.
-	// Reopen data file.
 	db = btesting.MustOpenDBWithOption(t, path, nil)
-	require.Equalf(t, os.Getpagesize(), db.Info().PageSize, "The page size is expected to be %d, but actually is %d", os.Getpagesize(), db.Info().PageSize)
+	require.Equalf(t, os.Getpagesize(), db.Info().PageSize, "check page size failed")
 }
 
 // Ensure that it can read the page size from the second meta page if the first one is invalid.
@@ -257,17 +256,18 @@ func TestOpen_ReadPageSize_FromMeta1_Given(t *testing.T) {
 		require.NoError(t, err)
 
 		// Rewrite meta pages.
-		meta0 := (*meta)(unsafe.Pointer(&buf[pageHeaderSize]))
-		meta0.pgid++
-		err = os.WriteFile(path, buf, 0666)
-		require.NoError(t, err)
+		if i%3 == 0 {
+			t.Logf("#%d: Intentionally corrupt the first meta page for pageSize %d", i, givenPageSize)
+			meta0 := (*meta)(unsafe.Pointer(&buf[pageHeaderSize]))
+			meta0.pgid++
+			err = os.WriteFile(path, buf, 0666)
+			require.NoError(t, err)
+		}
 
 		// Reopen data file.
 		db = btesting.MustOpenDBWithOption(t, path, nil)
-		require.Equalf(t, givenPageSize, db.Info().PageSize, "The page size is expected to be %d, but actually is %d", givenPageSize, db.Info().PageSize)
-		// The db.DB is set to nil in MustClose(), so the testing Cleanup
-		// will do nothing when executing PostTestCleanup().
-		db.PostTestCleanup()
+		require.Equalf(t, givenPageSize, db.Info().PageSize, "check page size failed")
+		db.MustClose()
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"io"
 	"os"
 	"runtime"
 	"sort"
@@ -377,7 +378,8 @@ func (db *DB) getPageSizeFromSecondMeta() (int, bool, error) {
 		if pos >= fileSize-1024 {
 			break
 		}
-		if bw, err := db.file.ReadAt(buf[:], pos); err == nil && bw == len(buf) {
+		bw, err := db.file.ReadAt(buf[:], pos)
+		if (err == nil && bw == len(buf)) || (err == io.EOF && int64(bw) == (fileSize-pos)) {
 			metaCanRead = true
 			if m := db.pageInBuffer(buf[:], 0).meta(); m.validate() == nil {
 				return int(m.pageSize), metaCanRead, nil
