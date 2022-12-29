@@ -215,14 +215,10 @@ func TestOpen_ErrChecksum(t *testing.T) {
 // The page size is expected to be the OS's page size in this case.
 func TestOpen_ReadPageSize_FromMeta1_OS(t *testing.T) {
 	// Create empty database.
-	db := MustOpenDB()
+	db := btesting.MustCreateDB(t)
 	path := db.Path()
-	defer db.MustClose()
-
-	// Close database.
-	if err := db.DB.Close(); err != nil {
-		t.Fatal(err)
-	}
+	// Close the database
+	db.MustClose()
 
 	// Read data file.
 	buf, err := os.ReadFile(path)
@@ -238,16 +234,8 @@ func TestOpen_ReadPageSize_FromMeta1_OS(t *testing.T) {
 	}
 
 	// Reopen data file.
-	if db, err := bolt.Open(path, 0666, nil); err != nil {
-		t.Fatalf("unexpected error: %s", err)
-	} else {
-		if db.Info().PageSize != os.Getpagesize() {
-			t.Fatalf("The page size is expected to be %d, but actually is %d", os.Getpagesize(), db.Info().PageSize)
-		}
-		if err := db.Close(); err != nil {
-			panic(err)
-		}
-	}
+	db = btesting.MustOpenDBWithOption(t, path, nil)
+	require.Equalf(t, os.Getpagesize(), db.Info().PageSize, "check page size failed")
 }
 
 // Ensure that it can read the page size from the second meta page if the first one is invalid.
@@ -256,40 +244,30 @@ func TestOpen_ReadPageSize_FromMeta1_Given(t *testing.T) {
 	// test page size from 1KB (1024<<0) to 16MB(1024<<14)
 	for i := 0; i <= 14; i++ {
 		givenPageSize := 1024 << uint(i)
+		t.Logf("Testing page size %d", givenPageSize)
 		// Create empty database.
-		db := MustOpenWithOption(&bolt.Options{PageSize: givenPageSize})
+		db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: givenPageSize})
 		path := db.Path()
-		defer db.MustClose()
-
-		// Close database.
-		if err := db.DB.Close(); err != nil {
-			t.Fatal(err)
-		}
+		// Close the database
+		db.MustClose()
 
 		// Read data file.
 		buf, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		// Rewrite meta pages.
-		meta0 := (*meta)(unsafe.Pointer(&buf[pageHeaderSize]))
-		meta0.pgid++
-		if err := os.WriteFile(path, buf, 0666); err != nil {
-			t.Fatal(err)
+		if i%3 == 0 {
+			t.Logf("#%d: Intentionally corrupt the first meta page for pageSize %d", i, givenPageSize)
+			meta0 := (*meta)(unsafe.Pointer(&buf[pageHeaderSize]))
+			meta0.pgid++
+			err = os.WriteFile(path, buf, 0666)
+			require.NoError(t, err)
 		}
 
 		// Reopen data file.
-		if db, err := bolt.Open(path, 0666, &bolt.Options{PageSize: givenPageSize}); err != nil {
-			t.Fatalf("unexpected error: %s", err)
-		} else {
-			if db.Info().PageSize != givenPageSize {
-				t.Fatalf("The page size is expected to be %d, but actually is %d", givenPageSize, db.Info().PageSize)
-			}
-			if err := db.Close(); err != nil {
-				panic(err)
-			}
-		}
+		db = btesting.MustOpenDBWithOption(t, path, nil)
+		require.Equalf(t, givenPageSize, db.Info().PageSize, "check page size failed")
+		db.MustClose()
 	}
 }
 
