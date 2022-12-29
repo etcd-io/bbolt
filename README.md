@@ -78,14 +78,23 @@ New minor versions may add additional features to the API.
 ### Installing
 
 To start using Bolt, install Go and run `go get`:
-
 ```sh
-$ go get go.etcd.io/bbolt/...
+$ go get go.etcd.io/bbolt@latest
 ```
 
-This will retrieve the library and install the `bolt` command line utility into
-your `$GOBIN` path.
+This will retrieve the library and update your `go.mod` and `go.sum` files.
 
+To run the command line utility, execute:
+```sh
+$ go run go.etcd.io/bbolt/cmd/bbolt@latest
+```
+
+Run `go install` to install the `bbolt` command line utility into
+your `$GOBIN` path, which defaults to `$GOPATH/bin` or `$HOME/go/bin` if the
+`GOPATH` environment variable is not set.
+```sh
+$ go install go.etcd.io/bbolt/cmd/bbolt@latest
+```
 
 ### Importing bbolt
 
