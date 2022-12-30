@@ -660,10 +660,17 @@ func (tx *Tx) Page(id int) (*PageInfo, error) {
 	}
 
 	// Determine the type (or if it's free).
-	if tx.db.freelist.freed(pgid(id)) {
-		info.Type = "free"
+	if tx.db.freelist != nil {
+		if tx.db.freelist.freed(pgid(id)) {
+			info.Type = "free"
+		} else {
+			info.Type = p.typ()
+		}
 	} else {
-		info.Type = p.typ()
+		// If DB is open in RO mode, we might not have freelist available.
+		// So we cannot distinguish whether page is free or not.
+		// TODO(ptabor): Introduce bbolt.option to load freepages even in RO.
+		info.Type = p.typ() + "?"
 	}
 
 	return info, nil

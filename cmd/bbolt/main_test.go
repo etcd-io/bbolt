@@ -5,17 +5,62 @@ import (
 	crypto "crypto/rand"
 	"encoding/binary"
 	"fmt"
-	"go.etcd.io/bbolt/internal/btesting"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"io"
 	"math/rand"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	bolt "go.etcd.io/bbolt"
 	main "go.etcd.io/bbolt/cmd/bbolt"
+	"go.etcd.io/bbolt/internal/btesting"
 )
+
+func MustCreateTestDB(t *testing.T) string {
+	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
+
+	if err := db.Update(func(tx *bolt.Tx) error {
+		// Create "foo" bucket.
+		b, err := tx.CreateBucket([]byte("foo"))
+		if err != nil {
+			return err
+		}
+		for i := 0; i < 10; i++ {
+			if err := b.Put([]byte(strconv.Itoa(i)), []byte(strconv.Itoa(i))); err != nil {
+				return err
+			}
+		}
+
+		// Create "bar" bucket.
+		b, err = tx.CreateBucket([]byte("bar"))
+		if err != nil {
+			return err
+		}
+		for i := 0; i < 100; i++ {
+			if err := b.Put([]byte(strconv.Itoa(i)), []byte(strconv.Itoa(i))); err != nil {
+				return err
+			}
+		}
+
+		// Create "baz" bucket.
+		b, err = tx.CreateBucket([]byte("baz"))
+		if err != nil {
+			return err
+		}
+		if err := b.Put([]byte("key"), []byte("value")); err != nil {
+			return err
+		}
+
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	return db.Path()
+}
 
 // Ensure the "info" command can print information about a database.
 func TestInfoCommand_Run(t *testing.T) {
@@ -74,52 +119,9 @@ func TestStatsCommand_Run_EmptyDatabase(t *testing.T) {
 
 // Ensure the "stats" command can execute correctly.
 func TestStatsCommand_Run(t *testing.T) {
-	// Ignore
-	if os.Getpagesize() != 4096 {
-		t.Skip("system does not use 4KB page size")
-	}
+	dbPath := MustCreateTestDB(t)
 
-	db := btesting.MustCreateDB(t)
-
-	if err := db.Update(func(tx *bolt.Tx) error {
-		// Create "foo" bucket.
-		b, err := tx.CreateBucket([]byte("foo"))
-		if err != nil {
-			return err
-		}
-		for i := 0; i < 10; i++ {
-			if err := b.Put([]byte(strconv.Itoa(i)), []byte(strconv.Itoa(i))); err != nil {
-				return err
-			}
-		}
-
-		// Create "bar" bucket.
-		b, err = tx.CreateBucket([]byte("bar"))
-		if err != nil {
-			return err
-		}
-		for i := 0; i < 100; i++ {
-			if err := b.Put([]byte(strconv.Itoa(i)), []byte(strconv.Itoa(i))); err != nil {
-				return err
-			}
-		}
-
-		// Create "baz" bucket.
-		b, err = tx.CreateBucket([]byte("baz"))
-		if err != nil {
-			return err
-		}
-		if err := b.Put([]byte("key"), []byte("value")); err != nil {
-			return err
-		}
-
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	db.Close()
-
-	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
+	defer requireDBNoChange(t, dbData(t, dbPath), dbPath)
 
 	// Generate expected result.
 	exp := "Aggregate statistics for 3 buckets\n\n" +
@@ -143,11 +145,31 @@ func TestStatsCommand_Run(t *testing.T) {
 
 	// Run the command.
 	m := NewMain()
-	if err := m.Run("stats", db.Path()); err != nil {
-		t.Fatal(err)
-	} else if m.Stdout.String() != exp {
-		t.Fatalf("unexpected stdout:\n\n%s", m.Stdout.String())
-	}
+	require.NoError(t, m.Run("stats", dbPath))
+	require.EqualValues(t, exp, m.Stdout.String())
+}
+
+func TestPagesCommand_Run(t *testing.T) {
+	dbPath := MustCreateTestDB(t)
+
+	defer requireDBNoChange(t, dbData(t, dbPath), dbPath)
+
+	// Generate expected result.
+	exp := `ID       TYPE       ITEMS  OVRFLW
+======== ========== ====== ======
+0        meta?      0            
+1        meta?      0            
+2        freelist?  0            
+3        leaf?      0            
+4        leaf?      100          
+5        leaf?      3            
+6        freelist?  2            
+`
+	// Run the command.
+	m := NewMain()
+	require.NoError(t, m.Run("pages", dbPath))
+	assert.EqualValues(t, exp, m.Stdout.String())
+	assert.EqualValues(t, strings.ReplaceAll(exp, " ", "_"), strings.ReplaceAll(m.Stdout.String(), " ", "_"))
 }
 
 // Ensure the "buckets" command can print a list of buckets.

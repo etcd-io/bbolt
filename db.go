@@ -281,6 +281,8 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 		return db, nil
 	}
 
+	// TODO(ptabor): Introduce bbolt.option to load freepages even in RO transactions,
+	// such that debugging tools (bbolt CLI) can distinguish whether page is reachable or not.
 	db.loadFreelist()
 
 	// Flush freelist when transitioning from no sync to sync so
