@@ -6,6 +6,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unsafe"
 )
@@ -151,8 +152,8 @@ func (tx *Tx) Commit() error {
 	// Rebalance nodes which have had deletions.
 	var startTime = time.Now()
 	tx.root.rebalance()
-	if tx.stats.Rebalance > 0 {
-		tx.stats.RebalanceTime += time.Since(startTime)
+	if atomic.LoadInt64(&tx.stats.Rebalance) > 0 {
+		atomicAddDuration(&tx.stats.RebalanceTime, time.Since(startTime))
 	}
 
 	// spill data onto dirty pages.
@@ -161,7 +162,7 @@ func (tx *Tx) Commit() error {
 		tx.rollback()
 		return err
 	}
-	tx.stats.SpillTime += time.Since(startTime)
+	atomicAddDuration(&tx.stats.SpillTime, time.Since(startTime))
 
 	// Free the old root bucket.
 	tx.meta.root.root = tx.root.root
@@ -208,7 +209,7 @@ func (tx *Tx) Commit() error {
 		tx.rollback()
 		return err
 	}
-	tx.stats.WriteTime += time.Since(startTime)
+	atomicAddDuration(&tx.stats.WriteTime, time.Since(startTime))
 
 	// Finalize the transaction.
 	tx.close()
@@ -503,8 +504,8 @@ func (tx *Tx) allocate(count int) (*page, error) {
 	tx.pages[p.id] = p
 
 	// Update statistics.
-	tx.stats.PageCount += count
-	tx.stats.PageAlloc += count * tx.db.pageSize
+	atomic.AddInt64(&tx.stats.PageCount, int64(count))
+	atomic.AddInt64(&tx.stats.PageAlloc, int64(count*tx.db.pageSize))
 
 	return p, nil
 }
@@ -539,7 +540,7 @@ func (tx *Tx) write() error {
 			}
 
 			// Update statistics.
-			tx.stats.Write++
+			atomic.AddInt64(&tx.stats.Write, 1)
 
 			// Exit inner for loop if we've written all the chunks.
 			rem -= sz
@@ -598,7 +599,7 @@ func (tx *Tx) writeMeta() error {
 	}
 
 	// Update statistics.
-	tx.stats.Write++
+	atomic.AddInt64(&tx.stats.Write, 1)
 
 	return nil
 }
@@ -672,27 +673,27 @@ func (tx *Tx) Page(id int) (*PageInfo, error) {
 // TxStats represents statistics about the actions performed by the transaction.
 type TxStats struct {
 	// Page statistics.
-	PageCount int // number of page allocations
-	PageAlloc int // total bytes allocated
+	PageCount int64 // number of page allocations
+	PageAlloc int64 // total bytes allocated
 
 	// Cursor statistics.
-	CursorCount int // number of cursors created
+	CursorCount int64 // number of cursors created
 
 	// Node statistics
-	NodeCount int // number of node allocations
-	NodeDeref int // number of node dereferences
+	NodeCount int64 // number of node allocations
+	NodeDeref int64 // number of node dereferences
 
 	// Rebalance statistics.
-	Rebalance     int           // number of node rebalances
+	Rebalance     int64         // number of node rebalances
 	RebalanceTime time.Duration // total time spent rebalancing
 
 	// Split/Spill statistics.
-	Split     int           // number of nodes split
-	Spill     int           // number of nodes spilled
+	Split     int64         // number of nodes split
+	Spill     int64         // number of nodes spilled
 	SpillTime time.Duration // total time spent spilling
 
 	// Write statistics.
-	Write     int           // number of writes performed
+	Write     int64         // number of writes performed
 	WriteTime time.Duration // total time spent writing to disk
 }
 
@@ -729,4 +730,8 @@ func (s *TxStats) Sub(other *TxStats) TxStats {
 	diff.Write = s.Write - other.Write
 	diff.WriteTime = s.WriteTime - other.WriteTime
 	return diff
+}
+
+func atomicAddDuration(ptr *time.Duration, du time.Duration) {
+	atomic.AddInt64((*int64)(unsafe.Pointer(ptr)), int64(du))
 }

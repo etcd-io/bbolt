@@ -25,7 +25,7 @@ func TestTx_allocatePageStats(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if tx.Stats().PageCount != prePageCnt+allocateCnt {
+	if tx.Stats().PageCount != prePageCnt+int64(allocateCnt) {
 		t.Errorf("Allocated %d but got %d page in stats", allocateCnt, tx.Stats().PageCount)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -304,7 +305,7 @@ func (n *node) splitTwo(pageSize uintptr) (*node, *node) {
 	n.inodes = n.inodes[:splitIndex]
 
 	// Update the statistics.
-	n.bucket.tx.stats.Split++
+	atomic.AddInt64(&n.bucket.tx.stats.Split, 1)
 
 	return n, next
 }
@@ -391,7 +392,7 @@ func (n *node) spill() error {
 		}
 
 		// Update the statistics.
-		tx.stats.Spill++
+		atomic.AddInt64(&tx.stats.Spill, 1)
 	}
 
 	// If the root node split and created a new root then we need to spill that
@@ -547,7 +548,7 @@ func (n *node) dereference() {
 	}
 
 	// Update statistics.
-	n.bucket.tx.stats.NodeDeref++
+	atomic.AddInt64(&n.bucket.tx.stats.NodeDeref, 1)
 }
 
 // free adds the node's underlying page to the freelist.
