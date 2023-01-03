@@ -2,11 +2,13 @@ package surgeon_test
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
+
 	"go.etcd.io/bbolt/internal/btesting"
 	"go.etcd.io/bbolt/internal/guts_cli"
 	"go.etcd.io/bbolt/internal/surgeon"
-	"testing"
 )
 
 func TestNavigator_FindPathToPagesWithKey(t *testing.T) {

@@ -136,6 +136,8 @@ func (p *Page) Overflow() uint32 {
 }
 
 // DO NOT EDIT. Copied from the "bolt" package.
+
+// TODO(ptabor): Make the page-types an enum.
 func (p *Page) Type() string {
 	if (p.flags & branchPageFlag) != 0 {
 		return "branch"

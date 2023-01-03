@@ -2,11 +2,13 @@ package surgeon_test
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
+
 	bolt "go.etcd.io/bbolt"
 	"go.etcd.io/bbolt/internal/btesting"
 	"go.etcd.io/bbolt/internal/surgeon"
-	"testing"
 )
 
 func TestRevertMetaPage(t *testing.T) {

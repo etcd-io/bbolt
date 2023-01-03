@@ -69,9 +69,9 @@ func (n XRay) traverseInternal(stack []guts_cli.Pgid, callback func(page *guts_c
 	return nil
 }
 
-// FindPathToPagesWithKey finds a path (from root to the page that contains the given key.
-// As it traverses multiple buckets, in theory there might be multiple keys with given name.
-// Note: For simplicity it's currently implemented as traversing whole reachable tree.
+// FindPathToPagesWithKey finds all paths from root to the page that contains the given key.
+// As it traverses multiple buckets, so in theory there might be multiple keys with the given name.
+// Note: For simplicity it's currently implemented as traversing of the whole reachable tree.
 func (n XRay) FindPathToPagesWithKey(key []byte) ([][]guts_cli.Pgid, error) {
 	var found [][]guts_cli.Pgid
 
