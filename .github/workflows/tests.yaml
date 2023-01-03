@@ -3,8 +3,13 @@ on: [push, pull_request]
 jobs:
   test:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
+        target:
+        - unit-test-2-cpu
+        - unit-test-4-cpu
+        - unit-test-4-cpu-race
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v3
@@ -12,7 +17,28 @@ jobs:
       with:
         go-version: "1.17.13"
     - run: make fmt
-    - run: make race
-    - run: make test
+    - env:
+        TARGET: ${{ matrix.target }}
+      run: |
+        case "${TARGET}" in
+          unit-test-2-cpu)
+            CPU=2 make test-simulate
+            CPU=2 make test
+            ;;
+          unit-test-4-cpu)
+            CPU=4 make test-simulate
+            CPU=4 make test
+            ;;
+          unit-test-4-cpu-race)
+            CPU=4 ENABLE_RACE=true make test-simulate
+            CPU=4 ENABLE_RACE=true make test
+            ;;
+          *)
+            echo "Failed to find target"
+            exit 1
+            ;;
+        esac
+      shell: bash
+    - run: make coverage
     - name: golangci-lint
       uses: golangci/golangci-lint-action@0ad9a0988b3973e851ab0a07adf248ec2e100376 # v3.3.1
