@@ -1,5 +1,7 @@
 GO_CMD="go"
 
+# TODO(ptabor): Expand to cover different architectures (GOOS GOARCH), or just list go files.
+
 GOFILES=$(${GO_CMD} list  --f "{{with \$d:=.}}{{range .GoFiles}}{{\$d.Dir}}/{{.}}{{\"\n\"}}{{end}}{{end}}" ./...)
 TESTGOFILES=$(${GO_CMD} list  --f "{{with \$d:=.}}{{range .TestGoFiles}}{{\$d.Dir}}/{{.}}{{\"\n\"}}{{end}}{{end}}" ./...)
 XTESTGOFILES=$(${GO_CMD} list  --f "{{with \$d:=.}}{{range .XTestGoFiles}}{{\$d.Dir}}/{{.}}{{\"\n\"}}{{end}}{{end}}" ./...)

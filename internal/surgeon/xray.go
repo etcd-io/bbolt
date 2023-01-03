@@ -20,7 +20,7 @@ func NewXRay(path string) XRay {
 	return XRay{path}
 }
 
-func (n XRay) traverseInternal(stack []guts_cli.Pgid, callback func(page *guts_cli.Page, stack []guts_cli.Pgid) error) error {
+func (n XRay) traverse(stack []guts_cli.Pgid, callback func(page *guts_cli.Page, stack []guts_cli.Pgid) error) error {
 	p, data, err := guts_cli.ReadPage(n.path, uint64(stack[len(stack)-1]))
 	if err != nil {
 		return fmt.Errorf("failed reading page (stack %v): %w", stack, err)
@@ -34,13 +34,13 @@ func (n XRay) traverseInternal(stack []guts_cli.Pgid, callback func(page *guts_c
 		{
 			m := guts_cli.LoadPageMeta(data)
 			r := m.RootBucket().RootPage()
-			return n.traverseInternal(append(stack, r), callback)
+			return n.traverse(append(stack, r), callback)
 		}
 	case "branch":
 		{
 			for i := uint16(0); i < p.Count(); i++ {
 				bpe := p.BranchPageElement(i)
-				if err := n.traverseInternal(append(stack, bpe.PgId()), callback); err != nil {
+				if err := n.traverse(append(stack, bpe.PgId()), callback); err != nil {
 					return err
 				}
 			}
@@ -51,7 +51,7 @@ func (n XRay) traverseInternal(stack []guts_cli.Pgid, callback func(page *guts_c
 			if lpe.IsBucketEntry() {
 				pgid := lpe.Bucket().RootPage()
 				if pgid > 0 {
-					if err := n.traverseInternal(append(stack, pgid), callback); err != nil {
+					if err := n.traverse(append(stack, pgid), callback); err != nil {
 						return err
 					}
 				} else {
@@ -69,17 +69,18 @@ func (n XRay) traverseInternal(stack []guts_cli.Pgid, callback func(page *guts_c
 	return nil
 }
 
-// FindPathToPagesWithKey finds all paths from root to the page that contains the given key.
+// FindPathsToKey finds all paths from root to the page that contains the given key.
 // As it traverses multiple buckets, so in theory there might be multiple keys with the given name.
 // Note: For simplicity it's currently implemented as traversing of the whole reachable tree.
-func (n XRay) FindPathToPagesWithKey(key []byte) ([][]guts_cli.Pgid, error) {
+// If key is a bucket name, a page-path referencing the key will be returned as well.
+func (n XRay) FindPathsToKey(key []byte) ([][]guts_cli.Pgid, error) {
 	var found [][]guts_cli.Pgid
 
 	rootPage, _, err := guts_cli.GetRootPage(n.path)
 	if err != nil {
 		return nil, err
 	}
-	err = n.traverseInternal([]guts_cli.Pgid{rootPage},
+	err = n.traverse([]guts_cli.Pgid{rootPage},
 		func(page *guts_cli.Page, stack []guts_cli.Pgid) error {
 			if page.Type() == "leaf" {
 				for i := uint16(0); i < page.Count(); i++ {
