@@ -682,7 +682,9 @@ func TestDB_Concurrent_WriteTo(t *testing.T) {
 			panic(err)
 		}
 		f.Close()
-		snap := btesting.MustOpenDBWithOption(t, f.Name(), o)
+
+		copyOpt := *o
+		snap := btesting.MustOpenDBWithOption(t, f.Name(), &copyOpt)
 		defer snap.MustClose()
 		snap.MustCheck()
 	}
