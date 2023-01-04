@@ -3,5 +3,6 @@
 *.swp
 /bin/
 cover.out
+cover-*.out
 /.idea
 *.iml

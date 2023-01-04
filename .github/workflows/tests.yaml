@@ -1,7 +1,81 @@
 name: Tests
 on: [push, pull_request]
 jobs:
-  test:
+  test-linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+        - linux-amd64-unit-test-4-cpu
+        - linux-amd64-unit-test-4-cpu-freelist-hashmap-race
+        - linux-amd64-unit-test-2-cpu-freelist-array-short-race
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/setup-go@v3
+      with:
+        go-version: "1.17.13"
+    - run: make fmt
+    - env:
+        TARGET: ${{ matrix.target }}
+      run: |
+        case "${TARGET}" in
+          linux-amd64-unit-test-4-cpu)
+            CPU=4 make test
+            ;;
+          linux-amd64-unit-test-4-cpu-freelist-hashmap-race)
+            CPU=4 ENABLE_RACE=true make test-freelist-hashmap
+            ;;
+          linux-amd64-unit-test-2-cpu-freelist-array-short-race)
+            CPU=2 ENABLE_RACE=true EXTRA_TESTFLAGS="-short" make test-freelist-array
+            ;;
+          *)
+            echo "Failed to find target"
+            exit 1
+            ;;
+        esac
+    - name: golangci-lint
+      uses: golangci/golangci-lint-action@0ad9a0988b3973e851ab0a07adf248ec2e100376 # v3.3.1
+
+  test-windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+        - windows-amd64-unit-test-4-cpu
+        # FIXME(fuweid):
+        #
+        # The windows will throws the following error when enable race.
+        # We skip it until we have solution.
+        #
+        #   ThreadSanitizer failed to allocate 0x000200000000 (8589934592) bytes at 0x0400c0000000 (error code: 1455)
+        #
+        #- windows-amd64-unit-test-4-cpu-race
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/setup-go@v3
+      with:
+        go-version: "1.17.13"
+    - run: make fmt
+    - env:
+        TARGET: ${{ matrix.target }}
+      run: |
+        case "${TARGET}" in
+          windows-amd64-unit-test-4-cpu)
+            CPU=4 make test
+            ;;
+          *)
+            echo "Failed to find target"
+            exit 1
+            ;;
+        esac
+      shell: bash
+    - name: golangci-lint
+      uses: golangci/golangci-lint-action@0ad9a0988b3973e851ab0a07adf248ec2e100376 # v3.3.1
+
+  coverage:
+    needs: ["test-linux", "test-windows"]
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
@@ -11,8 +85,5 @@ jobs:
     - uses: actions/setup-go@v3
       with:
         go-version: "1.17.13"
-    - run: make fmt
-    - run: make race
-    - run: make test
-    - name: golangci-lint
-      uses: golangci/golangci-lint-action@0ad9a0988b3973e851ab0a07adf248ec2e100376 # v3.3.1
+    - run: make coverage
+

@@ -7,6 +7,9 @@ import (
 	"log"
 	"os"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	bolt "go.etcd.io/bbolt"
 	"go.etcd.io/bbolt/internal/btesting"
@@ -901,4 +904,108 @@ func ExampleTx_CopyFile() {
 
 	// Output:
 	// The value for 'foo' in the clone is: bar
+}
+
+func TestTxStats_GetAndIncAtomically(t *testing.T) {
+	var stats bolt.TxStats
+
+	stats.IncPageCount(1)
+	assert.Equal(t, int64(1), stats.GetPageCount())
+
+	stats.IncPageAlloc(2)
+	assert.Equal(t, int64(2), stats.GetPageAlloc())
+
+	stats.IncCursorCount(3)
+	assert.Equal(t, int64(3), stats.GetCursorCount())
+
+	stats.IncNodeCount(100)
+	assert.Equal(t, int64(100), stats.GetNodeCount())
+
+	stats.IncNodeDeref(101)
+	assert.Equal(t, int64(101), stats.GetNodeDeref())
+
+	stats.IncRebalance(1000)
+	assert.Equal(t, int64(1000), stats.GetRebalance())
+
+	stats.IncRebalanceTime(1001 * time.Second)
+	assert.Equal(t, 1001*time.Second, stats.GetRebalanceTime())
+
+	stats.IncSplit(10000)
+	assert.Equal(t, int64(10000), stats.GetSplit())
+
+	stats.IncSpill(10001)
+	assert.Equal(t, int64(10001), stats.GetSpill())
+
+	stats.IncSpillTime(10001 * time.Second)
+	assert.Equal(t, 10001*time.Second, stats.GetSpillTime())
+
+	stats.IncWrite(100000)
+	assert.Equal(t, int64(100000), stats.GetWrite())
+
+	stats.IncWriteTime(100001 * time.Second)
+	assert.Equal(t, 100001*time.Second, stats.GetWriteTime())
+
+	assert.Equal(t,
+		bolt.TxStats{
+			PageCount:     1,
+			PageAlloc:     2,
+			CursorCount:   3,
+			NodeCount:     100,
+			NodeDeref:     101,
+			Rebalance:     1000,
+			RebalanceTime: 1001 * time.Second,
+			Split:         10000,
+			Spill:         10001,
+			SpillTime:     10001 * time.Second,
+			Write:         100000,
+			WriteTime:     100001 * time.Second,
+		},
+		stats,
+	)
+}
+
+func TestTxStats_Sub(t *testing.T) {
+	statsA := bolt.TxStats{
+		PageCount:     1,
+		PageAlloc:     2,
+		CursorCount:   3,
+		NodeCount:     100,
+		NodeDeref:     101,
+		Rebalance:     1000,
+		RebalanceTime: 1001 * time.Second,
+		Split:         10000,
+		Spill:         10001,
+		SpillTime:     10001 * time.Second,
+		Write:         100000,
+		WriteTime:     100001 * time.Second,
+	}
+
+	statsB := bolt.TxStats{
+		PageCount:     2,
+		PageAlloc:     3,
+		CursorCount:   4,
+		NodeCount:     101,
+		NodeDeref:     102,
+		Rebalance:     1001,
+		RebalanceTime: 1002 * time.Second,
+		Split:         11001,
+		Spill:         11002,
+		SpillTime:     11002 * time.Second,
+		Write:         110001,
+		WriteTime:     110010 * time.Second,
+	}
+
+	diff := statsB.Sub(&statsA)
+	assert.Equal(t, int64(1), diff.GetPageCount())
+	assert.Equal(t, int64(1), diff.GetPageAlloc())
+	assert.Equal(t, int64(1), diff.GetCursorCount())
+	assert.Equal(t, int64(1), diff.GetNodeCount())
+	assert.Equal(t, int64(1), diff.GetNodeDeref())
+	assert.Equal(t, int64(1), diff.GetRebalance())
+	assert.Equal(t, time.Second, diff.GetRebalanceTime())
+	assert.Equal(t, int64(1001), diff.GetSplit())
+	assert.Equal(t, int64(1001), diff.GetSpill())
+	assert.Equal(t, 1001*time.Second, diff.GetSpillTime())
+	assert.Equal(t, int64(10001), diff.GetWrite())
+	assert.Equal(t, 10009*time.Second, diff.GetWriteTime())
 }
