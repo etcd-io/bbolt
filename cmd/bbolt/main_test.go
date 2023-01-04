@@ -5,14 +5,16 @@ import (
 	crypto "crypto/rand"
 	"encoding/binary"
 	"fmt"
-	"go.etcd.io/bbolt/internal/btesting"
 	"io"
 	"math/rand"
 	"os"
 	"strconv"
 	"testing"
 
+	"go.etcd.io/bbolt/internal/btesting"
+
 	"github.com/stretchr/testify/require"
+
 	bolt "go.etcd.io/bbolt"
 	main "go.etcd.io/bbolt/cmd/bbolt"
 )

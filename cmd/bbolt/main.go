@@ -19,6 +19,8 @@ import (
 	"unicode/utf8"
 	"unsafe"
 
+	"go.etcd.io/bbolt/internal/guts_cli"
+
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -39,9 +41,6 @@ var (
 	// ErrInvalidValue is returned when a benchmark reads an unexpected value.
 	ErrInvalidValue = errors.New("invalid value")
 
-	// ErrCorrupt is returned when a checking a data file finds errors.
-	ErrCorrupt = errors.New("invalid value")
-
 	// ErrNonDivisibleBatchSize is returned when the batch size can't be evenly
 	// divided by the iteration count.
 	ErrNonDivisibleBatchSize = errors.New("number of iterations must be divisible by the batch size")
@@ -61,12 +60,6 @@ var (
 	// ErrKeyNotFound is returned when a key is not found.
 	ErrKeyNotFound = errors.New("key not found")
 )
-
-// PageHeaderSize represents the size of the bolt.page header.
-const PageHeaderSize = 16
-
-// Represents a marker value to indicate that a file (meta page) is a Bolt DB.
-const magic uint32 = 0xED0CDAED
 
 func main() {
 	m := NewMain()
@@ -219,7 +212,7 @@ func (cmd *CheckCommand) Run(args ...string) error {
 		// Print summary of errors.
 		if count > 0 {
 			fmt.Fprintf(cmd.Stdout, "%d errors found\n", count)
-			return ErrCorrupt
+			return guts_cli.ErrCorrupt
 		}
 
 		// Notify user that database is valid.
@@ -346,7 +339,7 @@ func (cmd *DumpCommand) Run(args ...string) error {
 	}
 
 	// Open database to retrieve page size.
-	pageSize, _, err := ReadPageAndHWMSize(path)
+	pageSize, _, err := guts_cli.ReadPageAndHWMSize(path)
 	if err != nil {
 		return err
 	}
@@ -499,7 +492,7 @@ func (cmd *PageItemCommand) Run(args ...string) error {
 	defer func() { _ = f.Close() }()
 
 	// Retrieve page info and page size.
-	_, buf, err := ReadPage(path, pageID)
+	_, buf, err := guts_cli.ReadPage(path, pageID)
 	if err != nil {
 		return err
 	}
@@ -520,15 +513,15 @@ func (cmd *PageItemCommand) Run(args ...string) error {
 }
 
 // leafPageElement retrieves a leaf page element.
-func (cmd *PageItemCommand) leafPageElement(pageBytes []byte, index uint16) (*leafPageElement, error) {
-	p := (*page)(unsafe.Pointer(&pageBytes[0]))
-	if index >= p.count {
-		return nil, fmt.Errorf("leafPageElement: expected item index less than %d, but got %d.", p.count, index)
+func (cmd *PageItemCommand) leafPageElement(pageBytes []byte, index uint16) (*guts_cli.LeafPageElement, error) {
+	p := (*guts_cli.Page)(unsafe.Pointer(&pageBytes[0]))
+	if index >= p.Count() {
+		return nil, fmt.Errorf("leafPageElement: expected item index less than %d, but got %d.", p.Count(), index)
 	}
 	if p.Type() != "leaf" {
 		return nil, fmt.Errorf("leafPageElement: expected page type of 'leaf', but got '%s'", p.Type())
 	}
-	return p.leafPageElement(index), nil
+	return p.LeafPageElement(index), nil
 }
 
 const FORMAT_MODES = "auto|ascii-encoded|hex|bytes|redacted"
@@ -584,7 +577,7 @@ func (cmd *PageItemCommand) PrintLeafItemKey(w io.Writer, pageBytes []byte, inde
 	if err != nil {
 		return err
 	}
-	return writelnBytes(w, e.key(), format)
+	return writelnBytes(w, e.Key(), format)
 }
 
 // PrintLeafItemKey writes the bytes of a leaf element's value.
@@ -593,7 +586,7 @@ func (cmd *PageItemCommand) PrintLeafItemValue(w io.Writer, pageBytes []byte, in
 	if err != nil {
 		return err
 	}
-	return writelnBytes(w, e.value(), format)
+	return writelnBytes(w, e.Value(), format)
 }
 
 // Usage returns the help message.
@@ -1574,79 +1567,6 @@ func isPrintable(s string) bool {
 	return true
 }
 
-// ReadPage reads page info & full page data from a path.
-// This is not transactionally safe.
-func ReadPage(path string, pageID uint64) (*page, []byte, error) {
-	// Find page size.
-	pageSize, hwm, err := ReadPageAndHWMSize(path)
-	if err != nil {
-		return nil, nil, fmt.Errorf("read page size: %s", err)
-	}
-
-	// Open database file.
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer f.Close()
-
-	// Read one block into buffer.
-	buf := make([]byte, pageSize)
-	if n, err := f.ReadAt(buf, int64(pageID*pageSize)); err != nil {
-		return nil, nil, err
-	} else if n != len(buf) {
-		return nil, nil, io.ErrUnexpectedEOF
-	}
-
-	// Determine total number of blocks.
-	p := (*page)(unsafe.Pointer(&buf[0]))
-	if p.id != pgid(pageID) {
-		return nil, nil, fmt.Errorf("error: %w due to unexpected page id: %d != %d", ErrCorrupt, p.id, pageID)
-	}
-	overflowN := p.overflow
-	if overflowN >= uint32(hwm)-3 { // we exclude 2 meta pages and the current page.
-		return nil, nil, fmt.Errorf("error: %w, page claims to have %d overflow pages (>=hwm=%d). Interrupting to avoid risky OOM", ErrCorrupt, overflowN, hwm)
-	}
-
-	// Re-read entire page (with overflow) into buffer.
-	buf = make([]byte, (uint64(overflowN)+1)*pageSize)
-	if n, err := f.ReadAt(buf, int64(pageID*pageSize)); err != nil {
-		return nil, nil, err
-	} else if n != len(buf) {
-		return nil, nil, io.ErrUnexpectedEOF
-	}
-	p = (*page)(unsafe.Pointer(&buf[0]))
-	if p.id != pgid(pageID) {
-		return nil, nil, fmt.Errorf("error: %w due to unexpected page id: %d != %d", ErrCorrupt, p.id, pageID)
-	}
-
-	return p, buf, nil
-}
-
-// ReadPageAndHWMSize reads page size and HWM (id of the last+1 page).
-// This is not transactionally safe.
-func ReadPageAndHWMSize(path string) (uint64, pgid, error) {
-	// Open database file.
-	f, err := os.Open(path)
-	if err != nil {
-		return 0, 0, err
-	}
-	defer f.Close()
-
-	// Read 4KB chunk.
-	buf := make([]byte, 4096)
-	if _, err := io.ReadFull(f, buf); err != nil {
-		return 0, 0, err
-	}
-
-	// Read page size from metadata.
-	m := (*meta)(unsafe.Pointer(&buf[PageHeaderSize]))
-	if m.magic != magic {
-		return 0, 0, fmt.Errorf("the meta page has wrong (unexpected) magic")
-	}
-	return uint64(m.pageSize), pgid(m.pgid), nil
-}
-
 func stringToPage(str string) (uint64, error) {
 	return strconv.ParseUint(str, 10, 64)
 }
@@ -1662,112 +1582,6 @@ func stringToPages(strs []string) ([]uint64, error) {
 		a = append(a, i)
 	}
 	return a, nil
-}
-
-// DO NOT EDIT. Copied from the "bolt" package.
-const maxAllocSize = 0xFFFFFFF
-
-// DO NOT EDIT. Copied from the "bolt" package.
-const (
-	branchPageFlag   = 0x01
-	leafPageFlag     = 0x02
-	metaPageFlag     = 0x04
-	freelistPageFlag = 0x10
-)
-
-// DO NOT EDIT. Copied from the "bolt" package.
-const bucketLeafFlag = 0x01
-
-// DO NOT EDIT. Copied from the "bolt" package.
-type pgid uint64
-
-// DO NOT EDIT. Copied from the "bolt" package.
-type txid uint64
-
-// DO NOT EDIT. Copied from the "bolt" package.
-type meta struct {
-	magic    uint32
-	version  uint32
-	pageSize uint32
-	flags    uint32
-	root     bucket
-	freelist pgid
-	pgid     pgid // High Water Mark (id of next added page if the file growths)
-	txid     txid
-	checksum uint64
-}
-
-// DO NOT EDIT. Copied from the "bolt" package.
-type bucket struct {
-	root     pgid
-	sequence uint64
-}
-
-// DO NOT EDIT. Copied from the "bolt" package.
-type page struct {
-	id       pgid
-	flags    uint16
-	count    uint16
-	overflow uint32
-	ptr      uintptr
-}
-
-func (p *page) Type() string {
-	// For now all flags are exclusive,so let's be strict with expectations.
-	if p.flags == branchPageFlag {
-		return "branch"
-	} else if p.flags == leafPageFlag {
-		return "leaf"
-	} else if p.flags == metaPageFlag {
-		return "meta"
-	} else if p.flags == freelistPageFlag {
-		return "freelist"
-	}
-	return fmt.Sprintf("unknown<%02x>", p.flags)
-}
-
-// DO NOT EDIT. Copied from the "bolt" package.
-func (p *page) leafPageElement(index uint16) *leafPageElement {
-	n := &((*[0x7FFFFFF]leafPageElement)(unsafe.Pointer(&p.ptr)))[index]
-	return n
-}
-
-// DO NOT EDIT. Copied from the "bolt" package.
-func (p *page) branchPageElement(index uint16) *branchPageElement {
-	return &((*[0x7FFFFFF]branchPageElement)(unsafe.Pointer(&p.ptr)))[index]
-}
-
-// DO NOT EDIT. Copied from the "bolt" package.
-type branchPageElement struct {
-	pos   uint32
-	ksize uint32
-	pgid  pgid
-}
-
-// DO NOT EDIT. Copied from the "bolt" package.
-func (n *branchPageElement) key() []byte {
-	buf := (*[maxAllocSize]byte)(unsafe.Pointer(n))
-	return buf[n.pos : n.pos+n.ksize]
-}
-
-// DO NOT EDIT. Copied from the "bolt" package.
-type leafPageElement struct {
-	flags uint32
-	pos   uint32
-	ksize uint32
-	vsize uint32
-}
-
-// DO NOT EDIT. Copied from the "bolt" package.
-func (n *leafPageElement) key() []byte {
-	buf := (*[maxAllocSize]byte)(unsafe.Pointer(n))
-	return buf[n.pos : n.pos+n.ksize]
-}
-
-// DO NOT EDIT. Copied from the "bolt" package.
-func (n *leafPageElement) value() []byte {
-	buf := (*[maxAllocSize]byte)(unsafe.Pointer(n))
-	return buf[n.pos+n.ksize : n.pos+n.ksize+n.vsize]
 }
 
 // CompactCommand represents the "compact" command execution.

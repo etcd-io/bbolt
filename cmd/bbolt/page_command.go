@@ -7,7 +7,8 @@ import (
 	"io"
 	"os"
 	"strings"
-	"unsafe"
+
+	"go.etcd.io/bbolt/internal/guts_cli"
 )
 
 // PageCommand represents the "page" command execution.
@@ -79,7 +80,7 @@ func (cmd *PageCommand) printPages(pageIDs []uint64, path string, formatValue *s
 }
 
 func (cmd *PageCommand) printAllPages(path string, formatValue *string) {
-	_, hwm, err := ReadPageAndHWMSize(path)
+	_, hwm, err := guts_cli.ReadPageAndHWMSize(path)
 	if err != nil {
 		fmt.Fprintf(cmd.Stdout, "cannot read number of pages: %v", err)
 	}
@@ -109,16 +110,16 @@ func (cmd *PageCommand) printPage(path string, pageID uint64, formatValue string
 	}()
 
 	// Retrieve page info and page size.
-	p, buf, err := ReadPage(path, pageID)
+	p, buf, err := guts_cli.ReadPage(path, pageID)
 	if err != nil {
 		return 0, err
 	}
 
 	// Print basic page info.
-	fmt.Fprintf(cmd.Stdout, "Page ID:    %d\n", p.id)
+	fmt.Fprintf(cmd.Stdout, "Page ID:    %d\n", p.Id())
 	fmt.Fprintf(cmd.Stdout, "Page Type:  %s\n", p.Type())
 	fmt.Fprintf(cmd.Stdout, "Total Size: %d bytes\n", len(buf))
-	fmt.Fprintf(cmd.Stdout, "Overflow pages: %d\n", p.overflow)
+	fmt.Fprintf(cmd.Stdout, "Overflow pages: %d\n", p.Overflow())
 
 	// Print type-specific data.
 	switch p.Type() {
@@ -134,52 +135,44 @@ func (cmd *PageCommand) printPage(path string, pageID uint64, formatValue string
 	if err != nil {
 		return 0, err
 	}
-	return p.overflow, nil
+	return p.Overflow(), nil
 }
 
 // PrintMeta prints the data from the meta page.
 func (cmd *PageCommand) PrintMeta(w io.Writer, buf []byte) error {
-	m := (*meta)(unsafe.Pointer(&buf[PageHeaderSize]))
-	fmt.Fprintf(w, "Version:    %d\n", m.version)
-	fmt.Fprintf(w, "Page Size:  %d bytes\n", m.pageSize)
-	fmt.Fprintf(w, "Flags:      %08x\n", m.flags)
-	fmt.Fprintf(w, "Root:       <pgid=%d>\n", m.root.root)
-	fmt.Fprintf(w, "Freelist:   <pgid=%d>\n", m.freelist)
-	fmt.Fprintf(w, "HWM:        <pgid=%d>\n", m.pgid)
-	fmt.Fprintf(w, "Txn ID:     %d\n", m.txid)
-	fmt.Fprintf(w, "Checksum:   %016x\n", m.checksum)
-	fmt.Fprintf(w, "\n")
+	m := guts_cli.LoadPageMeta(buf)
+	m.Print(w)
 	return nil
 }
 
 // PrintLeaf prints the data for a leaf page.
 func (cmd *PageCommand) PrintLeaf(w io.Writer, buf []byte, formatValue string) error {
-	p := (*page)(unsafe.Pointer(&buf[0]))
+	p := guts_cli.LoadPage(buf)
 
 	// Print number of items.
-	fmt.Fprintf(w, "Item Count: %d\n", p.count)
+	fmt.Fprintf(w, "Item Count: %d\n", p.Count())
 	fmt.Fprintf(w, "\n")
 
 	// Print each key/value.
-	for i := uint16(0); i < p.count; i++ {
-		e := p.leafPageElement(i)
+	for i := uint16(0); i < p.Count(); i++ {
+		e := p.LeafPageElement(i)
 
 		// Format key as string.
 		var k string
-		if isPrintable(string(e.key())) {
-			k = fmt.Sprintf("%q", string(e.key()))
+		if isPrintable(string(e.Key())) {
+			k = fmt.Sprintf("%q", string(e.Key()))
 		} else {
-			k = fmt.Sprintf("%x", string(e.key()))
+			k = fmt.Sprintf("%x", string(e.Key()))
 		}
 
 		// Format value as string.
 		var v string
-		if (e.flags & uint32(bucketLeafFlag)) != 0 {
-			b := (*bucket)(unsafe.Pointer(&e.value()[0]))
-			v = fmt.Sprintf("<pgid=%d,seq=%d>", b.root, b.sequence)
+		if e.IsBucketEntry() {
+			b := e.Bucket()
+			v = b.String()
 		} else {
 			var err error
-			v, err = formatBytes(e.value(), formatValue)
+			v, err = formatBytes(e.Value(), formatValue)
 			if err != nil {
 				return err
 			}
@@ -193,25 +186,25 @@ func (cmd *PageCommand) PrintLeaf(w io.Writer, buf []byte, formatValue string) e
 
 // PrintBranch prints the data for a leaf page.
 func (cmd *PageCommand) PrintBranch(w io.Writer, buf []byte) error {
-	p := (*page)(unsafe.Pointer(&buf[0]))
+	p := guts_cli.LoadPage(buf)
 
 	// Print number of items.
-	fmt.Fprintf(w, "Item Count: %d\n", p.count)
+	fmt.Fprintf(w, "Item Count: %d\n", p.Count())
 	fmt.Fprintf(w, "\n")
 
 	// Print each key/value.
-	for i := uint16(0); i < p.count; i++ {
-		e := p.branchPageElement(i)
+	for i := uint16(0); i < p.Count(); i++ {
+		e := p.BranchPageElement(i)
 
 		// Format key as string.
 		var k string
-		if isPrintable(string(e.key())) {
-			k = fmt.Sprintf("%q", string(e.key()))
+		if isPrintable(string(e.Key())) {
+			k = fmt.Sprintf("%q", string(e.Key()))
 		} else {
-			k = fmt.Sprintf("%x", string(e.key()))
+			k = fmt.Sprintf("%x", string(e.Key()))
 		}
 
-		fmt.Fprintf(w, "%s: <pgid=%d>\n", k, e.pgid)
+		fmt.Fprintf(w, "%s: <pgid=%d>\n", k, e.PgId())
 	}
 	fmt.Fprintf(w, "\n")
 	return nil
@@ -219,25 +212,18 @@ func (cmd *PageCommand) PrintBranch(w io.Writer, buf []byte) error {
 
 // PrintFreelist prints the data for a freelist page.
 func (cmd *PageCommand) PrintFreelist(w io.Writer, buf []byte) error {
-	p := (*page)(unsafe.Pointer(&buf[0]))
-
-	// Check for overflow and, if present, adjust starting index and actual element count.
-	idx, count := 0, int(p.count)
-	if p.count == 0xFFFF {
-		idx = 1
-		count = int(((*[maxAllocSize]pgid)(unsafe.Pointer(&p.ptr)))[0])
-	}
+	p := guts_cli.LoadPage(buf)
 
 	// Print number of items.
-	fmt.Fprintf(w, "Item Count: %d\n", count)
-	fmt.Fprintf(w, "Overflow: %d\n", p.overflow)
+	fmt.Fprintf(w, "Item Count: %d\n", p.FreelistPageCount())
+	fmt.Fprintf(w, "Overflow: %d\n", p.Overflow())
 
 	fmt.Fprintf(w, "\n")
 
 	// Print each page in the freelist.
-	ids := (*[maxAllocSize]pgid)(unsafe.Pointer(&p.ptr))
-	for i := idx; i < count; i++ {
-		fmt.Fprintf(w, "%d\n", ids[i])
+	ids := p.FreelistPagePages()
+	for _, ids := range ids {
+		fmt.Fprintf(w, "%d\n", ids)
 	}
 	fmt.Fprintf(w, "\n")
 	return nil
