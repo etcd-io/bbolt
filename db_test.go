@@ -1038,8 +1038,8 @@ func TestDB_Stats(t *testing.T) {
 	}
 
 	stats := db.Stats()
-	if stats.TxStats.PageCount != 2 {
-		t.Fatalf("unexpected TxStats.PageCount: %d", stats.TxStats.PageCount)
+	if stats.TxStats.GetPageCount() != 2 {
+		t.Fatalf("unexpected TxStats.PageCount: %d", stats.TxStats.GetPageCount())
 	} else if stats.FreePageN != 0 {
 		t.Fatalf("unexpected FreePageN != 0: %d", stats.FreePageN)
 	} else if stats.PendingPageN != 2 {
@@ -1122,8 +1122,8 @@ func TestDBStats_Sub(t *testing.T) {
 	b.TxStats.PageCount = 10
 	b.FreePageN = 14
 	diff := b.Sub(&a)
-	if diff.TxStats.PageCount != 7 {
-		t.Fatalf("unexpected TxStats.PageCount: %d", diff.TxStats.PageCount)
+	if diff.TxStats.GetPageCount() != 7 {
+		t.Fatalf("unexpected TxStats.PageCount: %d", diff.TxStats.GetPageCount())
 	}
 
 	// free page stats are copied from the receiver and not subtracted

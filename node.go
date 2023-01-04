@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
-	"sync/atomic"
 	"unsafe"
 )
 
@@ -305,7 +304,7 @@ func (n *node) splitTwo(pageSize uintptr) (*node, *node) {
 	n.inodes = n.inodes[:splitIndex]
 
 	// Update the statistics.
-	atomic.AddInt64(&n.bucket.tx.stats.Split, 1)
+	n.bucket.tx.stats.IncSplit(1)
 
 	return n, next
 }
@@ -392,7 +391,7 @@ func (n *node) spill() error {
 		}
 
 		// Update the statistics.
-		atomic.AddInt64(&tx.stats.Spill, 1)
+		tx.stats.IncSpill(1)
 	}
 
 	// If the root node split and created a new root then we need to spill that
@@ -414,7 +413,7 @@ func (n *node) rebalance() {
 	n.unbalanced = false
 
 	// Update statistics.
-	n.bucket.tx.stats.Rebalance++
+	n.bucket.tx.stats.IncRebalance(1)
 
 	// Ignore if node is above threshold (25%) and has enough keys.
 	var threshold = n.bucket.tx.db.pageSize / 4
@@ -548,7 +547,7 @@ func (n *node) dereference() {
 	}
 
 	// Update statistics.
-	atomic.AddInt64(&n.bucket.tx.stats.NodeDeref, 1)
+	n.bucket.tx.stats.IncNodeDeref(1)
 }
 
 // free adds the node's underlying page to the freelist.
