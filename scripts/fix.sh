@@ -10,3 +10,4 @@ XTESTGOFILES=$(${GO_CMD} list  --f "{{with \$d:=.}}{{range .XTestGoFiles}}{{\$d.
 echo "${GOFILES}" "${TESTGOFILES}" "${XTESTGOFILES}"| xargs -n 100 go run golang.org/x/tools/cmd/goimports@latest -w -local go.etcd.io
 
 go fmt ./...
+go mod tidy

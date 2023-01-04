@@ -2,12 +2,14 @@ package tests_test
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
+
 	bolt "go.etcd.io/bbolt"
 	"go.etcd.io/bbolt/internal/btesting"
 	"go.etcd.io/bbolt/internal/guts_cli"
 	"go.etcd.io/bbolt/internal/surgeon"
-	"testing"
 )
 
 func TestTx_RecursivelyCheckPages_MisplacedPage(t *testing.T) {
@@ -19,13 +21,13 @@ func TestTx_RecursivelyCheckPages_MisplacedPage(t *testing.T) {
 		))
 	assert.NoError(t, db.Close())
 
-	navigator := surgeon.NewXRay(db.Path())
+	xRay := surgeon.NewXRay(db.Path())
 
-	path1, err := navigator.FindPathToPagesWithKey([]byte("0451"))
+	path1, err := xRay.FindPathsToKey([]byte("0451"))
 	assert.NoError(t, err, "Cannot find page that contains key:'0451'")
 	assert.Len(t, path1, 1, "Expected only one page that contains key:'0451'")
 
-	path2, err := navigator.FindPathToPagesWithKey([]byte("7563"))
+	path2, err := xRay.FindPathsToKey([]byte("7563"))
 	assert.NoError(t, err, "Cannot find page that contains key:'7563'")
 	assert.Len(t, path2, 1, "Expected only one page that contains key:'7563'")
 
@@ -56,9 +58,9 @@ func TestTx_RecursivelyCheckPages_CorruptedLeaf(t *testing.T) {
 		))
 	assert.NoError(t, db.Close())
 
-	navigator := surgeon.NewXRay(db.Path())
+	xray := surgeon.NewXRay(db.Path())
 
-	path1, err := navigator.FindPathToPagesWithKey([]byte("0451"))
+	path1, err := xray.FindPathsToKey([]byte("0451"))
 	assert.NoError(t, err, "Cannot find page that contains key:'0451'")
 	assert.Len(t, path1, 1, "Expected only one page that contains key:'0451'")
 
