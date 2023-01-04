@@ -11,8 +11,7 @@ TESTFLAGS_CPU=
 ifdef CPU
 	TESTFLAGS_CPU=-cpu=$(CPU)
 endif
-
-TESTFLAGS = $(TESTFLAGS_RACE) $(TESTFLAGS_CPU)
+TESTFLAGS = $(TESTFLAGS_RACE) $(TESTFLAGS_CPU) $(EXTRA_TESTFLAGS)
 
 fmt:
 	!(gofmt -l -s -d $(shell find . -name \*.go) | grep '[a-z]')
@@ -20,21 +19,17 @@ fmt:
 lint:
 	golangci-lint run ./...
 
-test:
+test: test-freelist-hashmap test-freelist-array
+
+test-freelist-hashmap:
 	@echo "hashmap freelist test"
 	TEST_FREELIST_TYPE=hashmap go test -v ${TESTFLAGS} -timeout 30m
 	TEST_FREELIST_TYPE=hashmap go test -v ${TESTFLAGS} ./cmd/bbolt
 
+test-freelist-array:
 	@echo "array freelist test"
 	TEST_FREELIST_TYPE=array go test -v ${TESTFLAGS} -timeout 30m
 	TEST_FREELIST_TYPE=array go test -v ${TESTFLAGS} ./cmd/bbolt
-
-test-simulate:
-	@echo "hashmap freelist test"
-	TEST_FREELIST_TYPE=hashmap go test -v ${TESTFLAGS} -test.run="TestSimulate_(100op|1000op)"
-
-	@echo "array freelist test"
-	TEST_FREELIST_TYPE=array go test -v ${TESTFLAGS} -test.run="TestSimulate_(100op|1000op)"
 
 coverage:
 	@echo "hashmap freelist test"
@@ -45,4 +40,4 @@ coverage:
 	TEST_FREELIST_TYPE=array go test -v -timeout 30m \
 		-coverprofile cover-freelist-array.out -covermode atomic
 
-.PHONY: fmt test test-simulate lint
+.PHONY: fmt test test-freelist-hashmap test-freelist-array lint

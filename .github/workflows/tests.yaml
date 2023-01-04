@@ -6,9 +6,9 @@ jobs:
       fail-fast: false
       matrix:
         target:
-        - linux-amd64-unit-test-2-cpu
         - linux-amd64-unit-test-4-cpu
-        - linux-amd64-unit-test-4-cpu-race
+        - linux-amd64-unit-test-4-cpu-freelist-hashmap-race
+        - linux-amd64-unit-test-2-cpu-freelist-array-short-race
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -20,17 +20,14 @@ jobs:
         TARGET: ${{ matrix.target }}
       run: |
         case "${TARGET}" in
-          linux-amd64-unit-test-2-cpu)
-            CPU=2 make test-simulate
-            CPU=2 make test
-            ;;
           linux-amd64-unit-test-4-cpu)
-            CPU=4 make test-simulate
             CPU=4 make test
             ;;
-          linux-amd64-unit-test-4-cpu-race)
-            CPU=4 ENABLE_RACE=true make test-simulate
-            CPU=4 ENABLE_RACE=true make test
+          linux-amd64-unit-test-4-cpu-freelist-hashmap-race)
+            CPU=4 ENABLE_RACE=true make test-freelist-hashmap
+            ;;
+          linux-amd64-unit-test-2-cpu-freelist-array-short-race)
+            CPU=2 ENABLE_RACE=true EXTRA_TESTFLAGS="-short" make test-freelist-array
             ;;
           *)
             echo "Failed to find target"
@@ -66,7 +63,6 @@ jobs:
       run: |
         case "${TARGET}" in
           windows-amd64-unit-test-4-cpu)
-            CPU=4 make test-simulate
             CPU=4 make test
             ;;
           *)
