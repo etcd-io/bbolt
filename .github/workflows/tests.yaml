@@ -6,9 +6,10 @@ jobs:
       fail-fast: false
       matrix:
         target:
+        - linux-amd64-unit-test-1-cpu
+        - linux-amd64-unit-test-2-cpu
         - linux-amd64-unit-test-4-cpu
-        - linux-amd64-unit-test-4-cpu-freelist-hashmap-race
-        - linux-amd64-unit-test-2-cpu-freelist-array-short-race
+        - linux-amd64-unit-test-4-cpu-race
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -20,14 +21,23 @@ jobs:
         TARGET: ${{ matrix.target }}
       run: |
         case "${TARGET}" in
+          linux-amd64-unit-test-1-cpu)
+            CPU=1 make test
+            ;;
+          linux-amd64-unit-test-2-cpu)
+            CPU=2 make test
+            ;;
           linux-amd64-unit-test-4-cpu)
             CPU=4 make test
             ;;
-          linux-amd64-unit-test-4-cpu-freelist-hashmap-race)
-            CPU=4 ENABLE_RACE=true make test-freelist-hashmap
-            ;;
-          linux-amd64-unit-test-2-cpu-freelist-array-short-race)
-            CPU=2 ENABLE_RACE=true EXTRA_TESTFLAGS="-short" make test-freelist-array
+          linux-amd64-unit-test-4-cpu-race)
+            # XXX: By default, the Github Action runner will terminate the process
+            # if it has high resource usage. Try to use GOGC to limit memory and
+            # cpu usage here to prevent unexpected terminating. It can be replaced
+            # with GOMEMLIMIT=2048MiB if the go-version is updated to >=1.19.x.
+            #
+            # REF: https://github.com/actions/runner-images/issues/6680#issuecomment-1335778010
+            GOGC=30 CPU=4 ENABLE_RACE=true make test
             ;;
           *)
             echo "Failed to find target"
