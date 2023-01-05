@@ -19,14 +19,11 @@ fmt:
 lint:
 	golangci-lint run ./...
 
-test: test-freelist-hashmap test-freelist-array
-
-test-freelist-hashmap:
+test:
 	@echo "hashmap freelist test"
 	TEST_FREELIST_TYPE=hashmap go test -v ${TESTFLAGS} -timeout 30m
 	TEST_FREELIST_TYPE=hashmap go test -v ${TESTFLAGS} ./cmd/bbolt
 
-test-freelist-array:
 	@echo "array freelist test"
 	TEST_FREELIST_TYPE=array go test -v ${TESTFLAGS} -timeout 30m
 	TEST_FREELIST_TYPE=array go test -v ${TESTFLAGS} ./cmd/bbolt
@@ -40,4 +37,4 @@ coverage:
 	TEST_FREELIST_TYPE=array go test -v -timeout 30m \
 		-coverprofile cover-freelist-array.out -covermode atomic
 
-.PHONY: fmt test test-freelist-hashmap test-freelist-array lint
+.PHONY: fmt test lint
