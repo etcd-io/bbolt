@@ -673,27 +673,45 @@ func (tx *Tx) Page(id int) (*PageInfo, error) {
 // TxStats represents statistics about the actions performed by the transaction.
 type TxStats struct {
 	// Page statistics.
+	//
+	// DEPRECATED: Use GetPageCount() or IncPageCount()
 	PageCount int64 // number of page allocations
+	// DEPRECATED: Use GetPageAlloc() or IncPageAlloc()
 	PageAlloc int64 // total bytes allocated
 
 	// Cursor statistics.
+	//
+	// DEPRECATED: Use GetCursorCount() or IncCursorCount()
 	CursorCount int64 // number of cursors created
 
 	// Node statistics
+	//
+	// DEPRECATED: Use GetNodeCount() or IncNodeCount()
 	NodeCount int64 // number of node allocations
+	// DEPRECATED: Use GetNodeDeref() or IncNodeDeref()
 	NodeDeref int64 // number of node dereferences
 
 	// Rebalance statistics.
-	Rebalance     int64         // number of node rebalances
+	//
+	// DEPRECATED: Use GetRebalance() or IncRebalance()
+	Rebalance int64 // number of node rebalances
+	// DEPRECATED: Use GetRebalanceTime() or IncRebalanceTime()
 	RebalanceTime time.Duration // total time spent rebalancing
 
 	// Split/Spill statistics.
-	Split     int64         // number of nodes split
-	Spill     int64         // number of nodes spilled
+	//
+	// DEPRECATED: Use GetSplit() or IncSplit()
+	Split int64 // number of nodes split
+	// DEPRECATED: Use GetSpill() or IncSpill()
+	Spill int64 // number of nodes spilled
+	// DEPRECATED: Use GetSpillTime() or IncSpillTime()
 	SpillTime time.Duration // total time spent spilling
 
 	// Write statistics.
-	Write     int64         // number of writes performed
+	//
+	// DEPRECATED: Use GetWrite() or IncWrite()
+	Write int64 // number of writes performed
+	// DEPRECATED: Use GetWriteTime() or IncWriteTime()
 	WriteTime time.Duration // total time spent writing to disk
 }
 
