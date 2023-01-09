@@ -10,11 +10,13 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
 	"unsafe"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	bolt "go.etcd.io/bbolt"
@@ -1309,6 +1311,29 @@ func TestDB_BatchTime(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// TestDBUnmap verifes that `dataref`, `data` and `datasz` must be reset
+// to zero values respectively after unmapping the db.
+func TestDBUnmap(t *testing.T) {
+	db := btesting.MustCreateDB(t)
+
+	require.NoError(t, db.DB.Close())
+
+	// Ignore the following error:
+	// Error: copylocks: call of reflect.ValueOf copies lock value: go.etcd.io/bbolt.DB contains sync.Once contains sync.Mutex (govet)
+	//nolint:govet
+	v := reflect.ValueOf(*db.DB)
+	dataref := v.FieldByName("dataref")
+	data := v.FieldByName("data")
+	datasz := v.FieldByName("datasz")
+	assert.True(t, dataref.IsNil())
+	assert.True(t, data.IsNil())
+	assert.True(t, datasz.IsZero())
+
+	// We need to reopen the db, otherwise MustCheck may panic.
+	db.DB = nil
+	db.MustReopen()
 }
 
 func ExampleDB_Update() {
