@@ -16,6 +16,9 @@ var (
 	// This typically occurs when a file is not a bolt database.
 	ErrInvalid = errors.New("invalid database")
 
+	// ErrInvalidMapping is returned when the database file fails to get mapped.
+	ErrInvalidMapping = errors.New("database isn't correctly mapped")
+
 	// ErrVersionMismatch is returned when the data file was created with a
 	// different version of Bolt.
 	ErrVersionMismatch = errors.New("version mismatch")

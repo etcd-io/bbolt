@@ -276,13 +276,17 @@ func (tx *Tx) rollback() {
 	}
 	if tx.writable {
 		tx.db.freelist.rollback(tx.meta.txid)
-		if !tx.db.hasSyncedFreelist() {
-			// Reconstruct free page list by scanning the DB to get the whole free page list.
-			// Note: scaning the whole db is heavy if your db size is large in NoSyncFreeList mode.
-			tx.db.freelist.noSyncReload(tx.db.freepages())
-		} else {
-			// Read free page list from freelist page.
-			tx.db.freelist.reload(tx.db.page(tx.db.meta().freelist))
+		// When mmap fails, the `data`, `dataref` and `datasz` may be reset to
+		// zero values, and there is no way to reload free page IDs in this case.
+		if tx.db.data != nil {
+			if !tx.db.hasSyncedFreelist() {
+				// Reconstruct free page list by scanning the DB to get the whole free page list.
+				// Note: scaning the whole db is heavy if your db size is large in NoSyncFreeList mode.
+				tx.db.freelist.noSyncReload(tx.db.freepages())
+			} else {
+				// Read free page list from freelist page.
+				tx.db.freelist.reload(tx.db.page(tx.db.meta().freelist))
+			}
 		}
 	}
 	tx.close()

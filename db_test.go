@@ -1331,9 +1331,8 @@ func TestDBUnmap(t *testing.T) {
 	assert.True(t, data.IsNil())
 	assert.True(t, datasz.IsZero())
 
-	// We need to reopen the db, otherwise MustCheck may panic.
+	// Set db.DB to nil to prevent MustCheck from panicking.
 	db.DB = nil
-	db.MustReopen()
 }
 
 func ExampleDB_Update() {

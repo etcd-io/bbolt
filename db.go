@@ -491,8 +491,19 @@ func (db *DB) mmap(minsz int) error {
 	return nil
 }
 
+func (db *DB) invalidate() {
+	db.dataref = nil
+	db.data = nil
+	db.datasz = 0
+
+	db.meta0 = nil
+	db.meta1 = nil
+}
+
 // munmap unmaps the data file from memory.
 func (db *DB) munmap() error {
+	defer db.invalidate()
+
 	if err := munmap(db); err != nil {
 		return fmt.Errorf("unmap error: " + err.Error())
 	}
@@ -701,6 +712,13 @@ func (db *DB) beginTx() (*Tx, error) {
 		return nil, ErrDatabaseNotOpen
 	}
 
+	// Exit if the database is not correctly mapped.
+	if db.data == nil {
+		db.mmaplock.RUnlock()
+		db.metalock.Unlock()
+		return nil, ErrInvalidMapping
+	}
+
 	// Create a transaction associated with the database.
 	t := &Tx{}
 	t.init(db)
@@ -740,6 +758,12 @@ func (db *DB) beginRWTx() (*Tx, error) {
 	if !db.opened {
 		db.rwlock.Unlock()
 		return nil, ErrDatabaseNotOpen
+	}
+
+	// Exit if the database is not correctly mapped.
+	if db.data == nil {
+		db.rwlock.Unlock()
+		return nil, ErrInvalidMapping
 	}
 
 	// Create a transaction associated with the database.
@@ -1016,6 +1040,7 @@ func (db *DB) Stats() Stats {
 // This is for internal access to the raw data bytes from the C cursor, use
 // carefully, or not at all.
 func (db *DB) Info() *Info {
+	_assert(db.data != nil, "database file isn't correctly mapped")
 	return &Info{uintptr(unsafe.Pointer(&db.data[0])), db.pageSize}
 }
 
@@ -1042,7 +1067,7 @@ func (db *DB) meta() *meta {
 		metaB = db.meta0
 	}
 
-	// Use higher meta page if valid. Otherwise fallback to previous, if valid.
+	// Use higher meta page if valid. Otherwise, fallback to previous, if valid.
 	if err := metaA.validate(); err == nil {
 		return metaA
 	} else if err := metaB.validate(); err == nil {
