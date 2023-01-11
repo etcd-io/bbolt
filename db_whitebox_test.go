@@ -53,6 +53,63 @@ func TestOpenWithPreLoadFreelist(t *testing.T) {
 	}
 }
 
+func TestMethodPage(t *testing.T) {
+	testCases := []struct {
+		name            string
+		readonly        bool
+		preLoadFreePage bool
+		expectedError   error
+	}{
+		{
+			name:            "write mode",
+			readonly:        false,
+			preLoadFreePage: false,
+			expectedError:   nil,
+		},
+		{
+			name:            "readonly mode with preloading free pages",
+			readonly:        true,
+			preLoadFreePage: true,
+			expectedError:   nil,
+		},
+		{
+			name:            "readonly mode without preloading free pages",
+			readonly:        true,
+			preLoadFreePage: false,
+			expectedError:   ErrFreePagesNotLoaded,
+		},
+	}
+
+	fileName, err := prepareData(t)
+	require.NoError(t, err)
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			db, err := Open(fileName, 0666, &Options{
+				ReadOnly:        tc.readonly,
+				PreLoadFreelist: tc.preLoadFreePage,
+			})
+			require.NoError(t, err)
+			defer db.Close()
+
+			tx, err := db.Begin(!tc.readonly)
+			require.NoError(t, err)
+
+			_, err = tx.Page(0)
+			require.Equal(t, tc.expectedError, err)
+
+			if tc.readonly {
+				require.NoError(t, tx.Rollback())
+			} else {
+				require.NoError(t, tx.Commit())
+			}
+
+			require.NoError(t, db.Close())
+		})
+	}
+}
+
 func prepareData(t *testing.T) (string, error) {
 	fileName := filepath.Join(t.TempDir(), "db")
 	db, err := Open(fileName, 0666, nil)
@@ -64,5 +121,4 @@ func prepareData(t *testing.T) (string, error) {
 	}
 
 	return fileName, nil
-
 }
