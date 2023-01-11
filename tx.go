@@ -652,6 +652,9 @@ func (tx *Tx) Page(id int) (*PageInfo, error) {
 		return nil, nil
 	}
 
+	// Force loading free list if opened in ReadOnly mode.
+	tx.db.loadFreelist()
+
 	// Build the page info.
 	p := tx.db.page(pgid(id))
 	info := &PageInfo{

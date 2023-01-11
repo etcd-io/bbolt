@@ -95,6 +95,11 @@ type DB struct {
 	// https://github.com/boltdb/bolt/issues/284
 	NoGrowSync bool
 
+	// When `true`, bbolt will always load the free pages when opening the DB.
+	// When opening db in write mode, this flag will always automatically
+	// set to `true`.
+	PreLoadFreelist bool
+
 	// If you want to read the entire database fast, you can set MmapFlag to
 	// syscall.MAP_POPULATE on Linux 2.6.23+ for sequential read-ahead.
 	MmapFlags int
@@ -196,6 +201,7 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 	db.NoGrowSync = options.NoGrowSync
 	db.MmapFlags = options.MmapFlags
 	db.NoFreelistSync = options.NoFreelistSync
+	db.PreLoadFreelist = options.PreLoadFreelist
 	db.FreelistType = options.FreelistType
 	db.Mlock = options.Mlock
 
@@ -208,6 +214,9 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 	if options.ReadOnly {
 		flag = os.O_RDONLY
 		db.readOnly = true
+	} else {
+		// always load free pages in write mode
+		db.PreLoadFreelist = true
 	}
 
 	db.openFile = options.OpenFile
@@ -277,11 +286,13 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 		return nil, err
 	}
 
+	if db.PreLoadFreelist {
+		db.loadFreelist()
+	}
+
 	if db.readOnly {
 		return db, nil
 	}
-
-	db.loadFreelist()
 
 	// Flush freelist when transitioning from no sync to sync so
 	// NoFreelistSync unaware boltdb can open the db later.
@@ -1162,6 +1173,11 @@ type Options struct {
 	// Do not sync freelist to disk. This improves the database write performance
 	// under normal operation, but requires a full database re-sync during recovery.
 	NoFreelistSync bool
+
+	// PreLoadFreelist sets whether to load the free pages when opening
+	// the db file. Note when opening db in write mode, bbolt will always
+	// load the free pages.
+	PreLoadFreelist bool
 
 	// FreelistType sets the backend freelist type. There are two options. Array which is simple but endures
 	// dramatic performance degradation if database is large and framentation in freelist is common.
