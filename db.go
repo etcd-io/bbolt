@@ -1093,11 +1093,10 @@ func (db *DB) grow(sz int) error {
 	// Truncate and fsync to ensure file size metadata is flushed.
 	// https://github.com/boltdb/bolt/issues/284
 	if !db.NoGrowSync && !db.readOnly {
-		if runtime.GOOS != "windows" {
-			if err := db.file.Truncate(int64(sz)); err != nil {
-				return fmt.Errorf("file resize error: %s", err)
-			}
+		if err := db.file.Truncate(int64(sz)); err != nil {
+			return fmt.Errorf("file resize error on (%s/%s): %s", runtime.GOARCH, runtime.GOOS, err)
 		}
+
 		if err := db.file.Sync(); err != nil {
 			return fmt.Errorf("file sync error: %s", err)
 		}
