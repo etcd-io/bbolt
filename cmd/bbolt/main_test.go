@@ -255,6 +255,37 @@ func TestGetCommand_Run(t *testing.T) {
 	}
 }
 
+// Ensure the "pages" command neither panic, nor change the db file.
+func TestPagesCommand_Run(t *testing.T) {
+	db := btesting.MustCreateDB(t)
+
+	err := db.Update(func(tx *bolt.Tx) error {
+		for _, name := range []string{"foo", "bar"} {
+			b, err := tx.CreateBucket([]byte(name))
+			if err != nil {
+				return err
+			}
+			for i := 0; i < 3; i++ {
+				key := fmt.Sprintf("%s-%d", name, i)
+				val := fmt.Sprintf("val-%s-%d", name, i)
+				if err := b.Put([]byte(key), []byte(val)); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	db.Close()
+
+	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
+
+	// Run the command.
+	m := NewMain()
+	err = m.Run("pages", db.Path())
+	require.NoError(t, err)
+}
+
 // Main represents a test wrapper for main.Main that records output.
 type Main struct {
 	*main.Main

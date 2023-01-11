@@ -652,6 +652,10 @@ func (tx *Tx) Page(id int) (*PageInfo, error) {
 		return nil, nil
 	}
 
+	if tx.db.freelist == nil {
+		return nil, ErrFreePagesNotLoaded
+	}
+
 	// Build the page info.
 	p := tx.db.page(pgid(id))
 	info := &PageInfo{

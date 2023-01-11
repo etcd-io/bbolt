@@ -195,7 +195,10 @@ func (cmd *CheckCommand) Run(args ...string) error {
 	}
 
 	// Open database.
-	db, err := bolt.Open(path, 0666, &bolt.Options{ReadOnly: true})
+	db, err := bolt.Open(path, 0666, &bolt.Options{
+		ReadOnly:        true,
+		PreLoadFreelist: true,
+	})
 	if err != nil {
 		return err
 	}
@@ -644,7 +647,10 @@ func (cmd *PagesCommand) Run(args ...string) error {
 	}
 
 	// Open database.
-	db, err := bolt.Open(path, 0666, &bolt.Options{ReadOnly: true})
+	db, err := bolt.Open(path, 0666, &bolt.Options{
+		ReadOnly:        true,
+		PreLoadFreelist: true,
+	})
 	if err != nil {
 		return err
 	}
