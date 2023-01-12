@@ -190,7 +190,7 @@ func (tx *Tx) Commit() error {
 
 	// If strict mode is enabled then perform a consistency check.
 	if tx.db.StrictMode {
-		ch := tx.Check(HexKeyValueStringer())
+		ch := tx.Check(HexKVStringer())
 		var errs []string
 		for {
 			err, ok := <-ch

@@ -207,7 +207,7 @@ func (cmd *CheckCommand) Run(args ...string) error {
 	// Perform consistency check.
 	return db.View(func(tx *bolt.Tx) error {
 		var count int
-		for err := range tx.Check(CmdKeyValueStringer()) {
+		for err := range tx.Check(CmdKvStringer()) {
 			fmt.Fprintln(cmd.Stdout, err)
 			count++
 		}
@@ -540,11 +540,7 @@ func formatBytes(b []byte, format string) (string, error) {
 	case "bytes":
 		return string(b), nil
 	case "auto":
-		if isPrintable(string(b)) {
-			return string(b), nil
-		} else {
-			return fmt.Sprintf("%x", b), nil
-		}
+		return bytesToAsciiOrHex(b), nil
 	case "redacted":
 		return fmt.Sprintf("<redacted len:%d>", len(b)), nil
 	default:
@@ -1573,6 +1569,15 @@ func isPrintable(s string) bool {
 	return true
 }
 
+func bytesToAsciiOrHex(b []byte) string {
+	sb := string(b)
+	if isPrintable(sb) {
+		return sb
+	} else {
+		return hex.EncodeToString(b)
+	}
+}
+
 func stringToPage(str string) (uint64, error) {
 	return strconv.ParseUint(str, 10, 64)
 }
@@ -1690,24 +1695,16 @@ Additional options include:
 `, "\n")
 }
 
-type cmdKeyValueStringer struct{}
+type cmdKvStringer struct{}
 
-func (_ cmdKeyValueStringer) KeyToString(key []byte) string {
-	if isPrintable(string(key)) {
-		return string(key)
-	} else {
-		return hex.EncodeToString(key)
-	}
+func (_ cmdKvStringer) KeyToString(key []byte) string {
+	return bytesToAsciiOrHex(key)
 }
 
-func (_ cmdKeyValueStringer) ValueToString(value []byte) string {
-	if isPrintable(string(value)) {
-		return string(value)
-	} else {
-		return hex.EncodeToString(value)
-	}
+func (_ cmdKvStringer) ValueToString(value []byte) string {
+	return bytesToAsciiOrHex(value)
 }
 
-func CmdKeyValueStringer() bolt.KeyValueStringer {
-	return cmdKeyValueStringer{}
+func CmdKvStringer() bolt.KVStringer {
+	return cmdKvStringer{}
 }

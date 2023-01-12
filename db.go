@@ -1148,7 +1148,7 @@ func (db *DB) freepages() []pgid {
 			panic(fmt.Sprintf("freepages: failed to get all reachable pages (%v)", e))
 		}
 	}()
-	tx.checkBucket(&tx.root, reachable, nofreed, HexKeyValueStringer(), ech)
+	tx.checkBucket(&tx.root, reachable, nofreed, HexKVStringer(), ech)
 	close(ech)
 
 	// TODO: If check bucket reported any corruptions (ech) we shouldn't proceed to freeing the pages.

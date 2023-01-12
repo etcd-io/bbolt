@@ -13,13 +13,13 @@ import (
 // because of caching. This overhead can be removed if running on a read-only
 // transaction, however, it is not safe to execute other writer transactions at
 // the same time.
-func (tx *Tx) Check(keyValueStringer KeyValueStringer) <-chan error {
+func (tx *Tx) Check(kvStringer KVStringer) <-chan error {
 	ch := make(chan error)
-	go tx.check(keyValueStringer, ch)
+	go tx.check(kvStringer, ch)
 	return ch
 }
 
-func (tx *Tx) check(keyValueStringer KeyValueStringer, ch chan error) {
+func (tx *Tx) check(kvStringer KVStringer, ch chan error) {
 	// Force loading free list if opened in ReadOnly mode.
 	tx.db.loadFreelist()
 
@@ -45,7 +45,7 @@ func (tx *Tx) check(keyValueStringer KeyValueStringer, ch chan error) {
 	}
 
 	// Recursively check buckets.
-	tx.checkBucket(&tx.root, reachable, freed, keyValueStringer, ch)
+	tx.checkBucket(&tx.root, reachable, freed, kvStringer, ch)
 
 	// Ensure all pages below high water mark are either reachable or freed.
 	for i := pgid(0); i < tx.meta.pgid; i++ {
@@ -60,7 +60,7 @@ func (tx *Tx) check(keyValueStringer KeyValueStringer, ch chan error) {
 }
 
 func (tx *Tx) checkBucket(b *Bucket, reachable map[pgid]*page, freed map[pgid]bool,
-	keyValueStringer KeyValueStringer, ch chan error) {
+	kvStringer KVStringer, ch chan error) {
 	// Ignore inline buckets.
 	if b.root == 0 {
 		return
@@ -89,12 +89,12 @@ func (tx *Tx) checkBucket(b *Bucket, reachable map[pgid]*page, freed map[pgid]bo
 		}
 	})
 
-	tx.recursivelyCheckPages(b.root, keyValueStringer.KeyToString, ch)
+	tx.recursivelyCheckPages(b.root, kvStringer.KeyToString, ch)
 
 	// Check each bucket within this bucket.
 	_ = b.ForEachBucket(func(k []byte) error {
 		if child := b.Bucket(k); child != nil {
-			tx.checkBucket(child, reachable, freed, keyValueStringer, ch)
+			tx.checkBucket(child, reachable, freed, kvStringer, ch)
 		}
 		return nil
 	})
@@ -127,8 +127,8 @@ func (tx *Tx) recursivelyCheckPagesInternal(
 			elem := p.branchPageElement(uint16(i))
 			if i == 0 && runningMin != nil && compareKeys(runningMin, elem.key()) > 0 {
 				ch <- fmt.Errorf("key (%d, %s) on the branch page(%d) needs to be >="+
-					" to the index in the ancestor. Pages stack: %v",
-					i, keyToString(elem.key()), pgid, pagesStack)
+					" to the key(%s) in the ancestor. Pages stack: %v",
+					i, keyToString(elem.key()), pgid, keyToString(runningMin), pagesStack)
 			}
 
 			if maxKeyOpen != nil && compareKeys(elem.key(), maxKeyOpen) >= 0 {
@@ -146,22 +146,25 @@ func (tx *Tx) recursivelyCheckPagesInternal(
 			maxKeyInSubtree = tx.recursivelyCheckPagesInternal(elem.pgid, elem.key(), maxKey, pagesStack, keyToString, ch)
 			runningMin = maxKeyInSubtree
 		}
-		return
+		return maxKeyInSubtree
 	case p.flags&leafPageFlag != 0:
 		runningMin := minKeyClosed
 		for i := range p.leafPageElements() {
 			elem := p.leafPageElement(uint16(i))
 			if i == 0 && runningMin != nil && compareKeys(runningMin, elem.key()) > 0 {
-				ch <- fmt.Errorf("key[%d]=(hex)%s on leaf page(%d) needs to be >= to the key in the ancestor. Stack: %v",
-					i, keyToString(elem.key()), pgid, pagesStack)
-			}
-			if i > 0 && compareKeys(runningMin, elem.key()) > 0 {
-				ch <- fmt.Errorf("key[%d]=(hex)%s on leaf page(%d) needs to be > (found <) than previous element (hex)%s. Stack: %v",
+				ch <- fmt.Errorf("The first key[%d]=(hex)%s on leaf page(%d) needs to be >= the key in the ancestor (%s). Stack: %v",
 					i, keyToString(elem.key()), pgid, keyToString(runningMin), pagesStack)
 			}
-			if i > 0 && compareKeys(runningMin, elem.key()) == 0 {
-				ch <- fmt.Errorf("key[%d]=(hex)%s on leaf page(%d) needs to be > (found =) than previous element (hex)%s. Stack: %v",
-					i, keyToString(elem.key()), pgid, keyToString(runningMin), pagesStack)
+			if i > 0 {
+				cmpRet := compareKeys(runningMin, elem.key())
+				if cmpRet > 0 {
+					ch <- fmt.Errorf("key[%d]=(hex)%s on leaf page(%d) needs to be > (found <) than previous element (hex)%s. Stack: %v",
+						i, keyToString(elem.key()), pgid, keyToString(runningMin), pagesStack)
+				}
+				if cmpRet == 0 {
+					ch <- fmt.Errorf("key[%d]=(hex)%s on leaf page(%d) needs to be > (found =) than previous element (hex)%s. Stack: %v",
+						i, keyToString(elem.key()), pgid, keyToString(runningMin), pagesStack)
+				}
 			}
 			if maxKeyOpen != nil && compareKeys(elem.key(), maxKeyOpen) >= 0 {
 				ch <- fmt.Errorf("key[%d]=(hex)%s on leaf page(%d) needs to be < than key of the next element in ancestor (hex)%s. Pages stack: %v",
@@ -175,28 +178,28 @@ func (tx *Tx) recursivelyCheckPagesInternal(
 	default:
 		ch <- fmt.Errorf("unexpected page type for pgid:%d", pgid)
 	}
-	return nil
+	return maxKeyInSubtree
 }
 
 // ===========================================================================================
 
-// KeyValueStringer allows to prepare human-readable diagnostic messages.
-type KeyValueStringer interface {
+// KVStringer allows to prepare human-readable diagnostic messages.
+type KVStringer interface {
 	KeyToString([]byte) string
 	ValueToString([]byte) string
 }
 
-// HexKeyValueStringer serializes both key & value to hex representation.
-func HexKeyValueStringer() KeyValueStringer {
-	return hexKeyValueStringer{}
+// HexKVStringer serializes both key & value to hex representation.
+func HexKVStringer() KVStringer {
+	return hexKvStringer{}
 }
 
-type hexKeyValueStringer struct{}
+type hexKvStringer struct{}
 
-func (_ hexKeyValueStringer) KeyToString(key []byte) string {
+func (_ hexKvStringer) KeyToString(key []byte) string {
 	return hex.EncodeToString(key)
 }
 
-func (_ hexKeyValueStringer) ValueToString(value []byte) string {
+func (_ hexKvStringer) ValueToString(value []byte) string {
 	return hex.EncodeToString(value)
 }
