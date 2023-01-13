@@ -513,8 +513,8 @@ func (b *Bucket) forEachPageNode(fn func(*page, *node, int)) {
 	b._forEachPageNode(b.root, 0, fn)
 }
 
-func (b *Bucket) _forEachPageNode(pgid pgid, depth int, fn func(*page, *node, int)) {
-	var p, n = b.pageNode(pgid)
+func (b *Bucket) _forEachPageNode(pgId pgid, depth int, fn func(*page, *node, int)) {
+	var p, n = b.pageNode(pgId)
 
 	// Execute function.
 	fn(p, n, depth)
@@ -654,11 +654,11 @@ func (b *Bucket) rebalance() {
 }
 
 // node creates a node from a page and associates it with a given parent.
-func (b *Bucket) node(pgid pgid, parent *node) *node {
+func (b *Bucket) node(pgId pgid, parent *node) *node {
 	_assert(b.nodes != nil, "nodes map expected")
 
 	// Retrieve node if it's already been created.
-	if n := b.nodes[pgid]; n != nil {
+	if n := b.nodes[pgId]; n != nil {
 		return n
 	}
 
@@ -673,12 +673,12 @@ func (b *Bucket) node(pgid pgid, parent *node) *node {
 	// Use the inline page if this is an inline bucket.
 	var p = b.page
 	if p == nil {
-		p = b.tx.page(pgid)
+		p = b.tx.page(pgId)
 	}
 
 	// Read the page into the node and cache it.
 	n.read(p)
-	b.nodes[pgid] = n
+	b.nodes[pgId] = n
 
 	// Update statistics.
 	b.tx.stats.IncNodeCount(1)

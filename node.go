@@ -113,9 +113,9 @@ func (n *node) prevSibling() *node {
 }
 
 // put inserts a key/value.
-func (n *node) put(oldKey, newKey, value []byte, pgid pgid, flags uint32) {
-	if pgid >= n.bucket.tx.meta.pgid {
-		panic(fmt.Sprintf("pgid (%d) above high water mark (%d)", pgid, n.bucket.tx.meta.pgid))
+func (n *node) put(oldKey, newKey, value []byte, pgId pgid, flags uint32) {
+	if pgId >= n.bucket.tx.meta.pgid {
+		panic(fmt.Sprintf("pgId (%d) above high water mark (%d)", pgId, n.bucket.tx.meta.pgid))
 	} else if len(oldKey) <= 0 {
 		panic("put: zero-length old key")
 	} else if len(newKey) <= 0 {
@@ -136,7 +136,7 @@ func (n *node) put(oldKey, newKey, value []byte, pgid pgid, flags uint32) {
 	inode.flags = flags
 	inode.key = newKey
 	inode.value = value
-	inode.pgid = pgid
+	inode.pgid = pgId
 	_assert(len(inode.key) > 0, "put: zero-length inode key")
 }
 

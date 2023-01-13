@@ -104,8 +104,8 @@ func (tx *Tx) checkBucket(b *Bucket, reachable map[pgid]*page, freed map[pgid]bo
 // key order constraints:
 //   - keys on pages must be sorted
 //   - keys on children pages are between 2 consecutive keys on the parent's branch page).
-func (tx *Tx) recursivelyCheckPages(pgid pgid, keyToString func([]byte) string, ch chan error) {
-	tx.recursivelyCheckPagesInternal(pgid, nil, nil, nil, keyToString, ch)
+func (tx *Tx) recursivelyCheckPages(pgId pgid, keyToString func([]byte) string, ch chan error) {
+	tx.recursivelyCheckPagesInternal(pgId, nil, nil, nil, keyToString, ch)
 }
 
 // recursivelyCheckPagesInternal verifies that all keys in the subtree rooted at `pgid` are:
@@ -114,11 +114,11 @@ func (tx *Tx) recursivelyCheckPages(pgid pgid, keyToString func([]byte) string, 
 //   - Are in right ordering relationship to their parents.
 //     `pagesStack` is expected to contain IDs of pages from the tree root to `pgid` for the clean debugging message.
 func (tx *Tx) recursivelyCheckPagesInternal(
-	pgid pgid, minKeyClosed, maxKeyOpen []byte, pagesStack []pgid,
+	pgId pgid, minKeyClosed, maxKeyOpen []byte, pagesStack []pgid,
 	keyToString func([]byte) string, ch chan error) (maxKeyInSubtree []byte) {
 
-	p := tx.page(pgid)
-	pagesStack = append(pagesStack, pgid)
+	p := tx.page(pgId)
+	pagesStack = append(pagesStack, pgId)
 	switch {
 	case p.flags&branchPageFlag != 0:
 		// For branch page we navigate ranges of all subpages.
@@ -128,13 +128,13 @@ func (tx *Tx) recursivelyCheckPagesInternal(
 			if i == 0 && runningMin != nil && compareKeys(runningMin, elem.key()) > 0 {
 				ch <- fmt.Errorf("key (%d, %s) on the branch page(%d) needs to be >="+
 					" to the key(%s) in the ancestor. Pages stack: %v",
-					i, keyToString(elem.key()), pgid, keyToString(runningMin), pagesStack)
+					i, keyToString(elem.key()), pgId, keyToString(runningMin), pagesStack)
 			}
 
 			if maxKeyOpen != nil && compareKeys(elem.key(), maxKeyOpen) >= 0 {
 				ch <- fmt.Errorf("key (%d: %s) on the branch page(%d) needs to be <"+
 					" than key of the next element reachable from the ancestor (%v). Pages stack: %v",
-					i, keyToString(elem.key()), pgid, keyToString(maxKeyOpen), pagesStack)
+					i, keyToString(elem.key()), pgId, keyToString(maxKeyOpen), pagesStack)
 			}
 
 			var maxKey []byte
@@ -153,22 +153,22 @@ func (tx *Tx) recursivelyCheckPagesInternal(
 			elem := p.leafPageElement(uint16(i))
 			if i == 0 && runningMin != nil && compareKeys(runningMin, elem.key()) > 0 {
 				ch <- fmt.Errorf("The first key[%d]=(hex)%s on leaf page(%d) needs to be >= the key in the ancestor (%s). Stack: %v",
-					i, keyToString(elem.key()), pgid, keyToString(runningMin), pagesStack)
+					i, keyToString(elem.key()), pgId, keyToString(runningMin), pagesStack)
 			}
 			if i > 0 {
 				cmpRet := compareKeys(runningMin, elem.key())
 				if cmpRet > 0 {
 					ch <- fmt.Errorf("key[%d]=(hex)%s on leaf page(%d) needs to be > (found <) than previous element (hex)%s. Stack: %v",
-						i, keyToString(elem.key()), pgid, keyToString(runningMin), pagesStack)
+						i, keyToString(elem.key()), pgId, keyToString(runningMin), pagesStack)
 				}
 				if cmpRet == 0 {
 					ch <- fmt.Errorf("key[%d]=(hex)%s on leaf page(%d) needs to be > (found =) than previous element (hex)%s. Stack: %v",
-						i, keyToString(elem.key()), pgid, keyToString(runningMin), pagesStack)
+						i, keyToString(elem.key()), pgId, keyToString(runningMin), pagesStack)
 				}
 			}
 			if maxKeyOpen != nil && compareKeys(elem.key(), maxKeyOpen) >= 0 {
 				ch <- fmt.Errorf("key[%d]=(hex)%s on leaf page(%d) needs to be < than key of the next element in ancestor (hex)%s. Pages stack: %v",
-					i, keyToString(elem.key()), pgid, keyToString(maxKeyOpen), pagesStack)
+					i, keyToString(elem.key()), pgId, keyToString(maxKeyOpen), pagesStack)
 			}
 			runningMin = elem.key()
 		}
@@ -176,7 +176,7 @@ func (tx *Tx) recursivelyCheckPagesInternal(
 			return p.leafPageElement(p.count - 1).key()
 		}
 	default:
-		ch <- fmt.Errorf("unexpected page type for pgid:%d", pgid)
+		ch <- fmt.Errorf("unexpected page type for pgId:%d", pgId)
 	}
 	return maxKeyInSubtree
 }
