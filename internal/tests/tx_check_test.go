@@ -2,8 +2,9 @@ package tests_test
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	bolt "go.etcd.io/bbolt"
 	"go.etcd.io/bbolt/internal/btesting"
@@ -23,11 +24,11 @@ func TestTx_RecursivelyCheckPages_MisplacedPage(t *testing.T) {
 	xRay := surgeon.NewXRay(db.Path())
 
 	path1, err := xRay.FindPathsToKey([]byte("0451"))
-	require.NoError(t, err, "Cannot find page that contains key:'0451'")
+	require.NoError(t, err, "cannot find page that contains key:'0451'")
 	require.Len(t, path1, 1, "Expected only one page that contains key:'0451'")
 
 	path2, err := xRay.FindPathsToKey([]byte("7563"))
-	require.NoError(t, err, "Cannot find page that contains key:'7563'")
+	require.NoError(t, err, "cannot find page that contains key:'7563'")
 	require.Len(t, path2, 1, "Expected only one page that contains key:'7563'")
 
 	srcPage := path1[0][len(path1[0])-1]
@@ -60,7 +61,7 @@ func TestTx_RecursivelyCheckPages_CorruptedLeaf(t *testing.T) {
 	xray := surgeon.NewXRay(db.Path())
 
 	path1, err := xray.FindPathsToKey([]byte("0451"))
-	require.NoError(t, err, "Cannot find page that contains key:'0451'")
+	require.NoError(t, err, "cannot find page that contains key:'0451'")
 	require.Len(t, path1, 1, "Expected only one page that contains key:'0451'")
 
 	srcPage := path1[0][len(path1[0])-1]

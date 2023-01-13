@@ -125,23 +125,11 @@ func (tx *Tx) recursivelyCheckPagesInternal(
 		runningMin := minKeyClosed
 		for i := range p.branchPageElements() {
 			elem := p.branchPageElement(uint16(i))
-			if i == 0 && runningMin != nil && compareKeys(runningMin, elem.key()) > 0 {
-				ch <- fmt.Errorf("key (%d, %s) on the branch page(%d) needs to be >="+
-					" to the key(%s) in the ancestor. Pages stack: %v",
-					i, keyToString(elem.key()), pgId, keyToString(runningMin), pagesStack)
-			}
+			verifyKeyOrder(elem.pgid, "branch", i, elem.key(), runningMin, maxKeyOpen, ch, keyToString, pagesStack)
 
-			if maxKeyOpen != nil && compareKeys(elem.key(), maxKeyOpen) >= 0 {
-				ch <- fmt.Errorf("key (%d: %s) on the branch page(%d) needs to be <"+
-					" than key of the next element reachable from the ancestor (%v). Pages stack: %v",
-					i, keyToString(elem.key()), pgId, keyToString(maxKeyOpen), pagesStack)
-			}
-
-			var maxKey []byte
+			maxKey := maxKeyOpen
 			if i < len(p.branchPageElements())-1 {
 				maxKey = p.branchPageElement(uint16(i + 1)).key()
-			} else {
-				maxKey = maxKeyOpen
 			}
 			maxKeyInSubtree = tx.recursivelyCheckPagesInternal(elem.pgid, elem.key(), maxKey, pagesStack, keyToString, ch)
 			runningMin = maxKeyInSubtree
@@ -151,25 +139,7 @@ func (tx *Tx) recursivelyCheckPagesInternal(
 		runningMin := minKeyClosed
 		for i := range p.leafPageElements() {
 			elem := p.leafPageElement(uint16(i))
-			if i == 0 && runningMin != nil && compareKeys(runningMin, elem.key()) > 0 {
-				ch <- fmt.Errorf("The first key[%d]=(hex)%s on leaf page(%d) needs to be >= the key in the ancestor (%s). Stack: %v",
-					i, keyToString(elem.key()), pgId, keyToString(runningMin), pagesStack)
-			}
-			if i > 0 {
-				cmpRet := compareKeys(runningMin, elem.key())
-				if cmpRet > 0 {
-					ch <- fmt.Errorf("key[%d]=(hex)%s on leaf page(%d) needs to be > (found <) than previous element (hex)%s. Stack: %v",
-						i, keyToString(elem.key()), pgId, keyToString(runningMin), pagesStack)
-				}
-				if cmpRet == 0 {
-					ch <- fmt.Errorf("key[%d]=(hex)%s on leaf page(%d) needs to be > (found =) than previous element (hex)%s. Stack: %v",
-						i, keyToString(elem.key()), pgId, keyToString(runningMin), pagesStack)
-				}
-			}
-			if maxKeyOpen != nil && compareKeys(elem.key(), maxKeyOpen) >= 0 {
-				ch <- fmt.Errorf("key[%d]=(hex)%s on leaf page(%d) needs to be < than key of the next element in ancestor (hex)%s. Pages stack: %v",
-					i, keyToString(elem.key()), pgId, keyToString(maxKeyOpen), pagesStack)
-			}
+			verifyKeyOrder(pgId, "leaf", i, elem.key(), runningMin, maxKeyOpen, ch, keyToString, pagesStack)
 			runningMin = elem.key()
 		}
 		if p.count > 0 {
@@ -179,6 +149,32 @@ func (tx *Tx) recursivelyCheckPagesInternal(
 		ch <- fmt.Errorf("unexpected page type for pgId:%d", pgId)
 	}
 	return maxKeyInSubtree
+}
+
+/***
+ * verifyKeyOrder checks whether an entry with given #index on pgId (pageType: "branch|leaf") that has given "key",
+ * is within range determined by (previousKey..maxKeyOpen) and reports found violations to the channel (ch).
+ */
+func verifyKeyOrder(pgId pgid, pageType string, index int, key []byte, previousKey []byte, maxKeyOpen []byte, ch chan error, keyToString func([]byte) string, pagesStack []pgid) {
+	if index == 0 && previousKey != nil && compareKeys(previousKey, key) > 0 {
+		ch <- fmt.Errorf("the first key[%d]=(hex)%s on %s page(%d) needs to be >= the key in the ancestor (%s). Stack: %v",
+			index, keyToString(key), pageType, pgId, keyToString(previousKey), pagesStack)
+	}
+	if index > 0 {
+		cmpRet := compareKeys(previousKey, key)
+		if cmpRet > 0 {
+			ch <- fmt.Errorf("key[%d]=(hex)%s on %s page(%d) needs to be > (found <) than previous element (hex)%s. Stack: %v",
+				index, keyToString(key), pageType, pgId, keyToString(previousKey), pagesStack)
+		}
+		if cmpRet == 0 {
+			ch <- fmt.Errorf("key[%d]=(hex)%s on %s page(%d) needs to be > (found =) than previous element (hex)%s. Stack: %v",
+				index, keyToString(key), pageType, pgId, keyToString(previousKey), pagesStack)
+		}
+	}
+	if maxKeyOpen != nil && compareKeys(key, maxKeyOpen) >= 0 {
+		ch <- fmt.Errorf("key[%d]=(hex)%s on %s page(%d) needs to be < than key of the next element in ancestor (hex)%s. Pages stack: %v",
+			index, keyToString(key), pageType, pgId, keyToString(previousKey), pagesStack)
+	}
 }
 
 // ===========================================================================================
