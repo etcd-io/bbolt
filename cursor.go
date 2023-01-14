@@ -172,13 +172,13 @@ func (c *Cursor) goToFirstElementOnTheStack() {
 		}
 
 		// Keep adding pages pointing to the first element to the stack.
-		var pgid pgid
+		var pgId pgid
 		if ref.node != nil {
-			pgid = ref.node.inodes[ref.index].pgid
+			pgId = ref.node.inodes[ref.index].pgid
 		} else {
-			pgid = ref.page.branchPageElement(uint16(ref.index)).pgid
+			pgId = ref.page.branchPageElement(uint16(ref.index)).pgid
 		}
-		p, n := c.bucket.pageNode(pgid)
+		p, n := c.bucket.pageNode(pgId)
 		c.stack = append(c.stack, elemRef{page: p, node: n, index: 0})
 	}
 }
@@ -193,13 +193,13 @@ func (c *Cursor) last() {
 		}
 
 		// Keep adding pages pointing to the last element in the stack.
-		var pgid pgid
+		var pgId pgid
 		if ref.node != nil {
-			pgid = ref.node.inodes[ref.index].pgid
+			pgId = ref.node.inodes[ref.index].pgid
 		} else {
-			pgid = ref.page.branchPageElement(uint16(ref.index)).pgid
+			pgId = ref.page.branchPageElement(uint16(ref.index)).pgid
 		}
-		p, n := c.bucket.pageNode(pgid)
+		p, n := c.bucket.pageNode(pgId)
 
 		var nextRef = elemRef{page: p, node: n}
 		nextRef.index = nextRef.count() - 1
@@ -268,8 +268,8 @@ func (c *Cursor) prev() (key []byte, value []byte, flags uint32) {
 }
 
 // search recursively performs a binary search against a given page/node until it finds a given key.
-func (c *Cursor) search(key []byte, pgid pgid) {
-	p, n := c.bucket.pageNode(pgid)
+func (c *Cursor) search(key []byte, pgId pgid) {
+	p, n := c.bucket.pageNode(pgId)
 	if p != nil && (p.flags&(branchPageFlag|leafPageFlag)) == 0 {
 		panic(fmt.Sprintf("invalid page type: %d: %x", p.id, p.flags))
 	}
