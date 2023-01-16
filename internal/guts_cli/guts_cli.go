@@ -64,6 +64,10 @@ func (m *Meta) RootBucket() *Bucket {
 	return &m.root
 }
 
+func (m *Meta) Txid() uint64 {
+	return uint64(m.txid)
+}
+
 func (m *Meta) Print(w io.Writer) {
 	fmt.Fprintf(w, "Version:    %d\n", m.version)
 	fmt.Fprintf(w, "Page Size:  %d bytes\n", m.pageSize)
