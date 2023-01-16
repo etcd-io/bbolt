@@ -71,19 +71,25 @@ func main() {
 	}
 }
 
-// Main represents the main program execution.
-type Main struct {
+type baseCommand struct {
 	Stdin  io.Reader
 	Stdout io.Writer
 	Stderr io.Writer
 }
 
+// Main represents the main program execution.
+type Main struct {
+	baseCommand
+}
+
 // NewMain returns a new instance of Main connect to the standard input/output.
 func NewMain() *Main {
 	return &Main{
-		Stdin:  os.Stdin,
-		Stdout: os.Stdout,
-		Stderr: os.Stderr,
+		baseCommand: baseCommand{
+			Stdin:  os.Stdin,
+			Stdout: os.Stdout,
+			Stderr: os.Stderr,
+		},
 	}
 }
 
@@ -160,18 +166,14 @@ Use "bbolt [command] -h" for more information about a command.
 
 // CheckCommand represents the "check" command execution.
 type CheckCommand struct {
-	Stdin  io.Reader
-	Stdout io.Writer
-	Stderr io.Writer
+	baseCommand
 }
 
 // NewCheckCommand returns a CheckCommand.
 func newCheckCommand(m *Main) *CheckCommand {
-	return &CheckCommand{
-		Stdin:  m.Stdin,
-		Stdout: m.Stdout,
-		Stderr: m.Stderr,
-	}
+	c := &CheckCommand{}
+	c.baseCommand = m.baseCommand
+	return c
 }
 
 // Run executes the command.
@@ -240,18 +242,14 @@ return after all pages have been checked.
 
 // InfoCommand represents the "info" command execution.
 type InfoCommand struct {
-	Stdin  io.Reader
-	Stdout io.Writer
-	Stderr io.Writer
+	baseCommand
 }
 
 // NewInfoCommand returns a InfoCommand.
 func newInfoCommand(m *Main) *InfoCommand {
-	return &InfoCommand{
-		Stdin:  m.Stdin,
-		Stdout: m.Stdout,
-		Stderr: m.Stderr,
-	}
+	c := &InfoCommand{}
+	c.baseCommand = m.baseCommand
+	return c
 }
 
 // Run executes the command.
@@ -299,18 +297,14 @@ Info prints basic information about the Bolt database at PATH.
 
 // DumpCommand represents the "dump" command execution.
 type DumpCommand struct {
-	Stdin  io.Reader
-	Stdout io.Writer
-	Stderr io.Writer
+	baseCommand
 }
 
 // newDumpCommand returns a DumpCommand.
 func newDumpCommand(m *Main) *DumpCommand {
-	return &DumpCommand{
-		Stdin:  m.Stdin,
-		Stdout: m.Stdout,
-		Stderr: m.Stderr,
-	}
+	c := &DumpCommand{}
+	c.baseCommand = m.baseCommand
+	return c
 }
 
 // Run executes the command.
@@ -426,18 +420,14 @@ Dump prints a hexadecimal dump of one or more pages.
 
 // PageItemCommand represents the "page-item" command execution.
 type PageItemCommand struct {
-	Stdin  io.Reader
-	Stdout io.Writer
-	Stderr io.Writer
+	baseCommand
 }
 
 // newPageItemCommand returns a PageItemCommand.
 func newPageItemCommand(m *Main) *PageItemCommand {
-	return &PageItemCommand{
-		Stdin:  m.Stdin,
-		Stdout: m.Stdout,
-		Stderr: m.Stderr,
-	}
+	c := &PageItemCommand{}
+	c.baseCommand = m.baseCommand
+	return c
 }
 
 type pageItemOptions struct {
@@ -608,18 +598,14 @@ page-item prints a page item key and value.
 
 // PagesCommand represents the "pages" command execution.
 type PagesCommand struct {
-	Stdin  io.Reader
-	Stdout io.Writer
-	Stderr io.Writer
+	baseCommand
 }
 
 // NewPagesCommand returns a PagesCommand.
 func newPagesCommand(m *Main) *PagesCommand {
-	return &PagesCommand{
-		Stdin:  m.Stdin,
-		Stdout: m.Stdout,
-		Stderr: m.Stderr,
-	}
+	c := &PagesCommand{}
+	c.baseCommand = m.baseCommand
+	return c
 }
 
 // Run executes the command.
@@ -705,18 +691,14 @@ a single page to take up multiple blocks.
 
 // StatsCommand represents the "stats" command execution.
 type StatsCommand struct {
-	Stdin  io.Reader
-	Stdout io.Writer
-	Stderr io.Writer
+	baseCommand
 }
 
 // NewStatsCommand returns a StatsCommand.
 func newStatsCommand(m *Main) *StatsCommand {
-	return &StatsCommand{
-		Stdin:  m.Stdin,
-		Stdout: m.Stdout,
-		Stderr: m.Stderr,
-	}
+	c := &StatsCommand{}
+	c.baseCommand = m.baseCommand
+	return c
 }
 
 // Run executes the command.
@@ -840,18 +822,14 @@ experience corruption, please submit a ticket to the Bolt project page:
 
 // BucketsCommand represents the "buckets" command execution.
 type BucketsCommand struct {
-	Stdin  io.Reader
-	Stdout io.Writer
-	Stderr io.Writer
+	baseCommand
 }
 
 // NewBucketsCommand returns a BucketsCommand.
 func newBucketsCommand(m *Main) *BucketsCommand {
-	return &BucketsCommand{
-		Stdin:  m.Stdin,
-		Stdout: m.Stdout,
-		Stderr: m.Stderr,
-	}
+	c := &BucketsCommand{}
+	c.baseCommand = m.baseCommand
+	return c
 }
 
 // Run executes the command.
@@ -901,18 +879,14 @@ Print a list of buckets.
 
 // KeysCommand represents the "keys" command execution.
 type KeysCommand struct {
-	Stdin  io.Reader
-	Stdout io.Writer
-	Stderr io.Writer
+	baseCommand
 }
 
 // NewKeysCommand returns a KeysCommand.
 func newKeysCommand(m *Main) *KeysCommand {
-	return &KeysCommand{
-		Stdin:  m.Stdin,
-		Stdout: m.Stdout,
-		Stderr: m.Stderr,
-	}
+	c := &KeysCommand{}
+	c.baseCommand = m.baseCommand
+	return c
 }
 
 // Run executes the command.
@@ -987,18 +961,14 @@ Print a list of keys in the given bucket.
 
 // GetCommand represents the "get" command execution.
 type GetCommand struct {
-	Stdin  io.Reader
-	Stdout io.Writer
-	Stderr io.Writer
+	baseCommand
 }
 
 // NewGetCommand returns a GetCommand.
 func newGetCommand(m *Main) *GetCommand {
-	return &GetCommand{
-		Stdin:  m.Stdin,
-		Stdout: m.Stdout,
-		Stderr: m.Stderr,
-	}
+	c := &GetCommand{}
+	c.baseCommand = m.baseCommand
+	return c
 }
 
 // Run executes the command.
@@ -1086,18 +1056,14 @@ var benchBucketName = []byte("bench")
 
 // BenchCommand represents the "bench" command execution.
 type BenchCommand struct {
-	Stdin  io.Reader
-	Stdout io.Writer
-	Stderr io.Writer
+	baseCommand
 }
 
 // NewBenchCommand returns a BenchCommand using the
 func newBenchCommand(m *Main) *BenchCommand {
-	return &BenchCommand{
-		Stdin:  m.Stdin,
-		Stdout: m.Stdout,
-		Stderr: m.Stderr,
-	}
+	c := &BenchCommand{}
+	c.baseCommand = m.baseCommand
+	return c
 }
 
 // Run executes the "bench" command.
@@ -1597,9 +1563,7 @@ func stringToPages(strs []string) ([]uint64, error) {
 
 // CompactCommand represents the "compact" command execution.
 type CompactCommand struct {
-	Stdin  io.Reader
-	Stdout io.Writer
-	Stderr io.Writer
+	baseCommand
 
 	SrcPath   string
 	DstPath   string
@@ -1608,11 +1572,9 @@ type CompactCommand struct {
 
 // newCompactCommand returns a CompactCommand.
 func newCompactCommand(m *Main) *CompactCommand {
-	return &CompactCommand{
-		Stdin:  m.Stdin,
-		Stdout: m.Stdout,
-		Stderr: m.Stderr,
-	}
+	c := &CompactCommand{}
+	c.baseCommand = m.baseCommand
+	return c
 }
 
 // Run executes the command.
