@@ -130,6 +130,8 @@ func (m *Main) Run(args ...string) error {
 		return newPagesCommand(m).Run(args[1:]...)
 	case "stats":
 		return newStatsCommand(m).Run(args[1:]...)
+	case "surgery":
+		return newSurgeryCommand(m).Run(args[1:]...)
 	default:
 		return ErrUnknownCommand
 	}
@@ -159,6 +161,7 @@ The commands are:
     pages       print list of pages with their types
     page-item   print the key and value of a page item.
     stats       iterate over all pages and generate usage stats
+    surgery     perform surgery on bbolt database
 
 Use "bbolt [command] -h" for more information about a command.
 `, "\n")
