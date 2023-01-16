@@ -13,18 +13,14 @@ import (
 
 // PageCommand represents the "page" command execution.
 type PageCommand struct {
-	Stdin  io.Reader
-	Stdout io.Writer
-	Stderr io.Writer
+	baseCommand
 }
 
 // newPageCommand returns a PageCommand.
 func newPageCommand(m *Main) *PageCommand {
-	return &PageCommand{
-		Stdin:  m.Stdin,
-		Stdout: m.Stdout,
-		Stderr: m.Stderr,
-	}
+	c := &PageCommand{}
+	c.baseCommand = m.baseCommand
+	return c
 }
 
 // Run executes the command.
