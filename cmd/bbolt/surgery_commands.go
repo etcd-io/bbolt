@@ -80,15 +80,12 @@ func newRevertMetaPageCommand(m *SurgeryCommand) *RevertMetaPageCommand {
 func (cmd *RevertMetaPageCommand) Run(args ...string) error {
 	// Parse flags.
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	fs.StringVar(&cmd.DstPath, "o", "", "")
-	if err := fs.Parse(args); err == flag.ErrHelp {
+	help := fs.Bool("h", false, "")
+	if err := fs.Parse(args); err != nil {
+		return err
+	} else if *help {
 		fmt.Fprintln(cmd.Stderr, cmd.Usage())
 		return ErrUsage
-	} else if err != nil {
-		return err
-	} else if cmd.DstPath == "" {
-		return errors.New("output file required")
 	}
 
 	// Require database paths.
@@ -97,14 +94,18 @@ func (cmd *RevertMetaPageCommand) Run(args ...string) error {
 		return ErrPathRequired
 	}
 
+	cmd.DstPath = fs.Arg(1)
+	if cmd.DstPath == "" {
+		return errors.New("output file required")
+	}
+
 	// Ensure source file exists.
-	fi, err := os.Stat(cmd.SrcPath)
+	_, err := os.Stat(cmd.SrcPath)
 	if os.IsNotExist(err) {
 		return ErrFileNotFound
 	} else if err != nil {
 		return err
 	}
-	initialSize := fi.Size()
 
 	// Ensure output file not exist.
 	_, err = os.Stat(cmd.DstPath)
@@ -115,22 +116,8 @@ func (cmd *RevertMetaPageCommand) Run(args ...string) error {
 	}
 
 	// Copy database from SrcPath to DstPath
-	srcDB, err := os.Open(cmd.SrcPath)
-	if err != nil {
-		return fmt.Errorf("failed to open source file %q: %w", cmd.SrcPath, err)
-	}
-	defer srcDB.Close()
-	dstDB, err := os.Create(cmd.DstPath)
-	if err != nil {
-		return fmt.Errorf("failed to create output file %q: %w", cmd.DstPath, err)
-	}
-	defer dstDB.Close()
-	written, err := io.Copy(dstDB, srcDB)
-	if err != nil {
-		return fmt.Errorf("failed to copy database file from %q to %q: %w", cmd.SrcPath, cmd.DstPath, err)
-	}
-	if initialSize != written {
-		return fmt.Errorf("the byte copied (%q: %d) isn't equal to the initial db size (%q: %d)", cmd.DstPath, written, cmd.SrcPath, initialSize)
+	if err := copyFile(cmd.SrcPath, cmd.DstPath); err != nil {
+		return fmt.Errorf("failed to copy file: %w", err)
 	}
 
 	// revert the meta page
@@ -139,6 +126,34 @@ func (cmd *RevertMetaPageCommand) Run(args ...string) error {
 	}
 
 	fmt.Fprintln(cmd.Stdout, "The meta page is reverted.")
+	return nil
+}
+
+func copyFile(srcPath, dstPath string) error {
+	srcDB, err := os.Open(srcPath)
+	if err != nil {
+		return fmt.Errorf("failed to open source file %q: %w", srcPath, err)
+	}
+	defer srcDB.Close()
+	dstDB, err := os.Create(dstPath)
+	if err != nil {
+		return fmt.Errorf("failed to create output file %q: %w", dstPath, err)
+	}
+	defer dstDB.Close()
+	written, err := io.Copy(dstDB, srcDB)
+	if err != nil {
+		return fmt.Errorf("failed to copy database file from %q to %q: %w", srcPath, dstPath, err)
+	}
+
+	srcFi, err := srcDB.Stat()
+	if err != nil {
+		return fmt.Errorf("failed to get source file info %q: %w", srcPath, err)
+	}
+	initialSize := srcFi.Size()
+	if initialSize != written {
+		return fmt.Errorf("the byte copied (%q: %d) isn't equal to the initial db size (%q: %d)", dstPath, written, srcPath, initialSize)
+	}
+
 	return nil
 }
 
