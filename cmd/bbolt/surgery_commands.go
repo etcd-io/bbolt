@@ -11,20 +11,23 @@ import (
 	"go.etcd.io/bbolt/internal/surgeon"
 )
 
-// SurgeryCommand represents the "surgery" command execution.
-type SurgeryCommand struct {
+// surgeryCommand represents the "surgery" command execution.
+type surgeryCommand struct {
 	baseCommand
+
+	srcPath string
+	dstPath string
 }
 
 // newSurgeryCommand returns a SurgeryCommand.
-func newSurgeryCommand(m *Main) *SurgeryCommand {
-	c := &SurgeryCommand{}
+func newSurgeryCommand(m *Main) *surgeryCommand {
+	c := &surgeryCommand{}
 	c.baseCommand = m.baseCommand
 	return c
 }
 
 // Run executes the `surgery` program.
-func (cmd *SurgeryCommand) Run(args ...string) error {
+func (cmd *surgeryCommand) Run(args ...string) error {
 	// Require a command at the beginning.
 	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
 		fmt.Fprintln(cmd.Stderr, cmd.Usage())
@@ -44,7 +47,7 @@ func (cmd *SurgeryCommand) Run(args ...string) error {
 }
 
 // Usage returns the help message.
-func (cmd *SurgeryCommand) Usage() string {
+func (cmd *surgeryCommand) Usage() string {
 	return strings.TrimLeft(`
 Surgery is a command for performing low level update on bbolt databases.
 
@@ -61,23 +64,20 @@ Use "bbolt surgery [command] -h" for more information about a command.
 `, "\n")
 }
 
-// RevertMetaPageCommand represents the "surgery revert-meta-page" command execution.
-type RevertMetaPageCommand struct {
-	baseCommand
-
-	SrcPath string
-	DstPath string
+// revertMetaPageCommand represents the "surgery revert-meta-page" command execution.
+type revertMetaPageCommand struct {
+	surgeryCommand
 }
 
-// newRevertMetaPageCommand returns a RevertMetaPageCommand.
-func newRevertMetaPageCommand(m *SurgeryCommand) *RevertMetaPageCommand {
-	c := &RevertMetaPageCommand{}
-	c.baseCommand = m.baseCommand
+// newRevertMetaPageCommand returns a revertMetaPageCommand.
+func newRevertMetaPageCommand(m *surgeryCommand) *revertMetaPageCommand {
+	c := &revertMetaPageCommand{}
+	c.surgeryCommand = *m
 	return c
 }
 
 // Run executes the command.
-func (cmd *RevertMetaPageCommand) Run(args ...string) error {
+func (cmd *revertMetaPageCommand) Run(args ...string) error {
 	// Parse flags.
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	help := fs.Bool("h", false, "")
@@ -89,18 +89,18 @@ func (cmd *RevertMetaPageCommand) Run(args ...string) error {
 	}
 
 	// Require database paths.
-	cmd.SrcPath = fs.Arg(0)
-	if cmd.SrcPath == "" {
+	cmd.srcPath = fs.Arg(0)
+	if cmd.srcPath == "" {
 		return ErrPathRequired
 	}
 
-	cmd.DstPath = fs.Arg(1)
-	if cmd.DstPath == "" {
+	cmd.dstPath = fs.Arg(1)
+	if cmd.dstPath == "" {
 		return errors.New("output file required")
 	}
 
 	// Ensure source file exists.
-	_, err := os.Stat(cmd.SrcPath)
+	_, err := os.Stat(cmd.srcPath)
 	if os.IsNotExist(err) {
 		return ErrFileNotFound
 	} else if err != nil {
@@ -108,20 +108,20 @@ func (cmd *RevertMetaPageCommand) Run(args ...string) error {
 	}
 
 	// Ensure output file not exist.
-	_, err = os.Stat(cmd.DstPath)
+	_, err = os.Stat(cmd.dstPath)
 	if err == nil {
-		return fmt.Errorf("output file %q already exists", cmd.DstPath)
+		return fmt.Errorf("output file %q already exists", cmd.dstPath)
 	} else if !os.IsNotExist(err) {
 		return err
 	}
 
 	// Copy database from SrcPath to DstPath
-	if err := copyFile(cmd.SrcPath, cmd.DstPath); err != nil {
+	if err := copyFile(cmd.srcPath, cmd.dstPath); err != nil {
 		return fmt.Errorf("failed to copy file: %w", err)
 	}
 
 	// revert the meta page
-	if err = surgeon.RevertMetaPage(cmd.DstPath); err != nil {
+	if err = surgeon.RevertMetaPage(cmd.dstPath); err != nil {
 		return err
 	}
 
@@ -158,7 +158,7 @@ func copyFile(srcPath, dstPath string) error {
 }
 
 // Usage returns the help message.
-func (cmd *RevertMetaPageCommand) Usage() string {
+func (cmd *revertMetaPageCommand) Usage() string {
 	return strings.TrimLeft(`
 usage: bolt surgery revert-meta-page -o DST SRC
 
