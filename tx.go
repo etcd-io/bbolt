@@ -156,6 +156,8 @@ func (tx *Tx) Commit() error {
 		tx.stats.IncRebalanceTime(time.Since(startTime))
 	}
 
+	opgid := tx.meta.pgid
+
 	// spill data onto dirty pages.
 	startTime = time.Now()
 	if err := tx.root.spill(); err != nil {
@@ -179,6 +181,14 @@ func (tx *Tx) Commit() error {
 		}
 	} else {
 		tx.meta.freelist = pgidNoFreelist
+	}
+
+	// If the high water mark has moved up then attempt to grow the database.
+	if tx.meta.pgid > opgid {
+		if err := tx.db.grow(int(tx.meta.pgid+1) * tx.db.pageSize); err != nil {
+			tx.rollback()
+			return err
+		}
 	}
 
 	// Write dirty pages to disk.
@@ -225,7 +235,6 @@ func (tx *Tx) Commit() error {
 func (tx *Tx) commitFreelist() error {
 	// Allocate new pages for the new free list. This will overestimate
 	// the size of the freelist but not underestimate the size (which would be bad).
-	opgid := tx.meta.pgid
 	p, err := tx.allocate((tx.db.freelist.size() / tx.db.pageSize) + 1)
 	if err != nil {
 		tx.rollback()
@@ -236,13 +245,6 @@ func (tx *Tx) commitFreelist() error {
 		return err
 	}
 	tx.meta.freelist = p.id
-	// If the high water mark has moved up then attempt to grow the database.
-	if tx.meta.pgid > opgid {
-		if err := tx.db.grow(int(tx.meta.pgid+1) * tx.db.pageSize); err != nil {
-			tx.rollback()
-			return err
-		}
-	}
 
 	return nil
 }
