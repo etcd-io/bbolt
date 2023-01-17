@@ -1,7 +1,7 @@
 package main_test
 
 import (
-	bolt "go.etcd.io/bbolt"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	bolt "go.etcd.io/bbolt"
 	"go.etcd.io/bbolt/internal/btesting"
 	"go.etcd.io/bbolt/internal/guts_cli"
 )
@@ -18,12 +19,15 @@ func TestSurgery_RevertMetaPage(t *testing.T) {
 	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: pageSize})
 	srcPath := db.Path()
 
+	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
+
 	srcFile, err := os.Open(srcPath)
 	require.NoError(t, err)
 	defer srcFile.Close()
 
 	// Read both meta0 and meta1 from srcFile
-	srcBuf0, srcBuf1 := readBothMetaPages(t, srcPath, pageSize)
+	srcBuf0 := readPage(t, srcPath, 0, pageSize)
+	srcBuf1 := readPage(t, srcPath, 1, pageSize)
 	meta0Page := guts_cli.LoadPageMeta(srcBuf0)
 	meta1Page := guts_cli.LoadPageMeta(srcBuf1)
 
@@ -43,32 +47,63 @@ func TestSurgery_RevertMetaPage(t *testing.T) {
 	require.NoError(t, err)
 
 	// read both meta0 and meta1 from dst file
-	dstBuf0, dstBuf1 := readBothMetaPages(t, dstPath, pageSize)
+	dstBuf0 := readPage(t, dstPath, 0, pageSize)
+	dstBuf1 := readPage(t, dstPath, 1, pageSize)
 
 	// check result. Note we should skip the page ID
 	assert.Equal(t, pageDataWithoutPageId(nonActiveSrcBuf), pageDataWithoutPageId(dstBuf0))
 	assert.Equal(t, pageDataWithoutPageId(nonActiveSrcBuf), pageDataWithoutPageId(dstBuf1))
 }
 
-func pageDataWithoutPageId(buf []byte) []byte {
-	return buf[8:]
+func TestSurgery_CopyPage(t *testing.T) {
+	pageSize := 4096
+	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: pageSize})
+	srcPath := db.Path()
+
+	// Insert some sample data
+	t.Log("Insert some sample data")
+	err := db.Fill([]byte("data"), 1, 20,
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
+		func(tx int, k int) []byte { return make([]byte, 10) },
+	)
+	require.NoError(t, err)
+
+	defer requireDBNoChange(t, dbData(t, srcPath), srcPath)
+
+	// revert the meta page
+	t.Log("copy page 3 to page 2")
+	dstPath := filepath.Join(t.TempDir(), "dstdb")
+	m := NewMain()
+	err = m.Run("surgery", "copy-page", srcPath, dstPath, "3", "2")
+	require.NoError(t, err)
+
+	// The page 2 should have exactly the same data as page 3.
+	t.Log("Verify result")
+	srcPageId3Data := readPage(t, srcPath, 3, pageSize)
+	dstPageId3Data := readPage(t, dstPath, 3, pageSize)
+	dstPageId2Data := readPage(t, dstPath, 2, pageSize)
+
+	assert.Equal(t, srcPageId3Data, dstPageId3Data)
+	assert.Equal(t, pageDataWithoutPageId(srcPageId3Data), pageDataWithoutPageId(dstPageId2Data))
 }
 
-func readBothMetaPages(t *testing.T, filePath string, pageSize int) ([]byte, []byte) {
-	dbFile, err := os.Open(filePath)
+func readPage(t *testing.T, path string, pageId int, pageSize int) []byte {
+	dbFile, err := os.Open(path)
 	require.NoError(t, err)
 	defer dbFile.Close()
 
-	buf0 := make([]byte, pageSize)
-	buf1 := make([]byte, pageSize)
-
-	meta0Len, err := dbFile.ReadAt(buf0, 0)
+	fi, err := dbFile.Stat()
 	require.NoError(t, err)
-	require.Equal(t, pageSize, meta0Len)
+	require.GreaterOrEqual(t, fi.Size(), int64((pageId+1)*pageSize))
 
-	meta1Len, err := dbFile.ReadAt(buf1, int64(pageSize))
+	buf := make([]byte, pageSize)
+	byteRead, err := dbFile.ReadAt(buf, int64(pageId*pageSize))
 	require.NoError(t, err)
-	require.Equal(t, pageSize, meta1Len)
+	require.Equal(t, pageSize, byteRead)
 
-	return buf0, buf1
+	return buf
+}
+
+func pageDataWithoutPageId(buf []byte) []byte {
+	return buf[8:]
 }

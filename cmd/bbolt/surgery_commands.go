@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
+	"go.etcd.io/bbolt/internal/guts_cli"
 	"go.etcd.io/bbolt/internal/surgeon"
 )
 
@@ -41,53 +43,14 @@ func (cmd *surgeryCommand) Run(args ...string) error {
 		return ErrUsage
 	case "revert-meta-page":
 		return newRevertMetaPageCommand(cmd).Run(args[1:]...)
+	case "copy-page":
+		return newCopyPageCommand(cmd).Run(args[1:]...)
 	default:
 		return ErrUnknownCommand
 	}
 }
 
-// Usage returns the help message.
-func (cmd *surgeryCommand) Usage() string {
-	return strings.TrimLeft(`
-Surgery is a command for performing low level update on bbolt databases.
-
-Usage:
-
-	bbolt surgery command [arguments]
-
-The commands are:
-
-    help                   print this screen
-    revert-meta-page       revert the meta page change made by the last transaction
-
-Use "bbolt surgery [command] -h" for more information about a command.
-`, "\n")
-}
-
-// revertMetaPageCommand represents the "surgery revert-meta-page" command execution.
-type revertMetaPageCommand struct {
-	surgeryCommand
-}
-
-// newRevertMetaPageCommand returns a revertMetaPageCommand.
-func newRevertMetaPageCommand(m *surgeryCommand) *revertMetaPageCommand {
-	c := &revertMetaPageCommand{}
-	c.surgeryCommand = *m
-	return c
-}
-
-// Run executes the command.
-func (cmd *revertMetaPageCommand) Run(args ...string) error {
-	// Parse flags.
-	fs := flag.NewFlagSet("", flag.ContinueOnError)
-	help := fs.Bool("h", false, "")
-	if err := fs.Parse(args); err != nil {
-		return err
-	} else if *help {
-		fmt.Fprintln(cmd.Stderr, cmd.Usage())
-		return ErrUsage
-	}
-
+func (cmd *surgeryCommand) parsePathsAndCopyFile(fs *flag.FlagSet) error {
 	// Require database paths.
 	cmd.srcPath = fs.Arg(0)
 	if cmd.srcPath == "" {
@@ -120,12 +83,6 @@ func (cmd *revertMetaPageCommand) Run(args ...string) error {
 		return fmt.Errorf("failed to copy file: %w", err)
 	}
 
-	// revert the meta page
-	if err = surgeon.RevertMetaPage(cmd.dstPath); err != nil {
-		return err
-	}
-
-	fmt.Fprintln(cmd.Stdout, "The meta page is reverted.")
 	return nil
 }
 
@@ -158,13 +115,128 @@ func copyFile(srcPath, dstPath string) error {
 }
 
 // Usage returns the help message.
+func (cmd *surgeryCommand) Usage() string {
+	return strings.TrimLeft(`
+Surgery is a command for performing low level update on bbolt databases.
+
+Usage:
+
+	bbolt surgery command [arguments]
+
+The commands are:
+    copy-page              copy page from source pageid to target pageid	
+    help                   print this screen
+    revert-meta-page       revert the meta page change made by the last transaction
+
+Use "bbolt surgery [command] -h" for more information about a command.
+`, "\n")
+}
+
+// revertMetaPageCommand represents the "surgery revert-meta-page" command execution.
+type revertMetaPageCommand struct {
+	*surgeryCommand
+}
+
+// newRevertMetaPageCommand returns a revertMetaPageCommand.
+func newRevertMetaPageCommand(m *surgeryCommand) *revertMetaPageCommand {
+	c := &revertMetaPageCommand{}
+	c.surgeryCommand = m
+	return c
+}
+
+// Run executes the command.
+func (cmd *revertMetaPageCommand) Run(args ...string) error {
+	// Parse flags.
+	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	help := fs.Bool("h", false, "")
+	if err := fs.Parse(args); err != nil {
+		return err
+	} else if *help {
+		fmt.Fprintln(cmd.Stderr, cmd.Usage())
+		return ErrUsage
+	}
+
+	if err := cmd.parsePathsAndCopyFile(fs); err != nil {
+		return fmt.Errorf("revertMetaPageCommand failed to parse paths and copy file: %w", err)
+	}
+
+	// revert the meta page
+	if err := surgeon.RevertMetaPage(cmd.dstPath); err != nil {
+		return fmt.Errorf("revertMetaPageCommand failed: %w", err)
+	}
+
+	fmt.Fprintln(cmd.Stdout, "The meta page is reverted.")
+	return nil
+}
+
+// Usage returns the help message.
 func (cmd *revertMetaPageCommand) Usage() string {
 	return strings.TrimLeft(`
-usage: bolt surgery revert-meta-page -o DST SRC
+usage: bolt surgery revert-meta-page SRC DST
 
 RevertMetaPage copies the database file at SRC to a newly created database
 file at DST. Afterwards, it reverts the meta page on the newly created
 database at DST.
+
+The original database is left untouched.
+`, "\n")
+}
+
+// copyPageCommand represents the "surgery copy-page" command execution.
+type copyPageCommand struct {
+	*surgeryCommand
+}
+
+// newCopyPageCommand returns a copyPageCommand.
+func newCopyPageCommand(m *surgeryCommand) *copyPageCommand {
+	c := &copyPageCommand{}
+	c.surgeryCommand = m
+	return c
+}
+
+// Run executes the command.
+func (cmd *copyPageCommand) Run(args ...string) error {
+	// Parse flags.
+	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	help := fs.Bool("h", false, "")
+	if err := fs.Parse(args); err != nil {
+		return err
+	} else if *help {
+		fmt.Fprintln(cmd.Stderr, cmd.Usage())
+		return ErrUsage
+	}
+
+	if err := cmd.parsePathsAndCopyFile(fs); err != nil {
+		return fmt.Errorf("copyPageCommand failed to parse paths and copy file: %w", err)
+	}
+
+	// Read page id.
+	srcPageId, err := strconv.ParseUint(fs.Arg(2), 10, 64)
+	if err != nil {
+		return err
+	}
+	dstPageId, err := strconv.ParseUint(fs.Arg(3), 10, 64)
+	if err != nil {
+		return err
+	}
+
+	// copy the page
+	if err := surgeon.CopyPage(cmd.dstPath, guts_cli.Pgid(srcPageId), guts_cli.Pgid(dstPageId)); err != nil {
+		return fmt.Errorf("copyPageCommand failed: %w", err)
+	}
+
+	fmt.Fprintf(cmd.Stdout, "The page %d was copied to page %d", srcPageId, dstPageId)
+	return nil
+}
+
+// Usage returns the help message.
+func (cmd *copyPageCommand) Usage() string {
+	return strings.TrimLeft(`
+usage: bolt surgery copy-page SRC DST srcPageId dstPageid
+
+CopyPage copies the database file at SRC to a newly created database
+file at DST. Afterwards, it copies the page at srcPageId to the page
+at dstPageId in DST.
 
 The original database is left untouched.
 `, "\n")
