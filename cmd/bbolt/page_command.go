@@ -11,20 +11,20 @@ import (
 	"go.etcd.io/bbolt/internal/guts_cli"
 )
 
-// PageCommand represents the "page" command execution.
-type PageCommand struct {
+// pageCommand represents the "page" command execution.
+type pageCommand struct {
 	baseCommand
 }
 
-// newPageCommand returns a PageCommand.
-func newPageCommand(m *Main) *PageCommand {
-	c := &PageCommand{}
+// newPageCommand returns a pageCommand.
+func newPageCommand(m *Main) *pageCommand {
+	c := &pageCommand{}
 	c.baseCommand = m.baseCommand
 	return c
 }
 
 // Run executes the command.
-func (cmd *PageCommand) Run(args ...string) error {
+func (cmd *pageCommand) Run(args ...string) error {
 	// Parse flags.
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	help := fs.Bool("h", false, "")
@@ -61,7 +61,7 @@ func (cmd *PageCommand) Run(args ...string) error {
 	return nil
 }
 
-func (cmd *PageCommand) printPages(pageIDs []uint64, path string, formatValue *string) {
+func (cmd *pageCommand) printPages(pageIDs []uint64, path string, formatValue *string) {
 	// Print each page listed.
 	for i, pageID := range pageIDs {
 		// Print a separator.
@@ -75,7 +75,7 @@ func (cmd *PageCommand) printPages(pageIDs []uint64, path string, formatValue *s
 	}
 }
 
-func (cmd *PageCommand) printAllPages(path string, formatValue *string) {
+func (cmd *pageCommand) printAllPages(path string, formatValue *string) {
 	_, hwm, err := guts_cli.ReadPageAndHWMSize(path)
 	if err != nil {
 		fmt.Fprintf(cmd.Stdout, "cannot read number of pages: %v", err)
@@ -98,7 +98,7 @@ func (cmd *PageCommand) printAllPages(path string, formatValue *string) {
 }
 
 // printPage prints given page to cmd.Stdout and returns error or number of interpreted pages.
-func (cmd *PageCommand) printPage(path string, pageID uint64, formatValue string) (numPages uint32, reterr error) {
+func (cmd *pageCommand) printPage(path string, pageID uint64, formatValue string) (numPages uint32, reterr error) {
 	defer func() {
 		if err := recover(); err != nil {
 			reterr = fmt.Errorf("%s", err)
@@ -135,14 +135,14 @@ func (cmd *PageCommand) printPage(path string, pageID uint64, formatValue string
 }
 
 // PrintMeta prints the data from the meta page.
-func (cmd *PageCommand) PrintMeta(w io.Writer, buf []byte) error {
+func (cmd *pageCommand) PrintMeta(w io.Writer, buf []byte) error {
 	m := guts_cli.LoadPageMeta(buf)
 	m.Print(w)
 	return nil
 }
 
 // PrintLeaf prints the data for a leaf page.
-func (cmd *PageCommand) PrintLeaf(w io.Writer, buf []byte, formatValue string) error {
+func (cmd *pageCommand) PrintLeaf(w io.Writer, buf []byte, formatValue string) error {
 	p := guts_cli.LoadPage(buf)
 
 	// Print number of items.
@@ -181,7 +181,7 @@ func (cmd *PageCommand) PrintLeaf(w io.Writer, buf []byte, formatValue string) e
 }
 
 // PrintBranch prints the data for a leaf page.
-func (cmd *PageCommand) PrintBranch(w io.Writer, buf []byte) error {
+func (cmd *pageCommand) PrintBranch(w io.Writer, buf []byte) error {
 	p := guts_cli.LoadPage(buf)
 
 	// Print number of items.
@@ -207,7 +207,7 @@ func (cmd *PageCommand) PrintBranch(w io.Writer, buf []byte) error {
 }
 
 // PrintFreelist prints the data for a freelist page.
-func (cmd *PageCommand) PrintFreelist(w io.Writer, buf []byte) error {
+func (cmd *pageCommand) PrintFreelist(w io.Writer, buf []byte) error {
 	p := guts_cli.LoadPage(buf)
 
 	// Print number of items.
@@ -226,7 +226,7 @@ func (cmd *PageCommand) PrintFreelist(w io.Writer, buf []byte) error {
 }
 
 // PrintPage prints a given page as hexadecimal.
-func (cmd *PageCommand) PrintPage(w io.Writer, r io.ReaderAt, pageID int, pageSize int) error {
+func (cmd *pageCommand) PrintPage(w io.Writer, r io.ReaderAt, pageID int, pageSize int) error {
 	const bytesPerLineN = 16
 
 	// Read page into buffer.
@@ -271,7 +271,7 @@ func (cmd *PageCommand) PrintPage(w io.Writer, r io.ReaderAt, pageID int, pageSi
 }
 
 // Usage returns the help message.
-func (cmd *PageCommand) Usage() string {
+func (cmd *pageCommand) Usage() string {
 	return strings.TrimLeft(`
 usage: bolt page PATH pageid [pageid...]
    or: bolt page --all PATH

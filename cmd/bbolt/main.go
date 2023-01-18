@@ -167,20 +167,20 @@ Use "bbolt [command] -h" for more information about a command.
 `, "\n")
 }
 
-// CheckCommand represents the "check" command execution.
-type CheckCommand struct {
+// checkCommand represents the "check" command execution.
+type checkCommand struct {
 	baseCommand
 }
 
-// NewCheckCommand returns a CheckCommand.
-func newCheckCommand(m *Main) *CheckCommand {
-	c := &CheckCommand{}
+// newCheckCommand returns a checkCommand.
+func newCheckCommand(m *Main) *checkCommand {
+	c := &checkCommand{}
 	c.baseCommand = m.baseCommand
 	return c
 }
 
 // Run executes the command.
-func (cmd *CheckCommand) Run(args ...string) error {
+func (cmd *checkCommand) Run(args ...string) error {
 	// Parse flags.
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	help := fs.Bool("h", false, "")
@@ -230,7 +230,7 @@ func (cmd *CheckCommand) Run(args ...string) error {
 }
 
 // Usage returns the help message.
-func (cmd *CheckCommand) Usage() string {
+func (cmd *checkCommand) Usage() string {
 	return strings.TrimLeft(`
 usage: bolt check PATH
 
@@ -243,20 +243,20 @@ return after all pages have been checked.
 `, "\n")
 }
 
-// InfoCommand represents the "info" command execution.
-type InfoCommand struct {
+// infoCommand represents the "info" command execution.
+type infoCommand struct {
 	baseCommand
 }
 
-// NewInfoCommand returns a InfoCommand.
-func newInfoCommand(m *Main) *InfoCommand {
-	c := &InfoCommand{}
+// newInfoCommand returns a infoCommand.
+func newInfoCommand(m *Main) *infoCommand {
+	c := &infoCommand{}
 	c.baseCommand = m.baseCommand
 	return c
 }
 
 // Run executes the command.
-func (cmd *InfoCommand) Run(args ...string) error {
+func (cmd *infoCommand) Run(args ...string) error {
 	// Parse flags.
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	help := fs.Bool("h", false, "")
@@ -290,7 +290,7 @@ func (cmd *InfoCommand) Run(args ...string) error {
 }
 
 // Usage returns the help message.
-func (cmd *InfoCommand) Usage() string {
+func (cmd *infoCommand) Usage() string {
 	return strings.TrimLeft(`
 usage: bolt info PATH
 
@@ -298,20 +298,20 @@ Info prints basic information about the Bolt database at PATH.
 `, "\n")
 }
 
-// DumpCommand represents the "dump" command execution.
-type DumpCommand struct {
+// dumpCommand represents the "dump" command execution.
+type dumpCommand struct {
 	baseCommand
 }
 
-// newDumpCommand returns a DumpCommand.
-func newDumpCommand(m *Main) *DumpCommand {
-	c := &DumpCommand{}
+// newDumpCommand returns a dumpCommand.
+func newDumpCommand(m *Main) *dumpCommand {
+	c := &dumpCommand{}
 	c.baseCommand = m.baseCommand
 	return c
 }
 
 // Run executes the command.
-func (cmd *DumpCommand) Run(args ...string) error {
+func (cmd *dumpCommand) Run(args ...string) error {
 	// Parse flags.
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	help := fs.Bool("h", false, "")
@@ -368,7 +368,7 @@ func (cmd *DumpCommand) Run(args ...string) error {
 }
 
 // PrintPage prints a given page as hexadecimal.
-func (cmd *DumpCommand) PrintPage(w io.Writer, r io.ReaderAt, pageID uint64, pageSize uint64) error {
+func (cmd *dumpCommand) PrintPage(w io.Writer, r io.ReaderAt, pageID uint64, pageSize uint64) error {
 	const bytesPerLineN = 16
 
 	// Read page into buffer.
@@ -413,7 +413,7 @@ func (cmd *DumpCommand) PrintPage(w io.Writer, r io.ReaderAt, pageID uint64, pag
 }
 
 // Usage returns the help message.
-func (cmd *DumpCommand) Usage() string {
+func (cmd *dumpCommand) Usage() string {
 	return strings.TrimLeft(`
 usage: bolt dump PATH pageid [pageid...]
 
@@ -421,14 +421,14 @@ Dump prints a hexadecimal dump of one or more pages.
 `, "\n")
 }
 
-// PageItemCommand represents the "page-item" command execution.
-type PageItemCommand struct {
+// pageItemCommand represents the "page-item" command execution.
+type pageItemCommand struct {
 	baseCommand
 }
 
-// newPageItemCommand returns a PageItemCommand.
-func newPageItemCommand(m *Main) *PageItemCommand {
-	c := &PageItemCommand{}
+// newPageItemCommand returns a pageItemCommand.
+func newPageItemCommand(m *Main) *pageItemCommand {
+	c := &pageItemCommand{}
 	c.baseCommand = m.baseCommand
 	return c
 }
@@ -441,7 +441,7 @@ type pageItemOptions struct {
 }
 
 // Run executes the command.
-func (cmd *PageItemCommand) Run(args ...string) error {
+func (cmd *pageItemCommand) Run(args ...string) error {
 	// Parse flags.
 	options := &pageItemOptions{}
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
@@ -509,7 +509,7 @@ func (cmd *PageItemCommand) Run(args ...string) error {
 }
 
 // leafPageElement retrieves a leaf page element.
-func (cmd *PageItemCommand) leafPageElement(pageBytes []byte, index uint16) (*guts_cli.LeafPageElement, error) {
+func (cmd *pageItemCommand) leafPageElement(pageBytes []byte, index uint16) (*guts_cli.LeafPageElement, error) {
 	p := (*guts_cli.Page)(unsafe.Pointer(&pageBytes[0]))
 	if index >= p.Count() {
 		return nil, fmt.Errorf("leafPageElement: expected item index less than %d, but got %d.", p.Count(), index)
@@ -564,7 +564,7 @@ func writelnBytes(w io.Writer, b []byte, format string) error {
 }
 
 // PrintLeafItemKey writes the bytes of a leaf element's key.
-func (cmd *PageItemCommand) PrintLeafItemKey(w io.Writer, pageBytes []byte, index uint16, format string) error {
+func (cmd *pageItemCommand) PrintLeafItemKey(w io.Writer, pageBytes []byte, index uint16, format string) error {
 	e, err := cmd.leafPageElement(pageBytes, index)
 	if err != nil {
 		return err
@@ -573,7 +573,7 @@ func (cmd *PageItemCommand) PrintLeafItemKey(w io.Writer, pageBytes []byte, inde
 }
 
 // PrintLeafItemKey writes the bytes of a leaf element's value.
-func (cmd *PageItemCommand) PrintLeafItemValue(w io.Writer, pageBytes []byte, index uint16, format string) error {
+func (cmd *pageItemCommand) PrintLeafItemValue(w io.Writer, pageBytes []byte, index uint16, format string) error {
 	e, err := cmd.leafPageElement(pageBytes, index)
 	if err != nil {
 		return err
@@ -582,7 +582,7 @@ func (cmd *PageItemCommand) PrintLeafItemValue(w io.Writer, pageBytes []byte, in
 }
 
 // Usage returns the help message.
-func (cmd *PageItemCommand) Usage() string {
+func (cmd *pageItemCommand) Usage() string {
 	return strings.TrimLeft(`
 usage: bolt page-item [options] PATH pageid itemid
 
@@ -599,20 +599,20 @@ page-item prints a page item key and value.
 `, "\n")
 }
 
-// PagesCommand represents the "pages" command execution.
-type PagesCommand struct {
+// pagesCommand represents the "pages" command execution.
+type pagesCommand struct {
 	baseCommand
 }
 
-// NewPagesCommand returns a PagesCommand.
-func newPagesCommand(m *Main) *PagesCommand {
-	c := &PagesCommand{}
+// newPagesCommand returns a pagesCommand.
+func newPagesCommand(m *Main) *pagesCommand {
+	c := &pagesCommand{}
 	c.baseCommand = m.baseCommand
 	return c
 }
 
 // Run executes the command.
-func (cmd *PagesCommand) Run(args ...string) error {
+func (cmd *pagesCommand) Run(args ...string) error {
 	// Parse flags.
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	help := fs.Bool("h", false, "")
@@ -678,7 +678,7 @@ func (cmd *PagesCommand) Run(args ...string) error {
 }
 
 // Usage returns the help message.
-func (cmd *PagesCommand) Usage() string {
+func (cmd *pagesCommand) Usage() string {
 	return strings.TrimLeft(`
 usage: bolt pages PATH
 
@@ -692,20 +692,20 @@ a single page to take up multiple blocks.
 `, "\n")
 }
 
-// StatsCommand represents the "stats" command execution.
-type StatsCommand struct {
+// statsCommand represents the "stats" command execution.
+type statsCommand struct {
 	baseCommand
 }
 
-// NewStatsCommand returns a StatsCommand.
-func newStatsCommand(m *Main) *StatsCommand {
-	c := &StatsCommand{}
+// newStatsCommand returns a statsCommand.
+func newStatsCommand(m *Main) *statsCommand {
+	c := &statsCommand{}
 	c.baseCommand = m.baseCommand
 	return c
 }
 
 // Run executes the command.
-func (cmd *StatsCommand) Run(args ...string) error {
+func (cmd *statsCommand) Run(args ...string) error {
 	// Parse flags.
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	help := fs.Bool("h", false, "")
@@ -788,7 +788,7 @@ func (cmd *StatsCommand) Run(args ...string) error {
 }
 
 // Usage returns the help message.
-func (cmd *StatsCommand) Usage() string {
+func (cmd *statsCommand) Usage() string {
 	return strings.TrimLeft(`
 usage: bolt stats PATH
 
@@ -823,20 +823,20 @@ experience corruption, please submit a ticket to the Bolt project page:
 `, "\n")
 }
 
-// BucketsCommand represents the "buckets" command execution.
-type BucketsCommand struct {
+// bucketsCommand represents the "buckets" command execution.
+type bucketsCommand struct {
 	baseCommand
 }
 
-// NewBucketsCommand returns a BucketsCommand.
-func newBucketsCommand(m *Main) *BucketsCommand {
-	c := &BucketsCommand{}
+// newBucketsCommand returns a bucketsCommand.
+func newBucketsCommand(m *Main) *bucketsCommand {
+	c := &bucketsCommand{}
 	c.baseCommand = m.baseCommand
 	return c
 }
 
 // Run executes the command.
-func (cmd *BucketsCommand) Run(args ...string) error {
+func (cmd *bucketsCommand) Run(args ...string) error {
 	// Parse flags.
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	help := fs.Bool("h", false, "")
@@ -872,7 +872,7 @@ func (cmd *BucketsCommand) Run(args ...string) error {
 }
 
 // Usage returns the help message.
-func (cmd *BucketsCommand) Usage() string {
+func (cmd *bucketsCommand) Usage() string {
 	return strings.TrimLeft(`
 usage: bolt buckets PATH
 
@@ -880,20 +880,20 @@ Print a list of buckets.
 `, "\n")
 }
 
-// KeysCommand represents the "keys" command execution.
-type KeysCommand struct {
+// keysCommand represents the "keys" command execution.
+type keysCommand struct {
 	baseCommand
 }
 
-// NewKeysCommand returns a KeysCommand.
-func newKeysCommand(m *Main) *KeysCommand {
-	c := &KeysCommand{}
+// newKeysCommand returns a keysCommand.
+func newKeysCommand(m *Main) *keysCommand {
+	c := &keysCommand{}
 	c.baseCommand = m.baseCommand
 	return c
 }
 
 // Run executes the command.
-func (cmd *KeysCommand) Run(args ...string) error {
+func (cmd *keysCommand) Run(args ...string) error {
 	// Parse flags.
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	optionsFormat := fs.String("format", "bytes", "Output format. One of: "+FORMAT_MODES+" (default: bytes)")
@@ -946,7 +946,7 @@ func (cmd *KeysCommand) Run(args ...string) error {
 
 // Usage returns the help message.
 // TODO: Use https://pkg.go.dev/flag#FlagSet.PrintDefaults to print supported flags.
-func (cmd *KeysCommand) Usage() string {
+func (cmd *keysCommand) Usage() string {
 	return strings.TrimLeft(`
 usage: bolt keys PATH [BUCKET...]
 
@@ -962,20 +962,20 @@ Print a list of keys in the given bucket.
 `, "\n")
 }
 
-// GetCommand represents the "get" command execution.
-type GetCommand struct {
+// getCommand represents the "get" command execution.
+type getCommand struct {
 	baseCommand
 }
 
-// NewGetCommand returns a GetCommand.
-func newGetCommand(m *Main) *GetCommand {
-	c := &GetCommand{}
+// newGetCommand returns a getCommand.
+func newGetCommand(m *Main) *getCommand {
+	c := &getCommand{}
 	c.baseCommand = m.baseCommand
 	return c
 }
 
 // Run executes the command.
-func (cmd *GetCommand) Run(args ...string) error {
+func (cmd *getCommand) Run(args ...string) error {
 	// Parse flags.
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	var parseFormat string
@@ -1040,7 +1040,7 @@ func (cmd *GetCommand) Run(args ...string) error {
 }
 
 // Usage returns the help message.
-func (cmd *GetCommand) Usage() string {
+func (cmd *getCommand) Usage() string {
 	return strings.TrimLeft(`
 usage: bolt get PATH [BUCKET..] KEY
 
@@ -1057,20 +1057,20 @@ Additional options include:
 
 var benchBucketName = []byte("bench")
 
-// BenchCommand represents the "bench" command execution.
-type BenchCommand struct {
+// benchCommand represents the "bench" command execution.
+type benchCommand struct {
 	baseCommand
 }
 
-// NewBenchCommand returns a BenchCommand using the
-func newBenchCommand(m *Main) *BenchCommand {
-	c := &BenchCommand{}
+// newBenchCommand returns a BenchCommand using the
+func newBenchCommand(m *Main) *benchCommand {
+	c := &benchCommand{}
 	c.baseCommand = m.baseCommand
 	return c
 }
 
 // Run executes the "bench" command.
-func (cmd *BenchCommand) Run(args ...string) error {
+func (cmd *benchCommand) Run(args ...string) error {
 	// Parse CLI arguments.
 	options, err := cmd.ParseFlags(args)
 	if err != nil {
@@ -1111,7 +1111,7 @@ func (cmd *BenchCommand) Run(args ...string) error {
 }
 
 // ParseFlags parses the command line flags.
-func (cmd *BenchCommand) ParseFlags(args []string) (*BenchOptions, error) {
+func (cmd *benchCommand) ParseFlags(args []string) (*BenchOptions, error) {
 	var options BenchOptions
 
 	// Parse flagset.
@@ -1158,7 +1158,7 @@ func (cmd *BenchCommand) ParseFlags(args []string) (*BenchOptions, error) {
 }
 
 // Writes to the database.
-func (cmd *BenchCommand) runWrites(db *bolt.DB, options *BenchOptions, results *BenchResults) error {
+func (cmd *benchCommand) runWrites(db *bolt.DB, options *BenchOptions, results *BenchResults) error {
 	// Start profiling for writes.
 	if options.ProfileMode == "rw" || options.ProfileMode == "w" {
 		cmd.startProfiling(options)
@@ -1191,27 +1191,27 @@ func (cmd *BenchCommand) runWrites(db *bolt.DB, options *BenchOptions, results *
 	return err
 }
 
-func (cmd *BenchCommand) runWritesSequential(db *bolt.DB, options *BenchOptions, results *BenchResults) error {
+func (cmd *benchCommand) runWritesSequential(db *bolt.DB, options *BenchOptions, results *BenchResults) error {
 	var i = uint32(0)
 	return cmd.runWritesWithSource(db, options, results, func() uint32 { i++; return i })
 }
 
-func (cmd *BenchCommand) runWritesRandom(db *bolt.DB, options *BenchOptions, results *BenchResults) error {
+func (cmd *benchCommand) runWritesRandom(db *bolt.DB, options *BenchOptions, results *BenchResults) error {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	return cmd.runWritesWithSource(db, options, results, func() uint32 { return r.Uint32() })
 }
 
-func (cmd *BenchCommand) runWritesSequentialNested(db *bolt.DB, options *BenchOptions, results *BenchResults) error {
+func (cmd *benchCommand) runWritesSequentialNested(db *bolt.DB, options *BenchOptions, results *BenchResults) error {
 	var i = uint32(0)
 	return cmd.runWritesNestedWithSource(db, options, results, func() uint32 { i++; return i })
 }
 
-func (cmd *BenchCommand) runWritesRandomNested(db *bolt.DB, options *BenchOptions, results *BenchResults) error {
+func (cmd *benchCommand) runWritesRandomNested(db *bolt.DB, options *BenchOptions, results *BenchResults) error {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	return cmd.runWritesNestedWithSource(db, options, results, func() uint32 { return r.Uint32() })
 }
 
-func (cmd *BenchCommand) runWritesWithSource(db *bolt.DB, options *BenchOptions, results *BenchResults, keySource func() uint32) error {
+func (cmd *benchCommand) runWritesWithSource(db *bolt.DB, options *BenchOptions, results *BenchResults, keySource func() uint32) error {
 	results.WriteOps = options.Iterations
 
 	for i := 0; i < options.Iterations; i += options.BatchSize {
@@ -1240,7 +1240,7 @@ func (cmd *BenchCommand) runWritesWithSource(db *bolt.DB, options *BenchOptions,
 	return nil
 }
 
-func (cmd *BenchCommand) runWritesNestedWithSource(db *bolt.DB, options *BenchOptions, results *BenchResults, keySource func() uint32) error {
+func (cmd *benchCommand) runWritesNestedWithSource(db *bolt.DB, options *BenchOptions, results *BenchResults, keySource func() uint32) error {
 	results.WriteOps = options.Iterations
 
 	for i := 0; i < options.Iterations; i += options.BatchSize {
@@ -1284,7 +1284,7 @@ func (cmd *BenchCommand) runWritesNestedWithSource(db *bolt.DB, options *BenchOp
 }
 
 // Reads from the database.
-func (cmd *BenchCommand) runReads(db *bolt.DB, options *BenchOptions, results *BenchResults) error {
+func (cmd *benchCommand) runReads(db *bolt.DB, options *BenchOptions, results *BenchResults) error {
 	// Start profiling for reads.
 	if options.ProfileMode == "r" {
 		cmd.startProfiling(options)
@@ -1316,7 +1316,7 @@ func (cmd *BenchCommand) runReads(db *bolt.DB, options *BenchOptions, results *B
 	return err
 }
 
-func (cmd *BenchCommand) runReadsSequential(db *bolt.DB, options *BenchOptions, results *BenchResults) error {
+func (cmd *benchCommand) runReadsSequential(db *bolt.DB, options *BenchOptions, results *BenchResults) error {
 	return db.View(func(tx *bolt.Tx) error {
 		t := time.Now()
 
@@ -1347,7 +1347,7 @@ func (cmd *BenchCommand) runReadsSequential(db *bolt.DB, options *BenchOptions, 
 	})
 }
 
-func (cmd *BenchCommand) runReadsSequentialNested(db *bolt.DB, options *BenchOptions, results *BenchResults) error {
+func (cmd *benchCommand) runReadsSequentialNested(db *bolt.DB, options *BenchOptions, results *BenchResults) error {
 	return db.View(func(tx *bolt.Tx) error {
 		t := time.Now()
 
@@ -1389,7 +1389,7 @@ func (cmd *BenchCommand) runReadsSequentialNested(db *bolt.DB, options *BenchOpt
 var cpuprofile, memprofile, blockprofile *os.File
 
 // Starts all profiles set on the options.
-func (cmd *BenchCommand) startProfiling(options *BenchOptions) {
+func (cmd *benchCommand) startProfiling(options *BenchOptions) {
 	var err error
 
 	// Start CPU profiling.
@@ -1428,7 +1428,7 @@ func (cmd *BenchCommand) startProfiling(options *BenchOptions) {
 }
 
 // Stops all profiles.
-func (cmd *BenchCommand) stopProfiling() {
+func (cmd *benchCommand) stopProfiling() {
 	if cpuprofile != nil {
 		pprof.StopCPUProfile()
 		cpuprofile.Close()
@@ -1564,8 +1564,8 @@ func stringToPages(strs []string) ([]uint64, error) {
 	return a, nil
 }
 
-// CompactCommand represents the "compact" command execution.
-type CompactCommand struct {
+// compactCommand represents the "compact" command execution.
+type compactCommand struct {
 	baseCommand
 
 	SrcPath   string
@@ -1574,14 +1574,14 @@ type CompactCommand struct {
 }
 
 // newCompactCommand returns a CompactCommand.
-func newCompactCommand(m *Main) *CompactCommand {
-	c := &CompactCommand{}
+func newCompactCommand(m *Main) *compactCommand {
+	c := &compactCommand{}
 	c.baseCommand = m.baseCommand
 	return c
 }
 
 // Run executes the command.
-func (cmd *CompactCommand) Run(args ...string) (err error) {
+func (cmd *compactCommand) Run(args ...string) (err error) {
 	// Parse flags.
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -1643,7 +1643,7 @@ func (cmd *CompactCommand) Run(args ...string) (err error) {
 }
 
 // Usage returns the help message.
-func (cmd *CompactCommand) Usage() string {
+func (cmd *compactCommand) Usage() string {
 	return strings.TrimLeft(`
 usage: bolt compact [options] -o DST SRC
 
