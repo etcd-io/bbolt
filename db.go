@@ -1125,7 +1125,7 @@ func (db *DB) grow(sz int) error {
 
 	// If the data is smaller than the alloc size then only allocate what's needed.
 	// Once it goes over the allocation size then allocate in chunks.
-	if db.datasz < db.AllocSize {
+	if db.datasz <= db.AllocSize {
 		sz = db.datasz
 	} else {
 		sz += db.AllocSize
