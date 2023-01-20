@@ -2,8 +2,6 @@ package surgeon
 
 import (
 	"fmt"
-	"os"
-
 	"go.etcd.io/bbolt/internal/guts_cli"
 )
 
@@ -13,25 +11,24 @@ func CopyPage(path string, srcPage guts_cli.Pgid, target guts_cli.Pgid) error {
 		return err1
 	}
 	p1.SetId(target)
-	return WritePage(path, d1)
+	return guts_cli.WritePage(path, d1)
 }
 
-func WritePage(path string, pageBuf []byte) error {
-	page := guts_cli.LoadPage(pageBuf)
-	pageSize, _, err := guts_cli.ReadPageAndHWMSize(path)
+func ClearPage(path string, pgId guts_cli.Pgid) error {
+	// Read the page
+	p, buf, err := guts_cli.ReadPage(path, uint64(pgId))
 	if err != nil {
-		return err
+		return fmt.Errorf("ReadPage failed: %w", err)
 	}
-	if pageSize != uint64(len(pageBuf)) {
-		return fmt.Errorf("WritePage: len(buf)=%d != pageSize=%d", len(pageBuf), pageSize)
+
+	// Update and rewrite the page
+	p.SetCount(0)
+	p.SetOverflow(0)
+	if err := guts_cli.WritePage(path, buf); err != nil {
+		return fmt.Errorf("WritePage failed: %w", err)
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY, 0)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	_, err = f.WriteAt(pageBuf, int64(page.Id())*int64(pageSize))
-	return err
+
+	return nil
 }
 
 // RevertMetaPage replaces the newer metadata page with the older.

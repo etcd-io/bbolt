@@ -69,7 +69,7 @@ func TestTx_RecursivelyCheckPages_CorruptedLeaf(t *testing.T) {
 	require.NoError(t, err)
 	require.Positive(t, p.Count(), "page must be not empty")
 	p.LeafPageElement(p.Count() / 2).Key()[0] = 'z'
-	require.NoError(t, surgeon.WritePage(db.Path(), pbuf))
+	require.NoError(t, guts_cli.WritePage(db.Path(), pbuf))
 
 	db.MustReopen()
 	require.NoError(t, db.Update(func(tx *bolt.Tx) error {

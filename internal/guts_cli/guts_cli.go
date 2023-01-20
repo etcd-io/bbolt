@@ -139,6 +139,10 @@ func (p *Page) Overflow() uint32 {
 	return p.overflow
 }
 
+func (p *Page) String() string {
+	return fmt.Sprintf("ID: %d, Type: %s, count: %d, overflow: %d", p.id, p.Type(), p.count, p.overflow)
+}
+
 // DO NOT EDIT. Copied from the "bolt" package.
 
 // TODO(ptabor): Make the page-types an enum.
@@ -176,6 +180,14 @@ func (p *Page) BranchPageElement(index uint16) *BranchPageElement {
 
 func (p *Page) SetId(target Pgid) {
 	p.id = target
+}
+
+func (p *Page) SetCount(target uint16) {
+	p.count = target
+}
+
+func (p *Page) SetOverflow(target uint32) {
+	p.overflow = target
 }
 
 // DO NOT EDIT. Copied from the "bolt" package.
@@ -274,6 +286,25 @@ func ReadPage(path string, pageID uint64) (*Page, []byte, error) {
 	}
 
 	return p, buf, nil
+}
+
+func WritePage(path string, pageBuf []byte) error {
+	page := LoadPage(pageBuf)
+	pageSize, _, err := ReadPageAndHWMSize(path)
+	if err != nil {
+		return err
+	}
+	expectedLen := pageSize * (uint64(page.Overflow()) + 1)
+	if expectedLen != uint64(len(pageBuf)) {
+		return fmt.Errorf("WritePage: len(buf):%d != pageSize*(overflow+1):%d", len(pageBuf), expectedLen)
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.WriteAt(pageBuf, int64(page.Id())*int64(pageSize))
+	return err
 }
 
 // ReadPageAndHWMSize reads Page size and HWM (id of the last+1 Page).
