@@ -45,6 +45,8 @@ func (cmd *surgeryCommand) Run(args ...string) error {
 		return newRevertMetaPageCommand(cmd).Run(args[1:]...)
 	case "copy-page":
 		return newCopyPageCommand(cmd).Run(args[1:]...)
+	case "clear-page":
+		return newClearPageCommand(cmd).Run(args[1:]...)
 	default:
 		return ErrUnknownCommand
 	}
@@ -225,7 +227,7 @@ func (cmd *copyPageCommand) Run(args ...string) error {
 		return fmt.Errorf("copyPageCommand failed: %w", err)
 	}
 
-	fmt.Fprintf(cmd.Stdout, "The page %d was copied to page %d", srcPageId, dstPageId)
+	fmt.Fprintf(cmd.Stdout, "The page %d was copied to page %d\n", srcPageId, dstPageId)
 	return nil
 }
 
@@ -237,6 +239,61 @@ usage: bolt surgery copy-page SRC DST srcPageId dstPageid
 CopyPage copies the database file at SRC to a newly created database
 file at DST. Afterwards, it copies the page at srcPageId to the page
 at dstPageId in DST.
+
+The original database is left untouched.
+`, "\n")
+}
+
+// clearPageCommand represents the "surgery clear-page" command execution.
+type clearPageCommand struct {
+	*surgeryCommand
+}
+
+// newClearPageCommand returns a clearPageCommand.
+func newClearPageCommand(m *surgeryCommand) *clearPageCommand {
+	c := &clearPageCommand{}
+	c.surgeryCommand = m
+	return c
+}
+
+// Run executes the command.
+func (cmd *clearPageCommand) Run(args ...string) error {
+	// Parse flags.
+	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	help := fs.Bool("h", false, "")
+	if err := fs.Parse(args); err != nil {
+		return err
+	} else if *help {
+		fmt.Fprintln(cmd.Stderr, cmd.Usage())
+		return ErrUsage
+	}
+
+	if err := cmd.parsePathsAndCopyFile(fs); err != nil {
+		return fmt.Errorf("clearPageCommand failed to parse paths and copy file: %w", err)
+	}
+
+	// Read page id.
+	pageId, err := strconv.ParseUint(fs.Arg(2), 10, 64)
+	if err != nil {
+		return err
+	}
+
+	if err := surgeon.ClearPage(cmd.dstPath, guts_cli.Pgid(pageId)); err != nil {
+		return fmt.Errorf("clearPageCommand failed: %w", err)
+	}
+
+	fmt.Fprintf(cmd.Stdout, "Page (%d) was cleared\n", pageId)
+	return nil
+}
+
+// Usage returns the help message.
+func (cmd *clearPageCommand) Usage() string {
+	return strings.TrimLeft(`
+usage: bolt surgery clear-page SRC DST pageId
+
+ClearPage copies the database file at SRC to a newly created database
+file at DST. Afterwards, it clears all elements in the page at pageId
+in DST.
 
 The original database is left untouched.
 `, "\n")
