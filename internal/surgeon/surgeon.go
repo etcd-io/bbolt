@@ -2,6 +2,7 @@ package surgeon
 
 import (
 	"fmt"
+
 	. "go.etcd.io/bbolt/internal/common"
 	"go.etcd.io/bbolt/internal/guts_cli"
 )
@@ -16,15 +17,34 @@ func CopyPage(path string, srcPage Pgid, target Pgid) error {
 }
 
 func ClearPage(path string, pgId Pgid) error {
+	return ClearElements(path, pgId, 0)
+}
+
+// ClearElements clears all elements after the first ${count} elements.
+func ClearElements(path string, pgId Pgid, count uint16) error {
 	// Read the page
 	p, buf, err := guts_cli.ReadPage(path, uint64(pgId))
 	if err != nil {
 		return fmt.Errorf("ReadPage failed: %w", err)
 	}
 
+	pt := p.Typ()
+	if pt != "leaf" && pt != "branch" {
+		return fmt.Errorf("can't clear elements in %q page", pt)
+	}
+
+	if count == p.Count() {
+		return nil
+	}
+
+	if count > p.Count() {
+		return fmt.Errorf("the count (%d) exceeds the max count (%d)", count, p.Count())
+	}
+
 	// Update and rewrite the page
-	p.SetCount(0)
+	p.SetCount(count)
 	p.SetOverflow(0)
+
 	if err := guts_cli.WritePage(path, buf); err != nil {
 		return fmt.Errorf("WritePage failed: %w", err)
 	}

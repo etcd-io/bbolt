@@ -41,12 +41,14 @@ func (cmd *surgeryCommand) Run(args ...string) error {
 	case "help":
 		fmt.Fprintln(cmd.Stderr, cmd.Usage())
 		return ErrUsage
-	case "revert-meta-page":
-		return newRevertMetaPageCommand(cmd).Run(args[1:]...)
-	case "copy-page":
-		return newCopyPageCommand(cmd).Run(args[1:]...)
+	case "clear-elements":
+		return newClearElementsCommand(cmd).Run(args[1:]...)
 	case "clear-page":
 		return newClearPageCommand(cmd).Run(args[1:]...)
+	case "copy-page":
+		return newCopyPageCommand(cmd).Run(args[1:]...)
+	case "revert-meta-page":
+		return newRevertMetaPageCommand(cmd).Run(args[1:]...)
 	default:
 		return ErrUnknownCommand
 	}
@@ -294,6 +296,67 @@ usage: bolt surgery clear-page SRC DST pageId
 ClearPage copies the database file at SRC to a newly created database
 file at DST. Afterwards, it clears all elements in the page at pageId
 in DST.
+
+The original database is left untouched.
+`, "\n")
+}
+
+// clearElementsCommand represents the "surgery clear-elements" command execution.
+type clearElementsCommand struct {
+	*surgeryCommand
+}
+
+// newClearElementsCommand returns a clearElementsCommand.
+func newClearElementsCommand(m *surgeryCommand) *clearElementsCommand {
+	c := &clearElementsCommand{}
+	c.surgeryCommand = m
+	return c
+}
+
+// Run executes the command.
+func (cmd *clearElementsCommand) Run(args ...string) error {
+	// Parse flags.
+	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	help := fs.Bool("h", false, "")
+	if err := fs.Parse(args); err != nil {
+		return err
+	} else if *help {
+		fmt.Fprintln(cmd.Stderr, cmd.Usage())
+		return ErrUsage
+	}
+
+	if err := cmd.parsePathsAndCopyFile(fs); err != nil {
+		return fmt.Errorf("clearPageCommand failed to parse paths and copy file: %w", err)
+	}
+
+	// Read page id.
+	pageId, err := strconv.ParseUint(fs.Arg(2), 10, 64)
+	if err != nil {
+		return err
+	}
+
+	// Read element count.
+	elementCnt, err := strconv.ParseUint(fs.Arg(3), 10, 16)
+	if err != nil {
+		return err
+	}
+
+	if err := surgeon.ClearElements(cmd.dstPath, Pgid(pageId), uint16(elementCnt)); err != nil {
+		return fmt.Errorf("clearElementsCommand failed: %w", err)
+	}
+
+	fmt.Fprintf(cmd.Stdout, "All elements after the first %d elements in page %d were cleared\n", elementCnt, pageId)
+	return nil
+}
+
+// Usage returns the help message.
+func (cmd *clearElementsCommand) Usage() string {
+	return strings.TrimLeft(`
+usage: bolt surgery clear-elements SRC DST pageId element-count
+
+ClearElements copies the database file at SRC to a newly created database
+file at DST. Afterwards, it clears all elements after the first 
+element-count elements in the page at pageId in DST.
 
 The original database is left untouched.
 `, "\n")
