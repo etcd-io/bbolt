@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -535,7 +536,7 @@ func formatBytes(b []byte, format string) (string, error) {
 	case "auto":
 		return bytesToAsciiOrHex(b), nil
 	case "redacted":
-		return fmt.Sprintf("<redacted len:%d>", len(b)), nil
+		return fmt.Sprintf("<redacted len:%d sha256:%x>", len(b), sha256.New().Sum(b)), nil
 	default:
 		return "", fmt.Errorf("formatBytes: unsupported format: %s", format)
 	}
