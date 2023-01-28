@@ -13,9 +13,22 @@ import (
 // because of caching. This overhead can be removed if running on a read-only
 // transaction, however, it is not safe to execute other writer transactions at
 // the same time.
-func (tx *Tx) Check(kvStringer KVStringer) <-chan error {
+func (tx *Tx) Check() <-chan error {
+	return tx.CheckWithOptions()
+}
+
+// CheckWithOptions allows users to provide a customized `KVStringer` implementation,
+// so that bolt can generate human-readable diagnostic messages.
+func (tx *Tx) CheckWithOptions(options ...CheckOption) <-chan error {
+	chkConfig := checkConfig{
+		kvStringer: HexKVStringer(),
+	}
+	for _, op := range options {
+		op(&chkConfig)
+	}
+
 	ch := make(chan error)
-	go tx.check(kvStringer, ch)
+	go tx.check(chkConfig.kvStringer, ch)
 	return ch
 }
 
@@ -178,6 +191,18 @@ func verifyKeyOrder(pgId pgid, pageType string, index int, key []byte, previousK
 }
 
 // ===========================================================================================
+
+type checkConfig struct {
+	kvStringer KVStringer
+}
+
+type CheckOption func(options *checkConfig)
+
+func WithKVStringer(kvStringer KVStringer) CheckOption {
+	return func(c *checkConfig) {
+		c.kvStringer = kvStringer
+	}
+}
 
 // KVStringer allows to prepare human-readable diagnostic messages.
 type KVStringer interface {

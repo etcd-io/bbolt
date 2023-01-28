@@ -213,7 +213,7 @@ func (cmd *checkCommand) Run(args ...string) error {
 	// Perform consistency check.
 	return db.View(func(tx *bolt.Tx) error {
 		var count int
-		for err := range tx.Check(CmdKvStringer()) {
+		for err := range tx.CheckWithOptions(bolt.WithKVStringer(CmdKvStringer())) {
 			fmt.Fprintln(cmd.Stdout, err)
 			count++
 		}

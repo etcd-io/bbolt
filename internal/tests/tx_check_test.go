@@ -39,7 +39,7 @@ func TestTx_RecursivelyCheckPages_MisplacedPage(t *testing.T) {
 	require.NoError(t, db.Update(func(tx *bolt.Tx) error {
 		// Collect all the errors.
 		var errors []error
-		for err := range tx.Check(bolt.HexKVStringer()) {
+		for err := range tx.Check() {
 			errors = append(errors, err)
 		}
 		require.Len(t, errors, 1)
@@ -75,7 +75,7 @@ func TestTx_RecursivelyCheckPages_CorruptedLeaf(t *testing.T) {
 	require.NoError(t, db.Update(func(tx *bolt.Tx) error {
 		// Collect all the errors.
 		var errors []error
-		for err := range tx.Check(bolt.HexKVStringer()) {
+		for err := range tx.Check() {
 			errors = append(errors, err)
 		}
 		require.Len(t, errors, 2)

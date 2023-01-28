@@ -119,7 +119,7 @@ func (db *DB) MustCheck() {
 	err := db.Update(func(tx *bolt.Tx) error {
 		// Collect all the errors.
 		var errors []error
-		for err := range tx.Check(bolt.HexKVStringer()) {
+		for err := range tx.Check() {
 			errors = append(errors, err)
 			if len(errors) > 10 {
 				break
