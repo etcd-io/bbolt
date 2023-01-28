@@ -398,7 +398,7 @@ func TestOpen_Check(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = db.View(func(tx *bolt.Tx) error { return <-tx.Check(bolt.HexKVStringer()) }); err != nil {
+	if err = db.View(func(tx *bolt.Tx) error { return <-tx.Check() }); err != nil {
 		t.Fatal(err)
 	}
 	if err = db.Close(); err != nil {
@@ -409,7 +409,7 @@ func TestOpen_Check(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.View(func(tx *bolt.Tx) error { return <-tx.Check(bolt.HexKVStringer()) }); err != nil {
+	if err := db.View(func(tx *bolt.Tx) error { return <-tx.Check() }); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Close(); err != nil {
