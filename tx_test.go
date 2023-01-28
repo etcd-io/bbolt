@@ -15,6 +15,7 @@ import (
 
 	bolt "go.etcd.io/bbolt"
 	"go.etcd.io/bbolt/internal/btesting"
+	"go.etcd.io/bbolt/internal/common"
 )
 
 // TestTx_Check_ReadOnly tests consistency checking on a ReadOnly database.
@@ -84,7 +85,7 @@ func TestTx_Commit_ErrTxClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := tx.Commit(); err != bolt.ErrTxClosed {
+	if err := tx.Commit(); err != common.ErrTxClosed {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }
@@ -101,7 +102,7 @@ func TestTx_Rollback_ErrTxClosed(t *testing.T) {
 	if err := tx.Rollback(); err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.Rollback(); err != bolt.ErrTxClosed {
+	if err := tx.Rollback(); err != common.ErrTxClosed {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }
@@ -113,7 +114,7 @@ func TestTx_Commit_ErrTxNotWritable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.Commit(); err != bolt.ErrTxNotWritable {
+	if err := tx.Commit(); err != common.ErrTxNotWritable {
 		t.Fatal(err)
 	}
 	// Close the view transaction
@@ -165,7 +166,7 @@ func TestTx_CreateBucket_ErrTxNotWritable(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 	if err := db.View(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucket([]byte("foo"))
-		if err != bolt.ErrTxNotWritable {
+		if err != common.ErrTxNotWritable {
 			t.Fatalf("unexpected error: %s", err)
 		}
 		return nil
@@ -185,7 +186,7 @@ func TestTx_CreateBucket_ErrTxClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := tx.CreateBucket([]byte("foo")); err != bolt.ErrTxClosed {
+	if _, err := tx.CreateBucket([]byte("foo")); err != common.ErrTxClosed {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }
@@ -293,11 +294,11 @@ func TestTx_CreateBucketIfNotExists(t *testing.T) {
 func TestTx_CreateBucketIfNotExists_ErrBucketNameRequired(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 	if err := db.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucketIfNotExists([]byte{}); err != bolt.ErrBucketNameRequired {
+		if _, err := tx.CreateBucketIfNotExists([]byte{}); err != common.ErrBucketNameRequired {
 			t.Fatalf("unexpected error: %s", err)
 		}
 
-		if _, err := tx.CreateBucketIfNotExists(nil); err != bolt.ErrBucketNameRequired {
+		if _, err := tx.CreateBucketIfNotExists(nil); err != common.ErrBucketNameRequired {
 			t.Fatalf("unexpected error: %s", err)
 		}
 
@@ -323,7 +324,7 @@ func TestTx_CreateBucket_ErrBucketExists(t *testing.T) {
 
 	// Create the same bucket again.
 	if err := db.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucket([]byte("widgets")); err != bolt.ErrBucketExists {
+		if _, err := tx.CreateBucket([]byte("widgets")); err != common.ErrBucketExists {
 			t.Fatalf("unexpected error: %s", err)
 		}
 		return nil
@@ -336,7 +337,7 @@ func TestTx_CreateBucket_ErrBucketExists(t *testing.T) {
 func TestTx_CreateBucket_ErrBucketNameRequired(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 	if err := db.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucket(nil); err != bolt.ErrBucketNameRequired {
+		if _, err := tx.CreateBucket(nil); err != common.ErrBucketNameRequired {
 			t.Fatalf("unexpected error: %s", err)
 		}
 		return nil
@@ -401,7 +402,7 @@ func TestTx_DeleteBucket_ErrTxClosed(t *testing.T) {
 	if err := tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.DeleteBucket([]byte("foo")); err != bolt.ErrTxClosed {
+	if err := tx.DeleteBucket([]byte("foo")); err != common.ErrTxClosed {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }
@@ -410,7 +411,7 @@ func TestTx_DeleteBucket_ErrTxClosed(t *testing.T) {
 func TestTx_DeleteBucket_ReadOnly(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 	if err := db.View(func(tx *bolt.Tx) error {
-		if err := tx.DeleteBucket([]byte("foo")); err != bolt.ErrTxNotWritable {
+		if err := tx.DeleteBucket([]byte("foo")); err != common.ErrTxNotWritable {
 			t.Fatalf("unexpected error: %s", err)
 		}
 		return nil
@@ -423,7 +424,7 @@ func TestTx_DeleteBucket_ReadOnly(t *testing.T) {
 func TestTx_DeleteBucket_NotFound(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 	if err := db.Update(func(tx *bolt.Tx) error {
-		if err := tx.DeleteBucket([]byte("widgets")); err != bolt.ErrBucketNotFound {
+		if err := tx.DeleteBucket([]byte("widgets")); err != common.ErrBucketNotFound {
 			t.Fatalf("unexpected error: %s", err)
 		}
 		return nil

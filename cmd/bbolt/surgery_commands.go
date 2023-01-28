@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"go.etcd.io/bbolt/internal/guts_cli"
+	"go.etcd.io/bbolt/internal/common"
 	"go.etcd.io/bbolt/internal/surgeon"
 )
 
@@ -224,7 +224,7 @@ func (cmd *copyPageCommand) Run(args ...string) error {
 	}
 
 	// copy the page
-	if err := surgeon.CopyPage(cmd.dstPath, guts_cli.Pgid(srcPageId), guts_cli.Pgid(dstPageId)); err != nil {
+	if err := surgeon.CopyPage(cmd.dstPath, common.Pgid(srcPageId), common.Pgid(dstPageId)); err != nil {
 		return fmt.Errorf("copyPageCommand failed: %w", err)
 	}
 
@@ -279,7 +279,7 @@ func (cmd *clearPageCommand) Run(args ...string) error {
 		return err
 	}
 
-	if err := surgeon.ClearPage(cmd.dstPath, guts_cli.Pgid(pageId)); err != nil {
+	if err := surgeon.ClearPage(cmd.dstPath, common.Pgid(pageId)); err != nil {
 		return fmt.Errorf("clearPageCommand failed: %w", err)
 	}
 

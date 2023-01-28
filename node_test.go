@@ -3,15 +3,19 @@ package bbolt
 import (
 	"testing"
 	"unsafe"
+
+	"go.etcd.io/bbolt/internal/common"
 )
 
 // Ensure that a node can insert a key/value.
 func TestNode_put(t *testing.T) {
-	n := &node{inodes: make(inodes, 0), bucket: &Bucket{tx: &Tx{meta: &meta{pgid: 1}}}}
+	m := &common.Meta{}
+	m.SetPgid(1)
+	n := &node{inodes: make(inodes, 0), bucket: &Bucket{tx: &Tx{meta: m}}}
 	n.put([]byte("baz"), []byte("baz"), []byte("2"), 0, 0)
 	n.put([]byte("foo"), []byte("foo"), []byte("0"), 0, 0)
 	n.put([]byte("bar"), []byte("bar"), []byte("1"), 0, 0)
-	n.put([]byte("foo"), []byte("foo"), []byte("3"), 0, leafPageFlag)
+	n.put([]byte("foo"), []byte("foo"), []byte("3"), 0, common.LeafPageFlag)
 
 	if len(n.inodes) != 3 {
 		t.Fatalf("exp=3; got=%d", len(n.inodes))
@@ -25,7 +29,7 @@ func TestNode_put(t *testing.T) {
 	if k, v := n.inodes[2].key, n.inodes[2].value; string(k) != "foo" || string(v) != "3" {
 		t.Fatalf("exp=<foo,3>; got=<%s,%s>", k, v)
 	}
-	if n.inodes[2].flags != uint32(leafPageFlag) {
+	if n.inodes[2].flags != uint32(common.LeafPageFlag) {
 		t.Fatalf("not a leaf: %d", n.inodes[2].flags)
 	}
 }
@@ -34,18 +38,19 @@ func TestNode_put(t *testing.T) {
 func TestNode_read_LeafPage(t *testing.T) {
 	// Create a page.
 	var buf [4096]byte
-	page := (*page)(unsafe.Pointer(&buf[0]))
-	page.flags = leafPageFlag
-	page.count = 2
+	page := (*common.Page)(unsafe.Pointer(&buf[0]))
+	page.SetFlags(common.LeafPageFlag)
+	page.SetCount(2)
 
 	// Insert 2 elements at the beginning. sizeof(leafPageElement) == 16
-	nodes := (*[3]leafPageElement)(unsafe.Pointer(uintptr(unsafe.Pointer(page)) + unsafe.Sizeof(*page)))
-	nodes[0] = leafPageElement{flags: 0, pos: 32, ksize: 3, vsize: 4}  // pos = sizeof(leafPageElement) * 2
-	nodes[1] = leafPageElement{flags: 0, pos: 23, ksize: 10, vsize: 3} // pos = sizeof(leafPageElement) + 3 + 4
+	nodes := page.LeafPageElements()
+	//nodes := (*[3]leafPageElement)(unsafe.Pointer(uintptr(unsafe.Pointer(page)) + unsafe.Sizeof(*page)))
+	nodes[0] = *common.NewLeafPageElement(0, 32, 3, 4)  // pos = sizeof(leafPageElement) * 2
+	nodes[1] = *common.NewLeafPageElement(0, 23, 10, 3) // pos = sizeof(leafPageElement) + 3 + 4
 
 	// Write data for the nodes at the end.
 	const s = "barfoozhelloworldbye"
-	data := unsafeByteSlice(unsafe.Pointer(&nodes[2]), 0, 0, len(s))
+	data := common.UnsafeByteSlice(unsafe.Pointer(uintptr(unsafe.Pointer(page))+unsafe.Sizeof(*page)+common.LeafPageElementSize*2), 0, 0, len(s))
 	copy(data, s)
 
 	// Deserialize page into a leaf.
@@ -70,14 +75,16 @@ func TestNode_read_LeafPage(t *testing.T) {
 // Ensure that a node can serialize into a leaf page.
 func TestNode_write_LeafPage(t *testing.T) {
 	// Create a node.
-	n := &node{isLeaf: true, inodes: make(inodes, 0), bucket: &Bucket{tx: &Tx{db: &DB{}, meta: &meta{pgid: 1}}}}
+	m := &common.Meta{}
+	m.SetPgid(1)
+	n := &node{isLeaf: true, inodes: make(inodes, 0), bucket: &Bucket{tx: &Tx{db: &DB{}, meta: m}}}
 	n.put([]byte("susy"), []byte("susy"), []byte("que"), 0, 0)
 	n.put([]byte("ricki"), []byte("ricki"), []byte("lake"), 0, 0)
 	n.put([]byte("john"), []byte("john"), []byte("johnson"), 0, 0)
 
 	// Write it to a page.
 	var buf [4096]byte
-	p := (*page)(unsafe.Pointer(&buf[0]))
+	p := (*common.Page)(unsafe.Pointer(&buf[0]))
 	n.write(p)
 
 	// Read the page back in.
@@ -102,7 +109,9 @@ func TestNode_write_LeafPage(t *testing.T) {
 // Ensure that a node can split into appropriate subgroups.
 func TestNode_split(t *testing.T) {
 	// Create a node.
-	n := &node{inodes: make(inodes, 0), bucket: &Bucket{tx: &Tx{db: &DB{}, meta: &meta{pgid: 1}}}}
+	m := &common.Meta{}
+	m.SetPgid(1)
+	n := &node{inodes: make(inodes, 0), bucket: &Bucket{tx: &Tx{db: &DB{}, meta: m}}}
 	n.put([]byte("00000001"), []byte("00000001"), []byte("0123456701234567"), 0, 0)
 	n.put([]byte("00000002"), []byte("00000002"), []byte("0123456701234567"), 0, 0)
 	n.put([]byte("00000003"), []byte("00000003"), []byte("0123456701234567"), 0, 0)
@@ -127,7 +136,9 @@ func TestNode_split(t *testing.T) {
 // Ensure that a page with the minimum number of inodes just returns a single node.
 func TestNode_split_MinKeys(t *testing.T) {
 	// Create a node.
-	n := &node{inodes: make(inodes, 0), bucket: &Bucket{tx: &Tx{db: &DB{}, meta: &meta{pgid: 1}}}}
+	m := &common.Meta{}
+	m.SetPgid(1)
+	n := &node{inodes: make(inodes, 0), bucket: &Bucket{tx: &Tx{db: &DB{}, meta: m}}}
 	n.put([]byte("00000001"), []byte("00000001"), []byte("0123456701234567"), 0, 0)
 	n.put([]byte("00000002"), []byte("00000002"), []byte("0123456701234567"), 0, 0)
 
@@ -141,7 +152,9 @@ func TestNode_split_MinKeys(t *testing.T) {
 // Ensure that a node that has keys that all fit on a page just returns one leaf.
 func TestNode_split_SinglePage(t *testing.T) {
 	// Create a node.
-	n := &node{inodes: make(inodes, 0), bucket: &Bucket{tx: &Tx{db: &DB{}, meta: &meta{pgid: 1}}}}
+	m := &common.Meta{}
+	m.SetPgid(1)
+	n := &node{inodes: make(inodes, 0), bucket: &Bucket{tx: &Tx{db: &DB{}, meta: m}}}
 	n.put([]byte("00000001"), []byte("00000001"), []byte("0123456701234567"), 0, 0)
 	n.put([]byte("00000002"), []byte("00000002"), []byte("0123456701234567"), 0, 0)
 	n.put([]byte("00000003"), []byte("00000003"), []byte("0123456701234567"), 0, 0)
