@@ -1,19 +1,19 @@
-package bbolt
+package common
 
 import (
 	"reflect"
 	"unsafe"
 )
 
-func unsafeAdd(base unsafe.Pointer, offset uintptr) unsafe.Pointer {
+func UnsafeAdd(base unsafe.Pointer, offset uintptr) unsafe.Pointer {
 	return unsafe.Pointer(uintptr(base) + offset)
 }
 
-func unsafeIndex(base unsafe.Pointer, offset uintptr, elemsz uintptr, n int) unsafe.Pointer {
+func UnsafeIndex(base unsafe.Pointer, offset uintptr, elemsz uintptr, n int) unsafe.Pointer {
 	return unsafe.Pointer(uintptr(base) + offset + uintptr(n)*elemsz)
 }
 
-func unsafeByteSlice(base unsafe.Pointer, offset uintptr, i, j int) []byte {
+func UnsafeByteSlice(base unsafe.Pointer, offset uintptr, i, j int) []byte {
 	// See: https://github.com/golang/go/wiki/cgo#turning-c-arrays-into-go-slices
 	//
 	// This memory is not allocated from C, but it is unmanaged by Go's
@@ -24,14 +24,14 @@ func unsafeByteSlice(base unsafe.Pointer, offset uintptr, i, j int) []byte {
 	// index 0.  However, the wiki never says that the address must be to
 	// the beginning of a C allocation (or even that malloc was used at
 	// all), so this is believed to be correct.
-	return (*[maxAllocSize]byte)(unsafeAdd(base, offset))[i:j:j]
+	return (*[pageMaxAllocSize]byte)(UnsafeAdd(base, offset))[i:j:j]
 }
 
-// unsafeSlice modifies the data, len, and cap of a slice variable pointed to by
+// UnsafeSlice modifies the data, len, and cap of a slice variable pointed to by
 // the slice parameter.  This helper should be used over other direct
 // manipulation of reflect.SliceHeader to prevent misuse, namely, converting
 // from reflect.SliceHeader to a Go slice type.
-func unsafeSlice(slice, data unsafe.Pointer, len int) {
+func UnsafeSlice(slice, data unsafe.Pointer, len int) {
 	s := (*reflect.SliceHeader)(slice)
 	s.Data = uintptr(data)
 	s.Cap = len

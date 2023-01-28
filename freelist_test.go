@@ -7,6 +7,8 @@ import (
 	"sort"
 	"testing"
 	"unsafe"
+
+	"go.etcd.io/bbolt/internal/common"
 )
 
 // TestFreelistType is used as a env variable for test to indicate the backend type
@@ -15,17 +17,17 @@ const TestFreelistType = "TEST_FREELIST_TYPE"
 // Ensure that a page is added to a transaction's freelist.
 func TestFreelist_free(t *testing.T) {
 	f := newTestFreelist()
-	f.free(100, &page{id: 12})
-	if !reflect.DeepEqual([]pgid{12}, f.pending[100].ids) {
-		t.Fatalf("exp=%v; got=%v", []pgid{12}, f.pending[100].ids)
+	f.free(100, common.NewPage(12, 0, 0, 0))
+	if !reflect.DeepEqual([]common.Pgid{12}, f.pending[100].ids) {
+		t.Fatalf("exp=%v; got=%v", []common.Pgid{12}, f.pending[100].ids)
 	}
 }
 
 // Ensure that a page and its overflow is added to a transaction's freelist.
 func TestFreelist_free_overflow(t *testing.T) {
 	f := newTestFreelist()
-	f.free(100, &page{id: 12, overflow: 3})
-	if exp := []pgid{12, 13, 14, 15}; !reflect.DeepEqual(exp, f.pending[100].ids) {
+	f.free(100, common.NewPage(12, 0, 0, 3))
+	if exp := []common.Pgid{12, 13, 14, 15}; !reflect.DeepEqual(exp, f.pending[100].ids) {
 		t.Fatalf("exp=%v; got=%v", exp, f.pending[100].ids)
 	}
 }
@@ -33,17 +35,17 @@ func TestFreelist_free_overflow(t *testing.T) {
 // Ensure that a transaction's free pages can be released.
 func TestFreelist_release(t *testing.T) {
 	f := newTestFreelist()
-	f.free(100, &page{id: 12, overflow: 1})
-	f.free(100, &page{id: 9})
-	f.free(102, &page{id: 39})
+	f.free(100, common.NewPage(12, 0, 0, 1))
+	f.free(100, common.NewPage(9, 0, 0, 0))
+	f.free(102, common.NewPage(39, 0, 0, 0))
 	f.release(100)
 	f.release(101)
-	if exp := []pgid{9, 12, 13}; !reflect.DeepEqual(exp, f.getFreePageIDs()) {
+	if exp := []common.Pgid{9, 12, 13}; !reflect.DeepEqual(exp, f.getFreePageIDs()) {
 		t.Fatalf("exp=%v; got=%v", exp, f.getFreePageIDs())
 	}
 
 	f.release(102)
-	if exp := []pgid{9, 12, 13, 39}; !reflect.DeepEqual(exp, f.getFreePageIDs()) {
+	if exp := []common.Pgid{9, 12, 13, 39}; !reflect.DeepEqual(exp, f.getFreePageIDs()) {
 		t.Fatalf("exp=%v; got=%v", exp, f.getFreePageIDs())
 	}
 }
@@ -51,33 +53,33 @@ func TestFreelist_release(t *testing.T) {
 // Ensure that releaseRange handles boundary conditions correctly
 func TestFreelist_releaseRange(t *testing.T) {
 	type testRange struct {
-		begin, end txid
+		begin, end common.Txid
 	}
 
 	type testPage struct {
-		id       pgid
+		id       common.Pgid
 		n        int
-		allocTxn txid
-		freeTxn  txid
+		allocTxn common.Txid
+		freeTxn  common.Txid
 	}
 
 	var releaseRangeTests = []struct {
 		title         string
 		pagesIn       []testPage
 		releaseRanges []testRange
-		wantFree      []pgid
+		wantFree      []common.Pgid
 	}{
 		{
 			title:         "Single pending in range",
 			pagesIn:       []testPage{{id: 3, n: 1, allocTxn: 100, freeTxn: 200}},
 			releaseRanges: []testRange{{1, 300}},
-			wantFree:      []pgid{3},
+			wantFree:      []common.Pgid{3},
 		},
 		{
 			title:         "Single pending with minimum end range",
 			pagesIn:       []testPage{{id: 3, n: 1, allocTxn: 100, freeTxn: 200}},
 			releaseRanges: []testRange{{1, 200}},
-			wantFree:      []pgid{3},
+			wantFree:      []common.Pgid{3},
 		},
 		{
 			title:         "Single pending outsize minimum end range",
@@ -89,7 +91,7 @@ func TestFreelist_releaseRange(t *testing.T) {
 			title:         "Single pending with minimum begin range",
 			pagesIn:       []testPage{{id: 3, n: 1, allocTxn: 100, freeTxn: 200}},
 			releaseRanges: []testRange{{100, 300}},
-			wantFree:      []pgid{3},
+			wantFree:      []common.Pgid{3},
 		},
 		{
 			title:         "Single pending outside minimum begin range",
@@ -101,7 +103,7 @@ func TestFreelist_releaseRange(t *testing.T) {
 			title:         "Single pending in minimum range",
 			pagesIn:       []testPage{{id: 3, n: 1, allocTxn: 199, freeTxn: 200}},
 			releaseRanges: []testRange{{199, 200}},
-			wantFree:      []pgid{3},
+			wantFree:      []common.Pgid{3},
 		},
 		{
 			title:         "Single pending and read transaction at 199",
@@ -146,16 +148,16 @@ func TestFreelist_releaseRange(t *testing.T) {
 				{id: 9, n: 2, allocTxn: 175, freeTxn: 200},
 			},
 			releaseRanges: []testRange{{50, 149}, {151, 300}},
-			wantFree:      []pgid{4, 9, 10},
+			wantFree:      []common.Pgid{4, 9, 10},
 		},
 	}
 
 	for _, c := range releaseRangeTests {
 		f := newTestFreelist()
-		var ids []pgid
+		var ids []common.Pgid
 		for _, p := range c.pagesIn {
 			for i := uint64(0); i < uint64(p.n); i++ {
-				ids = append(ids, pgid(uint64(p.id)+i))
+				ids = append(ids, common.Pgid(uint64(p.id)+i))
 			}
 		}
 		f.readIDs(ids)
@@ -164,7 +166,7 @@ func TestFreelist_releaseRange(t *testing.T) {
 		}
 
 		for _, p := range c.pagesIn {
-			f.free(p.freeTxn, &page{id: p.id, overflow: uint32(p.n - 1)})
+			f.free(p.freeTxn, common.NewPage(p.id, 0, 0, uint32(p.n-1)))
 		}
 
 		for _, r := range c.releaseRanges {
@@ -179,11 +181,11 @@ func TestFreelist_releaseRange(t *testing.T) {
 
 func TestFreelistHashmap_allocate(t *testing.T) {
 	f := newTestFreelist()
-	if f.freelistType != FreelistMapType {
+	if f.freelistType != common.FreelistMapType {
 		t.Skip()
 	}
 
-	ids := []pgid{3, 4, 5, 6, 7, 9, 12, 13, 18}
+	ids := []common.Pgid{3, 4, 5, 6, 7, 9, 12, 13, 18}
 	f.readIDs(ids)
 
 	f.allocate(1, 3)
@@ -209,10 +211,10 @@ func TestFreelistHashmap_allocate(t *testing.T) {
 // Ensure that a freelist can find contiguous blocks of pages.
 func TestFreelistArray_allocate(t *testing.T) {
 	f := newTestFreelist()
-	if f.freelistType != FreelistArrayType {
+	if f.freelistType != common.FreelistArrayType {
 		t.Skip()
 	}
-	ids := []pgid{3, 4, 5, 6, 7, 9, 12, 13, 18}
+	ids := []common.Pgid{3, 4, 5, 6, 7, 9, 12, 13, 18}
 	f.readIDs(ids)
 	if id := int(f.allocate(1, 3)); id != 3 {
 		t.Fatalf("exp=3; got=%v", id)
@@ -235,7 +237,7 @@ func TestFreelistArray_allocate(t *testing.T) {
 	if id := int(f.allocate(1, 0)); id != 0 {
 		t.Fatalf("exp=0; got=%v", id)
 	}
-	if exp := []pgid{9, 18}; !reflect.DeepEqual(exp, f.getFreePageIDs()) {
+	if exp := []common.Pgid{9, 18}; !reflect.DeepEqual(exp, f.getFreePageIDs()) {
 		t.Fatalf("exp=%v; got=%v", exp, f.getFreePageIDs())
 	}
 
@@ -248,7 +250,7 @@ func TestFreelistArray_allocate(t *testing.T) {
 	if id := int(f.allocate(1, 1)); id != 0 {
 		t.Fatalf("exp=0; got=%v", id)
 	}
-	if exp := []pgid{}; !reflect.DeepEqual(exp, f.getFreePageIDs()) {
+	if exp := []common.Pgid{}; !reflect.DeepEqual(exp, f.getFreePageIDs()) {
 		t.Fatalf("exp=%v; got=%v", exp, f.getFreePageIDs())
 	}
 }
@@ -257,12 +259,12 @@ func TestFreelistArray_allocate(t *testing.T) {
 func TestFreelist_read(t *testing.T) {
 	// Create a page.
 	var buf [4096]byte
-	page := (*page)(unsafe.Pointer(&buf[0]))
-	page.flags = freelistPageFlag
-	page.count = 2
+	page := (*common.Page)(unsafe.Pointer(&buf[0]))
+	page.SetFlags(common.FreelistPageFlag)
+	page.SetCount(2)
 
 	// Insert 2 page ids.
-	ids := (*[3]pgid)(unsafe.Pointer(uintptr(unsafe.Pointer(page)) + unsafe.Sizeof(*page)))
+	ids := (*[3]common.Pgid)(unsafe.Pointer(uintptr(unsafe.Pointer(page)) + unsafe.Sizeof(*page)))
 	ids[0] = 23
 	ids[1] = 50
 
@@ -271,7 +273,7 @@ func TestFreelist_read(t *testing.T) {
 	f.read(page)
 
 	// Ensure that there are two page ids in the freelist.
-	if exp := []pgid{23, 50}; !reflect.DeepEqual(exp, f.getFreePageIDs()) {
+	if exp := []common.Pgid{23, 50}; !reflect.DeepEqual(exp, f.getFreePageIDs()) {
 		t.Fatalf("exp=%v; got=%v", exp, f.getFreePageIDs())
 	}
 }
@@ -282,10 +284,10 @@ func TestFreelist_write(t *testing.T) {
 	var buf [4096]byte
 	f := newTestFreelist()
 
-	f.readIDs([]pgid{12, 39})
-	f.pending[100] = &txPending{ids: []pgid{28, 11}}
-	f.pending[101] = &txPending{ids: []pgid{3}}
-	p := (*page)(unsafe.Pointer(&buf[0]))
+	f.readIDs([]common.Pgid{12, 39})
+	f.pending[100] = &txPending{ids: []common.Pgid{28, 11}}
+	f.pending[101] = &txPending{ids: []common.Pgid{3}}
+	p := (*common.Page)(unsafe.Pointer(&buf[0]))
 	if err := f.write(p); err != nil {
 		t.Fatal(err)
 	}
@@ -296,7 +298,7 @@ func TestFreelist_write(t *testing.T) {
 
 	// Ensure that the freelist is correct.
 	// All pages should be present and in reverse order.
-	if exp := []pgid{3, 11, 12, 28, 39}; !reflect.DeepEqual(exp, f2.getFreePageIDs()) {
+	if exp := []common.Pgid{3, 11, 12, 28, 39}; !reflect.DeepEqual(exp, f2.getFreePageIDs()) {
 		t.Fatalf("exp=%v; got=%v", exp, f2.getFreePageIDs())
 	}
 }
@@ -313,17 +315,17 @@ func benchmark_FreelistRelease(b *testing.B, size int) {
 	for i := 0; i < b.N; i++ {
 		txp := &txPending{ids: pending}
 		f := newTestFreelist()
-		f.pending = map[txid]*txPending{1: txp}
+		f.pending = map[common.Txid]*txPending{1: txp}
 		f.readIDs(ids)
 		f.release(1)
 	}
 }
 
-func randomPgids(n int) []pgid {
+func randomPgids(n int) []common.Pgid {
 	rand.Seed(42)
-	pgids := make(pgids, n)
+	pgids := make(common.Pgids, n)
 	for i := range pgids {
-		pgids[i] = pgid(rand.Int63())
+		pgids[i] = common.Pgid(rand.Int63())
 	}
 	sort.Sort(pgids)
 	return pgids
@@ -331,7 +333,7 @@ func randomPgids(n int) []pgid {
 
 func Test_freelist_ReadIDs_and_getFreePageIDs(t *testing.T) {
 	f := newTestFreelist()
-	exp := []pgid{3, 4, 5, 6, 7, 9, 12, 13, 18}
+	exp := []common.Pgid{3, 4, 5, 6, 7, 9, 12, 13, 18}
 
 	f.readIDs(exp)
 
@@ -340,7 +342,7 @@ func Test_freelist_ReadIDs_and_getFreePageIDs(t *testing.T) {
 	}
 
 	f2 := newTestFreelist()
-	var exp2 []pgid
+	var exp2 []common.Pgid
 	f2.readIDs(exp2)
 
 	if got2 := f2.getFreePageIDs(); !reflect.DeepEqual(got2, exp2) {
@@ -355,53 +357,53 @@ func Test_freelist_mergeWithExist(t *testing.T) {
 	bm2 := pidSet{5: struct{}{}}
 	tests := []struct {
 		name            string
-		ids             []pgid
-		pgid            pgid
-		want            []pgid
-		wantForwardmap  map[pgid]uint64
-		wantBackwardmap map[pgid]uint64
+		ids             []common.Pgid
+		pgid            common.Pgid
+		want            []common.Pgid
+		wantForwardmap  map[common.Pgid]uint64
+		wantBackwardmap map[common.Pgid]uint64
 		wantfreemap     map[uint64]pidSet
 	}{
 		{
 			name:            "test1",
-			ids:             []pgid{1, 2, 4, 5, 6},
+			ids:             []common.Pgid{1, 2, 4, 5, 6},
 			pgid:            3,
-			want:            []pgid{1, 2, 3, 4, 5, 6},
-			wantForwardmap:  map[pgid]uint64{1: 6},
-			wantBackwardmap: map[pgid]uint64{6: 6},
+			want:            []common.Pgid{1, 2, 3, 4, 5, 6},
+			wantForwardmap:  map[common.Pgid]uint64{1: 6},
+			wantBackwardmap: map[common.Pgid]uint64{6: 6},
 			wantfreemap:     map[uint64]pidSet{6: bm1},
 		},
 		{
 			name:            "test2",
-			ids:             []pgid{1, 2, 5, 6},
+			ids:             []common.Pgid{1, 2, 5, 6},
 			pgid:            3,
-			want:            []pgid{1, 2, 3, 5, 6},
-			wantForwardmap:  map[pgid]uint64{1: 3, 5: 2},
-			wantBackwardmap: map[pgid]uint64{6: 2, 3: 3},
+			want:            []common.Pgid{1, 2, 3, 5, 6},
+			wantForwardmap:  map[common.Pgid]uint64{1: 3, 5: 2},
+			wantBackwardmap: map[common.Pgid]uint64{6: 2, 3: 3},
 			wantfreemap:     map[uint64]pidSet{3: bm1, 2: bm2},
 		},
 		{
 			name:            "test3",
-			ids:             []pgid{1, 2},
+			ids:             []common.Pgid{1, 2},
 			pgid:            3,
-			want:            []pgid{1, 2, 3},
-			wantForwardmap:  map[pgid]uint64{1: 3},
-			wantBackwardmap: map[pgid]uint64{3: 3},
+			want:            []common.Pgid{1, 2, 3},
+			wantForwardmap:  map[common.Pgid]uint64{1: 3},
+			wantBackwardmap: map[common.Pgid]uint64{3: 3},
 			wantfreemap:     map[uint64]pidSet{3: bm1},
 		},
 		{
 			name:            "test4",
-			ids:             []pgid{2, 3},
+			ids:             []common.Pgid{2, 3},
 			pgid:            1,
-			want:            []pgid{1, 2, 3},
-			wantForwardmap:  map[pgid]uint64{1: 3},
-			wantBackwardmap: map[pgid]uint64{3: 3},
+			want:            []common.Pgid{1, 2, 3},
+			wantForwardmap:  map[common.Pgid]uint64{1: 3},
+			wantBackwardmap: map[common.Pgid]uint64{3: 3},
 			wantfreemap:     map[uint64]pidSet{3: bm1},
 		},
 	}
 	for _, tt := range tests {
 		f := newTestFreelist()
-		if f.freelistType == FreelistArrayType {
+		if f.freelistType == common.FreelistArrayType {
 			t.Skip()
 		}
 		f.readIDs(tt.ids)
@@ -425,9 +427,9 @@ func Test_freelist_mergeWithExist(t *testing.T) {
 
 // newTestFreelist get the freelist type from env and initial the freelist
 func newTestFreelist() *freelist {
-	freelistType := FreelistArrayType
-	if env := os.Getenv(TestFreelistType); env == string(FreelistMapType) {
-		freelistType = FreelistMapType
+	freelistType := common.FreelistArrayType
+	if env := os.Getenv(TestFreelistType); env == string(common.FreelistMapType) {
+		freelistType = common.FreelistMapType
 	}
 
 	return newFreelist(freelistType)

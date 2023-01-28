@@ -1,4 +1,4 @@
-package bbolt
+package common
 
 import "errors"
 
