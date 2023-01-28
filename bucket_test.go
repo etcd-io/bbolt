@@ -18,6 +18,7 @@ import (
 
 	bolt "go.etcd.io/bbolt"
 	"go.etcd.io/bbolt/internal/btesting"
+	"go.etcd.io/bbolt/internal/common"
 )
 
 // Ensure that a bucket that gets a non-existent key returns nil.
@@ -246,7 +247,7 @@ func TestBucket_Put_IncompatibleValue(t *testing.T) {
 		if _, err := tx.Bucket([]byte("widgets")).CreateBucket([]byte("foo")); err != nil {
 			t.Fatal(err)
 		}
-		if err := b0.Put([]byte("foo"), []byte("bar")); err != bolt.ErrIncompatibleValue {
+		if err := b0.Put([]byte("foo"), []byte("bar")); err != common.ErrIncompatibleValue {
 			t.Fatalf("unexpected error: %s", err)
 		}
 		return nil
@@ -272,7 +273,7 @@ func TestBucket_Put_Closed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := b.Put([]byte("foo"), []byte("bar")); err != bolt.ErrTxClosed {
+	if err := b.Put([]byte("foo"), []byte("bar")); err != common.ErrTxClosed {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }
@@ -292,7 +293,7 @@ func TestBucket_Put_ReadOnly(t *testing.T) {
 
 	if err := db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("widgets"))
-		if err := b.Put([]byte("foo"), []byte("bar")); err != bolt.ErrTxNotWritable {
+		if err := b.Put([]byte("foo"), []byte("bar")); err != common.ErrTxNotWritable {
 			t.Fatalf("unexpected error: %s", err)
 		}
 		return nil
@@ -560,7 +561,7 @@ func TestBucket_Delete_Bucket(t *testing.T) {
 		if _, err := b.CreateBucket([]byte("foo")); err != nil {
 			t.Fatal(err)
 		}
-		if err := b.Delete([]byte("foo")); err != bolt.ErrIncompatibleValue {
+		if err := b.Delete([]byte("foo")); err != common.ErrIncompatibleValue {
 			t.Fatalf("unexpected error: %s", err)
 		}
 		return nil
@@ -583,7 +584,7 @@ func TestBucket_Delete_ReadOnly(t *testing.T) {
 	}
 
 	if err := db.View(func(tx *bolt.Tx) error {
-		if err := tx.Bucket([]byte("widgets")).Delete([]byte("foo")); err != bolt.ErrTxNotWritable {
+		if err := tx.Bucket([]byte("widgets")).Delete([]byte("foo")); err != common.ErrTxNotWritable {
 			t.Fatalf("unexpected error: %s", err)
 		}
 		return nil
@@ -609,7 +610,7 @@ func TestBucket_Delete_Closed(t *testing.T) {
 	if err := tx.Rollback(); err != nil {
 		t.Fatal(err)
 	}
-	if err := b.Delete([]byte("foo")); err != bolt.ErrTxClosed {
+	if err := b.Delete([]byte("foo")); err != common.ErrTxClosed {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }
@@ -780,7 +781,7 @@ func TestBucket_CreateBucket_IncompatibleValue(t *testing.T) {
 		if err := widgets.Put([]byte("foo"), []byte("bar")); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := widgets.CreateBucket([]byte("foo")); err != bolt.ErrIncompatibleValue {
+		if _, err := widgets.CreateBucket([]byte("foo")); err != common.ErrIncompatibleValue {
 			t.Fatalf("unexpected error: %s", err)
 		}
 		return nil
@@ -801,7 +802,7 @@ func TestBucket_DeleteBucket_IncompatibleValue(t *testing.T) {
 		if err := widgets.Put([]byte("foo"), []byte("bar")); err != nil {
 			t.Fatal(err)
 		}
-		if err := tx.Bucket([]byte("widgets")).DeleteBucket([]byte("foo")); err != bolt.ErrIncompatibleValue {
+		if err := tx.Bucket([]byte("widgets")).DeleteBucket([]byte("foo")); err != common.ErrIncompatibleValue {
 			t.Fatalf("unexpected error: %s", err)
 		}
 		return nil
@@ -943,7 +944,7 @@ func TestBucket_NextSequence_ReadOnly(t *testing.T) {
 
 	if err := db.View(func(tx *bolt.Tx) error {
 		_, err := tx.Bucket([]byte("widgets")).NextSequence()
-		if err != bolt.ErrTxNotWritable {
+		if err != common.ErrTxNotWritable {
 			t.Fatalf("unexpected error: %s", err)
 		}
 		return nil
@@ -966,7 +967,7 @@ func TestBucket_NextSequence_Closed(t *testing.T) {
 	if err := tx.Rollback(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := b.NextSequence(); err != bolt.ErrTxClosed {
+	if _, err := b.NextSequence(); err != common.ErrTxClosed {
 		t.Fatal(err)
 	}
 }
@@ -1158,7 +1159,7 @@ func TestBucket_ForEach_Closed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := b.ForEach(func(k, v []byte) error { return nil }); err != bolt.ErrTxClosed {
+	if err := b.ForEach(func(k, v []byte) error { return nil }); err != common.ErrTxClosed {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }
@@ -1172,10 +1173,10 @@ func TestBucket_Put_EmptyKey(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := b.Put([]byte(""), []byte("bar")); err != bolt.ErrKeyRequired {
+		if err := b.Put([]byte(""), []byte("bar")); err != common.ErrKeyRequired {
 			t.Fatalf("unexpected error: %s", err)
 		}
-		if err := b.Put(nil, []byte("bar")); err != bolt.ErrKeyRequired {
+		if err := b.Put(nil, []byte("bar")); err != common.ErrKeyRequired {
 			t.Fatalf("unexpected error: %s", err)
 		}
 		return nil
@@ -1192,7 +1193,7 @@ func TestBucket_Put_KeyTooLarge(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := b.Put(make([]byte, 32769), []byte("bar")); err != bolt.ErrKeyTooLarge {
+		if err := b.Put(make([]byte, 32769), []byte("bar")); err != common.ErrKeyTooLarge {
 			t.Fatalf("unexpected error: %s", err)
 		}
 		return nil
@@ -1215,7 +1216,7 @@ func TestBucket_Put_ValueTooLarge(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := b.Put([]byte("foo"), make([]byte, bolt.MaxValueSize+1)); err != bolt.ErrValueTooLarge {
+		if err := b.Put([]byte("foo"), make([]byte, bolt.MaxValueSize+1)); err != common.ErrValueTooLarge {
 			t.Fatalf("unexpected error: %s", err)
 		}
 		return nil

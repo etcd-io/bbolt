@@ -21,6 +21,7 @@ import (
 
 	bolt "go.etcd.io/bbolt"
 	"go.etcd.io/bbolt/internal/btesting"
+	"go.etcd.io/bbolt/internal/common"
 )
 
 // pageSize is the size of one page in the data file.
@@ -136,7 +137,7 @@ func TestOpen_ErrInvalid(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := bolt.Open(path, 0666, nil); err != bolt.ErrInvalid {
+	if _, err := bolt.Open(path, 0666, nil); err != common.ErrInvalid {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }
@@ -172,7 +173,7 @@ func TestOpen_ErrVersionMismatch(t *testing.T) {
 	}
 
 	// Reopen data file.
-	if _, err := bolt.Open(path, 0666, nil); err != bolt.ErrVersionMismatch {
+	if _, err := bolt.Open(path, 0666, nil); err != common.ErrVersionMismatch {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }
@@ -208,7 +209,7 @@ func TestOpen_ErrChecksum(t *testing.T) {
 	}
 
 	// Reopen data file.
-	if _, err := bolt.Open(path, 0666, nil); err != bolt.ErrChecksum {
+	if _, err := bolt.Open(path, 0666, nil); err != common.ErrChecksum {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }
@@ -552,7 +553,7 @@ func TestDB_Open_ReadOnly(t *testing.T) {
 	}
 
 	// Can't launch read-write transaction.
-	if _, err := readOnlyDB.Begin(true); err != bolt.ErrDatabaseReadOnly {
+	if _, err := readOnlyDB.Begin(true); err != common.ErrDatabaseReadOnly {
 		t.Fatalf("unexpected error: %s", err)
 	}
 
@@ -641,7 +642,7 @@ func TestOpen_RecoverFreeList(t *testing.T) {
 // Ensure that a database cannot open a transaction when it's not open.
 func TestDB_Begin_ErrDatabaseNotOpen(t *testing.T) {
 	var db bolt.DB
-	if _, err := db.Begin(false); err != bolt.ErrDatabaseNotOpen {
+	if _, err := db.Begin(false); err != common.ErrDatabaseNotOpen {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }
@@ -727,7 +728,7 @@ func TestDB_Concurrent_WriteTo(t *testing.T) {
 // Ensure that opening a transaction while the DB is closed returns an error.
 func TestDB_BeginRW_Closed(t *testing.T) {
 	var db bolt.DB
-	if _, err := db.Begin(true); err != bolt.ErrDatabaseNotOpen {
+	if _, err := db.Begin(true); err != common.ErrDatabaseNotOpen {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }
@@ -828,7 +829,7 @@ func TestDB_Update_Closed(t *testing.T) {
 			t.Fatal(err)
 		}
 		return nil
-	}); err != bolt.ErrDatabaseNotOpen {
+	}); err != common.ErrDatabaseNotOpen {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }

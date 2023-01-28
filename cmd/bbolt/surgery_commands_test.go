@@ -11,7 +11,7 @@ import (
 
 	bolt "go.etcd.io/bbolt"
 	"go.etcd.io/bbolt/internal/btesting"
-	"go.etcd.io/bbolt/internal/guts_cli"
+	"go.etcd.io/bbolt/internal/common"
 )
 
 func TestSurgery_RevertMetaPage(t *testing.T) {
@@ -28,8 +28,8 @@ func TestSurgery_RevertMetaPage(t *testing.T) {
 	// Read both meta0 and meta1 from srcFile
 	srcBuf0 := readPage(t, srcPath, 0, pageSize)
 	srcBuf1 := readPage(t, srcPath, 1, pageSize)
-	meta0Page := guts_cli.LoadPageMeta(srcBuf0)
-	meta1Page := guts_cli.LoadPageMeta(srcBuf1)
+	meta0Page := common.LoadPageMeta(srcBuf0)
+	meta1Page := common.LoadPageMeta(srcBuf1)
 
 	// Get the non-active meta page
 	nonActiveSrcBuf := srcBuf0
@@ -115,7 +115,7 @@ func TestSurgery_ClearPage(t *testing.T) {
 	t.Log("Verify result")
 	dstPageId3Data := readPage(t, dstPath, 3, pageSize)
 
-	p := guts_cli.LoadPage(dstPageId3Data)
+	p := common.LoadPage(dstPageId3Data)
 	assert.Equal(t, uint16(0), p.Count())
 	assert.Equal(t, uint32(0), p.Overflow())
 }

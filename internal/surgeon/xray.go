@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"fmt"
 
+	"go.etcd.io/bbolt/internal/common"
 	"go.etcd.io/bbolt/internal/guts_cli"
 )
 
@@ -20,7 +21,7 @@ func NewXRay(path string) XRay {
 	return XRay{path}
 }
 
-func (n XRay) traverse(stack []guts_cli.Pgid, callback func(page *guts_cli.Page, stack []guts_cli.Pgid) error) error {
+func (n XRay) traverse(stack []common.Pgid, callback func(page *common.Page, stack []common.Pgid) error) error {
 	p, data, err := guts_cli.ReadPage(n.path, uint64(stack[len(stack)-1]))
 	if err != nil {
 		return fmt.Errorf("failed reading page (stack %v): %w", stack, err)
@@ -29,10 +30,10 @@ func (n XRay) traverse(stack []guts_cli.Pgid, callback func(page *guts_cli.Page,
 	if err != nil {
 		return fmt.Errorf("failed callback for page (stack %v): %w", stack, err)
 	}
-	switch p.Type() {
+	switch p.Typ() {
 	case "meta":
 		{
-			m := guts_cli.LoadPageMeta(data)
+			m := common.LoadPageMeta(data)
 			r := m.RootBucket().RootPage()
 			return n.traverse(append(stack, r), callback)
 		}
@@ -40,7 +41,7 @@ func (n XRay) traverse(stack []guts_cli.Pgid, callback func(page *guts_cli.Page,
 		{
 			for i := uint16(0); i < p.Count(); i++ {
 				bpe := p.BranchPageElement(i)
-				if err := n.traverse(append(stack, bpe.PgId()), callback); err != nil {
+				if err := n.traverse(append(stack, bpe.Pgid()), callback); err != nil {
 					return err
 				}
 			}
@@ -73,19 +74,19 @@ func (n XRay) traverse(stack []guts_cli.Pgid, callback func(page *guts_cli.Page,
 // As it traverses multiple buckets, so in theory there might be multiple keys with the given name.
 // Note: For simplicity it's currently implemented as traversing of the whole reachable tree.
 // If key is a bucket name, a page-path referencing the key will be returned as well.
-func (n XRay) FindPathsToKey(key []byte) ([][]guts_cli.Pgid, error) {
-	var found [][]guts_cli.Pgid
+func (n XRay) FindPathsToKey(key []byte) ([][]common.Pgid, error) {
+	var found [][]common.Pgid
 
 	rootPage, _, err := guts_cli.GetRootPage(n.path)
 	if err != nil {
 		return nil, err
 	}
-	err = n.traverse([]guts_cli.Pgid{rootPage},
-		func(page *guts_cli.Page, stack []guts_cli.Pgid) error {
-			if page.Type() == "leaf" {
+	err = n.traverse([]common.Pgid{rootPage},
+		func(page *common.Page, stack []common.Pgid) error {
+			if page.Typ() == "leaf" {
 				for i := uint16(0); i < page.Count(); i++ {
 					if bytes.Equal(page.LeafPageElement(i).Key(), key) {
-						var copyPath []guts_cli.Pgid
+						var copyPath []common.Pgid
 						copyPath = append(copyPath, stack...)
 						found = append(found, copyPath)
 					}
