@@ -8,6 +8,8 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	. "go.etcd.io/bbolt/internal/common"
 )
 
 // fdatasync flushes written data to a file descriptor.
@@ -93,7 +95,7 @@ func mmap(db *DB, sz int) error {
 	}
 
 	// Convert to a byte array.
-	db.data = ((*[maxMapSize]byte)(unsafe.Pointer(addr)))
+	db.data = (*[maxMapSize]byte)(unsafe.Pointer(addr))
 	db.datasz = sz
 
 	return nil

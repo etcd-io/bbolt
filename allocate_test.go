@@ -2,20 +2,22 @@ package bbolt
 
 import (
 	"testing"
+
+	. "go.etcd.io/bbolt/internal/common"
 )
 
 func TestTx_allocatePageStats(t *testing.T) {
 	f := newTestFreelist()
-	ids := []pgid{2, 3}
+	ids := []Pgid{2, 3}
 	f.readIDs(ids)
 
 	tx := &Tx{
 		db: &DB{
 			freelist: f,
-			pageSize: defaultPageSize,
+			pageSize: DefaultPageSize,
 		},
-		meta:  &meta{},
-		pages: make(map[pgid]*page),
+		meta:  &Meta{},
+		pages: make(map[Pgid]*Page),
 	}
 
 	txStats := tx.Stats()

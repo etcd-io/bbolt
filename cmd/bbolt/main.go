@@ -17,11 +17,10 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
-	"unsafe"
-
-	"go.etcd.io/bbolt/internal/guts_cli"
 
 	bolt "go.etcd.io/bbolt"
+	. "go.etcd.io/bbolt/internal/common"
+	"go.etcd.io/bbolt/internal/guts_cli"
 )
 
 var (
@@ -50,12 +49,6 @@ var (
 
 	// ErrBucketRequired is returned when a bucket is not specified.
 	ErrBucketRequired = errors.New("bucket required")
-
-	// ErrBucketNotFound is returned when a bucket is not found.
-	ErrBucketNotFound = errors.New("bucket not found")
-
-	// ErrKeyRequired is returned when a key is not specified.
-	ErrKeyRequired = errors.New("key required")
 
 	// ErrKeyNotFound is returned when a key is not found.
 	ErrKeyNotFound = errors.New("key not found")
@@ -508,16 +501,16 @@ func (cmd *pageItemCommand) Run(args ...string) error {
 	return nil
 }
 
-// leafPageElement retrieves a leaf page element.
-func (cmd *pageItemCommand) leafPageElement(pageBytes []byte, index uint16) (*guts_cli.LeafPageElement, error) {
-	p := (*guts_cli.Page)(unsafe.Pointer(&pageBytes[0]))
+func (cmd *pageItemCommand) validateLeafPage(pageBytes []byte, index uint16) (*Page, error) {
+	p := LoadPage(pageBytes)
 	if index >= p.Count() {
-		return nil, fmt.Errorf("leafPageElement: expected item index less than %d, but got %d.", p.Count(), index)
+		return nil, fmt.Errorf("leafPageElement: expected item index less than %d, but got %d", p.Count(), index)
 	}
-	if p.Type() != "leaf" {
-		return nil, fmt.Errorf("leafPageElement: expected page type of 'leaf', but got '%s'", p.Type())
+	if p.Typ() != "leaf" {
+		return nil, fmt.Errorf("leafPageElement: expected page type of 'leaf', but got '%s'", p.Typ())
 	}
-	return p.LeafPageElement(index), nil
+
+	return p, nil
 }
 
 const FORMAT_MODES = "auto|ascii-encoded|hex|bytes|redacted"
@@ -565,19 +558,21 @@ func writelnBytes(w io.Writer, b []byte, format string) error {
 
 // PrintLeafItemKey writes the bytes of a leaf element's key.
 func (cmd *pageItemCommand) PrintLeafItemKey(w io.Writer, pageBytes []byte, index uint16, format string) error {
-	e, err := cmd.leafPageElement(pageBytes, index)
+	p, err := cmd.validateLeafPage(pageBytes, index)
 	if err != nil {
 		return err
 	}
+	e := p.LeafPageElement(index)
 	return writelnBytes(w, e.Key(), format)
 }
 
-// PrintLeafItemKey writes the bytes of a leaf element's value.
+// PrintLeafItemValue writes the bytes of a leaf element's value.
 func (cmd *pageItemCommand) PrintLeafItemValue(w io.Writer, pageBytes []byte, index uint16, format string) error {
-	e, err := cmd.leafPageElement(pageBytes, index)
+	p, err := cmd.validateLeafPage(pageBytes, index)
 	if err != nil {
 		return err
 	}
+	e := p.LeafPageElement(index)
 	return writelnBytes(w, e.Value(), format)
 }
 
