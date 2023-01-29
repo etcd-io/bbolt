@@ -1,0 +1,30 @@
+Note that we start to track changes starting from v1.3.7.
+
+<hr>
+
+## v1.3.7(TBD)
+
+### BoltDB
+- Add [recursive checker to confirm database consistency](https://github.com/etcd-io/bbolt/pull/225).
+- Add [support to get the page size from the second meta page if the first one is invalid](https://github.com/etcd-io/bbolt/pull/294).
+- Add [support for loong64 arch](https://github.com/etcd-io/bbolt/pull/303).
+- Add [internal iterator to Bucket that goes over buckets](https://github.com/etcd-io/bbolt/pull/356).
+- Add [validation on page read and write](https://github.com/etcd-io/bbolt/pull/358).
+- Add [PreLoadFreelist option to support loading free pages in readonly mode](https://github.com/etcd-io/bbolt/pull/381).
+- Add [(*Tx) CheckWithOption to support generating human-readable diagnostic messages](https://github.com/etcd-io/bbolt/pull/395).
+- Fix [Use `golang.org/x/sys/windows` for `FileLockEx`/`UnlockFileEx`](https://github.com/etcd-io/bbolt/pull/283).
+- Fix [readonly file mapping on windows](https://github.com/etcd-io/bbolt/pull/307).
+- Fix [the "Last" method might return no data due to not skipping the empty pages](https://github.com/etcd-io/bbolt/pull/341).
+- Fix [panic on db.meta when rollback](https://github.com/etcd-io/bbolt/pull/362).
+
+### CMD
+- Add [support for get keys in sub buckets in `bbolt get` command](https://github.com/etcd-io/bbolt/pull/295).
+- Add [support for `--format` flag for `bbolt keys` command](https://github.com/etcd-io/bbolt/pull/306).
+- Add [safeguards to bbolt CLI commands](https://github.com/etcd-io/bbolt/pull/354).
+- Add [`bbolt page` supports --all and --value-format=redacted formats](https://github.com/etcd-io/bbolt/pull/359).
+- Add [`bbolt surgery` commands](https://github.com/etcd-io/bbolt/issues/370).
+- Fix [open db file readonly mode for commands which shouldn't update the db file](https://github.com/etcd-io/bbolt/pull/365), see also [pull/292](https://github.com/etcd-io/bbolt/pull/292).
+
+### Other
+- [Build bbolt CLI tool, test and format the source code using golang 1.17.13](https://github.com/etcd-io/bbolt/pull/297).
+- [Bump golang.org/x/sys to v0.4.0](https://github.com/etcd-io/bbolt/pull/397).
