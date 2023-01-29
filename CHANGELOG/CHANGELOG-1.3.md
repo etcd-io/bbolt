@@ -28,3 +28,15 @@ Note that we start to track changes starting from v1.3.7.
 ### Other
 - [Build bbolt CLI tool, test and format the source code using golang 1.17.13](https://github.com/etcd-io/bbolt/pull/297).
 - [Bump golang.org/x/sys to v0.4.0](https://github.com/etcd-io/bbolt/pull/397).
+
+### Summary
+Release v1.3.7 contains following critical fixes:
+- fix to problem that `Last` method might return incorrect value ([#341](https://github.com/etcd-io/bbolt/pull/341))
+- fix of potential panic when performing transaction's rollback ([#362](https://github.com/etcd-io/bbolt/pull/362))
+
+Other changes focused on defense-in-depth ([#358](https://github.com/etcd-io/bbolt/pull/358), [#294](https://github.com/etcd-io/bbolt/pull/294), [#225](https://github.com/etcd-io/bbolt/pull/225), [#395](https://github.com/etcd-io/bbolt/pull/395))
+
+`bbolt` command line tool was expanded to:
+- allow fixing simple corruptions by `bbolt surgery` ([#370](https://github.com/etcd-io/bbolt/pull/370))
+- be flexible about output formatting ([#306](https://github.com/etcd-io/bbolt/pull/306), [#359](https://github.com/etcd-io/bbolt/pull/359))
+- allow accessing data in subbuckets ([#295](https://github.com/etcd-io/bbolt/pull/295))
