@@ -45,7 +45,7 @@ jobs:
             ;;
         esac
     - name: golangci-lint
-      uses: golangci/golangci-lint-action@0ad9a0988b3973e851ab0a07adf248ec2e100376 # v3.3.1
+      uses: golangci/golangci-lint-action@08e2f20817b15149a52b5b3ebe7de50aff2ba8c5 # v3.4.0
 
   test-windows:
     strategy:
@@ -82,7 +82,7 @@ jobs:
         esac
       shell: bash
     - name: golangci-lint
-      uses: golangci/golangci-lint-action@0ad9a0988b3973e851ab0a07adf248ec2e100376 # v3.3.1
+      uses: golangci/golangci-lint-action@08e2f20817b15149a52b5b3ebe7de50aff2ba8c5 # v3.4.0
 
   coverage:
     needs: ["test-linux", "test-windows"]
