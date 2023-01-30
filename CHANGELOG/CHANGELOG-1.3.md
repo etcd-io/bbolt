@@ -2,7 +2,7 @@ Note that we start to track changes starting from v1.3.7.
 
 <hr>
 
-## v1.3.7(TBD)
+## v1.3.7(2023-01-31)
 
 ### BoltDB
 - Add [recursive checker to confirm database consistency](https://github.com/etcd-io/bbolt/pull/225).
