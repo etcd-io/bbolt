@@ -317,11 +317,14 @@ func (c *Cursor) searchPage(key []byte, p *page) {
 	index := sort.Search(int(p.count), func(i int) bool {
 		// TODO(benbjohnson): Optimize this range search. It's a bit hacky right now.
 		// sort.Search() finds the lowest index where f() != -1 but we need the highest index.
-		ret := bytes.Compare(inodes[i].key(), key)
-		if ret == 0 {
-			exact = true
+		if bytes.HasPrefix(inodes[i].key(), key) {
+			ret := bytes.Compare(inodes[i].key(), key)
+			if ret == 0 {
+				exact = true
+			}
+			return ret != -1
 		}
-		return ret != -1
+		return false
 	})
 	if !exact && index > 0 {
 		index--
