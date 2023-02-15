@@ -176,7 +176,7 @@ func (c *Cursor) goToFirstElementOnTheStack() {
 		// Keep adding pages pointing to the first element to the stack.
 		var pgId common.Pgid
 		if ref.node != nil {
-			pgId = ref.node.inodes[ref.index].pgid
+			pgId = ref.node.inodes[ref.index].Pgid()
 		} else {
 			pgId = ref.page.BranchPageElement(uint16(ref.index)).Pgid()
 		}
@@ -197,7 +197,7 @@ func (c *Cursor) last() {
 		// Keep adding pages pointing to the last element in the stack.
 		var pgId common.Pgid
 		if ref.node != nil {
-			pgId = ref.node.inodes[ref.index].pgid
+			pgId = ref.node.inodes[ref.index].Pgid()
 		} else {
 			pgId = ref.page.BranchPageElement(uint16(ref.index)).Pgid()
 		}
@@ -296,7 +296,7 @@ func (c *Cursor) searchNode(key []byte, n *node) {
 	index := sort.Search(len(n.inodes), func(i int) bool {
 		// TODO(benbjohnson): Optimize this range search. It's a bit hacky right now.
 		// sort.Search() finds the lowest index where f() != -1 but we need the highest index.
-		ret := bytes.Compare(n.inodes[i].key, key)
+		ret := bytes.Compare(n.inodes[i].Key(), key)
 		if ret == 0 {
 			exact = true
 		}
@@ -308,7 +308,7 @@ func (c *Cursor) searchNode(key []byte, n *node) {
 	c.stack[len(c.stack)-1].index = index
 
 	// Recursively search to the next page.
-	c.search(key, n.inodes[index].pgid)
+	c.search(key, n.inodes[index].Pgid())
 }
 
 func (c *Cursor) searchPage(key []byte, p *common.Page) {
@@ -342,7 +342,7 @@ func (c *Cursor) nsearch(key []byte) {
 	// If we have a node then search its inodes.
 	if n != nil {
 		index := sort.Search(len(n.inodes), func(i int) bool {
-			return bytes.Compare(n.inodes[i].key, key) != -1
+			return bytes.Compare(n.inodes[i].Key(), key) != -1
 		})
 		e.index = index
 		return
@@ -368,7 +368,7 @@ func (c *Cursor) keyValue() ([]byte, []byte, uint32) {
 	// Retrieve value from node.
 	if ref.node != nil {
 		inode := &ref.node.inodes[ref.index]
-		return inode.key, inode.value, inode.flags
+		return inode.Key(), inode.Value(), inode.Flags()
 	}
 
 	// Or retrieve value from page.
