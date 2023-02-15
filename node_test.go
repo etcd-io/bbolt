@@ -11,7 +11,7 @@ import (
 func TestNode_put(t *testing.T) {
 	m := &common.Meta{}
 	m.SetPgid(1)
-	n := &node{inodes: make(inodes, 0), bucket: &Bucket{tx: &Tx{meta: m}}}
+	n := &node{inodes: make(common.Inodes, 0), bucket: &Bucket{tx: &Tx{meta: m}}}
 	n.put([]byte("baz"), []byte("baz"), []byte("2"), 0, 0)
 	n.put([]byte("foo"), []byte("foo"), []byte("0"), 0, 0)
 	n.put([]byte("bar"), []byte("bar"), []byte("1"), 0, 0)
@@ -20,17 +20,17 @@ func TestNode_put(t *testing.T) {
 	if len(n.inodes) != 3 {
 		t.Fatalf("exp=3; got=%d", len(n.inodes))
 	}
-	if k, v := n.inodes[0].key, n.inodes[0].value; string(k) != "bar" || string(v) != "1" {
+	if k, v := n.inodes[0].Key(), n.inodes[0].Value(); string(k) != "bar" || string(v) != "1" {
 		t.Fatalf("exp=<bar,1>; got=<%s,%s>", k, v)
 	}
-	if k, v := n.inodes[1].key, n.inodes[1].value; string(k) != "baz" || string(v) != "2" {
+	if k, v := n.inodes[1].Key(), n.inodes[1].Value(); string(k) != "baz" || string(v) != "2" {
 		t.Fatalf("exp=<baz,2>; got=<%s,%s>", k, v)
 	}
-	if k, v := n.inodes[2].key, n.inodes[2].value; string(k) != "foo" || string(v) != "3" {
+	if k, v := n.inodes[2].Key(), n.inodes[2].Value(); string(k) != "foo" || string(v) != "3" {
 		t.Fatalf("exp=<foo,3>; got=<%s,%s>", k, v)
 	}
-	if n.inodes[2].flags != uint32(common.LeafPageFlag) {
-		t.Fatalf("not a leaf: %d", n.inodes[2].flags)
+	if n.inodes[2].Flags() != uint32(common.LeafPageFlag) {
+		t.Fatalf("not a leaf: %d", n.inodes[2].Flags())
 	}
 }
 
@@ -64,10 +64,10 @@ func TestNode_read_LeafPage(t *testing.T) {
 	if len(n.inodes) != 2 {
 		t.Fatalf("exp=2; got=%d", len(n.inodes))
 	}
-	if k, v := n.inodes[0].key, n.inodes[0].value; string(k) != "bar" || string(v) != "fooz" {
+	if k, v := n.inodes[0].Key(), n.inodes[0].Value(); string(k) != "bar" || string(v) != "fooz" {
 		t.Fatalf("exp=<bar,fooz>; got=<%s,%s>", k, v)
 	}
-	if k, v := n.inodes[1].key, n.inodes[1].value; string(k) != "helloworld" || string(v) != "bye" {
+	if k, v := n.inodes[1].Key(), n.inodes[1].Value(); string(k) != "helloworld" || string(v) != "bye" {
 		t.Fatalf("exp=<helloworld,bye>; got=<%s,%s>", k, v)
 	}
 }
@@ -77,7 +77,7 @@ func TestNode_write_LeafPage(t *testing.T) {
 	// Create a node.
 	m := &common.Meta{}
 	m.SetPgid(1)
-	n := &node{isLeaf: true, inodes: make(inodes, 0), bucket: &Bucket{tx: &Tx{db: &DB{}, meta: m}}}
+	n := &node{isLeaf: true, inodes: make(common.Inodes, 0), bucket: &Bucket{tx: &Tx{db: &DB{}, meta: m}}}
 	n.put([]byte("susy"), []byte("susy"), []byte("que"), 0, 0)
 	n.put([]byte("ricki"), []byte("ricki"), []byte("lake"), 0, 0)
 	n.put([]byte("john"), []byte("john"), []byte("johnson"), 0, 0)
@@ -95,13 +95,13 @@ func TestNode_write_LeafPage(t *testing.T) {
 	if len(n2.inodes) != 3 {
 		t.Fatalf("exp=3; got=%d", len(n2.inodes))
 	}
-	if k, v := n2.inodes[0].key, n2.inodes[0].value; string(k) != "john" || string(v) != "johnson" {
+	if k, v := n2.inodes[0].Key(), n2.inodes[0].Value(); string(k) != "john" || string(v) != "johnson" {
 		t.Fatalf("exp=<john,johnson>; got=<%s,%s>", k, v)
 	}
-	if k, v := n2.inodes[1].key, n2.inodes[1].value; string(k) != "ricki" || string(v) != "lake" {
+	if k, v := n2.inodes[1].Key(), n2.inodes[1].Value(); string(k) != "ricki" || string(v) != "lake" {
 		t.Fatalf("exp=<ricki,lake>; got=<%s,%s>", k, v)
 	}
-	if k, v := n2.inodes[2].key, n2.inodes[2].value; string(k) != "susy" || string(v) != "que" {
+	if k, v := n2.inodes[2].Key(), n2.inodes[2].Value(); string(k) != "susy" || string(v) != "que" {
 		t.Fatalf("exp=<susy,que>; got=<%s,%s>", k, v)
 	}
 }
@@ -111,7 +111,7 @@ func TestNode_split(t *testing.T) {
 	// Create a node.
 	m := &common.Meta{}
 	m.SetPgid(1)
-	n := &node{inodes: make(inodes, 0), bucket: &Bucket{tx: &Tx{db: &DB{}, meta: m}}}
+	n := &node{inodes: make(common.Inodes, 0), bucket: &Bucket{tx: &Tx{db: &DB{}, meta: m}}}
 	n.put([]byte("00000001"), []byte("00000001"), []byte("0123456701234567"), 0, 0)
 	n.put([]byte("00000002"), []byte("00000002"), []byte("0123456701234567"), 0, 0)
 	n.put([]byte("00000003"), []byte("00000003"), []byte("0123456701234567"), 0, 0)
@@ -138,7 +138,7 @@ func TestNode_split_MinKeys(t *testing.T) {
 	// Create a node.
 	m := &common.Meta{}
 	m.SetPgid(1)
-	n := &node{inodes: make(inodes, 0), bucket: &Bucket{tx: &Tx{db: &DB{}, meta: m}}}
+	n := &node{inodes: make(common.Inodes, 0), bucket: &Bucket{tx: &Tx{db: &DB{}, meta: m}}}
 	n.put([]byte("00000001"), []byte("00000001"), []byte("0123456701234567"), 0, 0)
 	n.put([]byte("00000002"), []byte("00000002"), []byte("0123456701234567"), 0, 0)
 
@@ -154,7 +154,7 @@ func TestNode_split_SinglePage(t *testing.T) {
 	// Create a node.
 	m := &common.Meta{}
 	m.SetPgid(1)
-	n := &node{inodes: make(inodes, 0), bucket: &Bucket{tx: &Tx{db: &DB{}, meta: m}}}
+	n := &node{inodes: make(common.Inodes, 0), bucket: &Bucket{tx: &Tx{db: &DB{}, meta: m}}}
 	n.put([]byte("00000001"), []byte("00000001"), []byte("0123456701234567"), 0, 0)
 	n.put([]byte("00000002"), []byte("00000002"), []byte("0123456701234567"), 0, 0)
 	n.put([]byte("00000003"), []byte("00000003"), []byte("0123456701234567"), 0, 0)

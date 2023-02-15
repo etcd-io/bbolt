@@ -523,7 +523,7 @@ func (b *Bucket) _forEachPageNode(pgId common.Pgid, depth int, fn func(*common.P
 	} else {
 		if !n.isLeaf {
 			for _, inode := range n.inodes {
-				b._forEachPageNode(inode.pgid, depth+1, fn)
+				b._forEachPageNode(inode.Pgid(), depth+1, fn)
 			}
 		}
 	}
@@ -602,9 +602,9 @@ func (b *Bucket) inlineable() bool {
 	// our threshold for inline bucket size.
 	var size = common.PageHeaderSize
 	for _, inode := range n.inodes {
-		size += common.LeafPageElementSize + uintptr(len(inode.key)) + uintptr(len(inode.value))
+		size += common.LeafPageElementSize + uintptr(len(inode.Key())) + uintptr(len(inode.Value()))
 
-		if inode.flags&common.BucketLeafFlag != 0 {
+		if inode.Flags()&common.BucketLeafFlag != 0 {
 			return false
 		} else if size > b.maxInlineBucketSize() {
 			return false
