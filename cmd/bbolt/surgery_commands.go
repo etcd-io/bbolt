@@ -126,8 +126,9 @@ Usage:
 	bbolt surgery command [arguments]
 
 The commands are:
-    copy-page              copy page from source pageid to target pageid	
     help                   print this screen
+    clear-page             clear all elements at the given pageId
+    copy-page              copy page from source pageId to target pageId
     revert-meta-page       revert the meta page change made by the last transaction
 
 Use "bbolt surgery [command] -h" for more information about a command.
