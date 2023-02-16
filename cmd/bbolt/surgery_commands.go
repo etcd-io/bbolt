@@ -41,12 +41,14 @@ func (cmd *surgeryCommand) Run(args ...string) error {
 	case "help":
 		fmt.Fprintln(cmd.Stderr, cmd.Usage())
 		return ErrUsage
-	case "revert-meta-page":
-		return newRevertMetaPageCommand(cmd).Run(args[1:]...)
-	case "copy-page":
-		return newCopyPageCommand(cmd).Run(args[1:]...)
+	case "clear-elements":
+		return newClearElementsCommand(cmd).Run(args[1:]...)
 	case "clear-page":
 		return newClearPageCommand(cmd).Run(args[1:]...)
+	case "copy-page":
+		return newCopyPageCommand(cmd).Run(args[1:]...)
+	case "revert-meta-page":
+		return newRevertMetaPageCommand(cmd).Run(args[1:]...)
 	default:
 		return ErrUnknownCommand
 	}
@@ -126,8 +128,10 @@ Usage:
 	bbolt surgery command [arguments]
 
 The commands are:
-    copy-page              copy page from source pageid to target pageid	
     help                   print this screen
+    clear-elements         clear elements from start element index to end element index at the given pageId
+    clear-page             clear all elements at the given pageId
+    copy-page              copy page from source pageId to target pageId
     revert-meta-page       revert the meta page change made by the last transaction
 
 Use "bbolt surgery [command] -h" for more information about a command.
@@ -294,6 +298,73 @@ usage: bolt surgery clear-page SRC DST pageId
 ClearPage copies the database file at SRC to a newly created database
 file at DST. Afterwards, it clears all elements in the page at pageId
 in DST.
+
+The original database is left untouched.
+`, "\n")
+}
+
+// clearElementsCommand represents the "surgery clear-elements" command execution.
+type clearElementsCommand struct {
+	*surgeryCommand
+}
+
+// newClearElementsCommand returns a clearElementsCommand.
+func newClearElementsCommand(m *surgeryCommand) *clearElementsCommand {
+	c := &clearElementsCommand{}
+	c.surgeryCommand = m
+	return c
+}
+
+// Run executes the command.
+func (cmd *clearElementsCommand) Run(args ...string) error {
+	// Parse flags.
+	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	help := fs.Bool("h", false, "")
+	if err := fs.Parse(args); err != nil {
+		return err
+	} else if *help {
+		fmt.Fprintln(cmd.Stderr, cmd.Usage())
+		return ErrUsage
+	}
+
+	if err := cmd.parsePathsAndCopyFile(fs); err != nil {
+		return fmt.Errorf("clearPageCommand failed to parse paths and copy file: %w", err)
+	}
+
+	// Read page id.
+	pageId, err := strconv.ParseUint(fs.Arg(2), 10, 64)
+	if err != nil {
+		return err
+	}
+
+	// Read element indexes.
+	startElementIdx, err := strconv.ParseInt(fs.Arg(3), 10, 16)
+	if err != nil {
+		return err
+	}
+	endElementIdx, err := strconv.ParseInt(fs.Arg(4), 10, 16)
+	if err != nil {
+		return err
+	}
+
+	if err := surgeon.ClearElements(cmd.dstPath, common.Pgid(pageId), int(startElementIdx), int(endElementIdx)); err != nil {
+		return fmt.Errorf("clearElementsCommand failed: %w", err)
+	}
+
+	fmt.Fprintf(cmd.Stdout, "All elements in [%d, %d) in page %d were cleared\n", startElementIdx, endElementIdx, pageId)
+	return nil
+}
+
+// Usage returns the help message.
+func (cmd *clearElementsCommand) Usage() string {
+	return strings.TrimLeft(`
+usage: bolt surgery clear-elements SRC DST pageId startElementIndex endElementIndex
+ClearElements copies the database file at SRC to a newly created database
+file at DST. Afterwards, it clears all elements in [startElementIndex, endElementIndex)
+in the page at pageId in DST.
+
+If endElementIndex is -1, then it clears element from startElementIndex to the
+end of the page.
 
 The original database is left untouched.
 `, "\n")
