@@ -50,6 +50,10 @@ func ReadPage(path string, pageID uint64) (*common.Page, []byte, error) {
 		return nil, nil, fmt.Errorf("error: %w, Page claims to have %d overflow pages (>=hwm=%d). Interrupting to avoid risky OOM", ErrCorrupt, overflowN, hwm)
 	}
 
+	if overflowN == 0 {
+		return p, buf, nil
+	}
+
 	// Re-read entire Page (with overflow) into buffer.
 	buf = make([]byte, (uint64(overflowN)+1)*pageSize)
 	if n, err := f.ReadAt(buf, int64(pageID*pageSize)); err != nil {
