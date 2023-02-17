@@ -536,7 +536,9 @@ func formatBytes(b []byte, format string) (string, error) {
 	case "auto":
 		return bytesToAsciiOrHex(b), nil
 	case "redacted":
-		return fmt.Sprintf("<redacted len:%d sha256:%x>", len(b), sha256.New().Sum(b)), nil
+		hash := sha256.New()
+		hash.Write(b)
+		return fmt.Sprintf("<redacted len:%d sha256:%x>", len(b), hash.Sum(nil)), nil
 	default:
 		return "", fmt.Errorf("formatBytes: unsupported format: %s", format)
 	}
