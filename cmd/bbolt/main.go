@@ -502,16 +502,17 @@ func (cmd *pageItemCommand) Run(args ...string) error {
 	return nil
 }
 
-func (cmd *pageItemCommand) validateLeafPage(pageBytes []byte, index uint16) (*common.Page, error) {
+func (cmd *pageItemCommand) leafPageElement(pageBytes []byte, index uint16) ([]byte, []byte, error) {
 	p := common.LoadPage(pageBytes)
 	if index >= p.Count() {
-		return nil, fmt.Errorf("leafPageElement: expected item index less than %d, but got %d", p.Count(), index)
+		return nil, nil, fmt.Errorf("leafPageElement: expected item index less than %d, but got %d", p.Count(), index)
 	}
 	if p.Typ() != "leaf" {
-		return nil, fmt.Errorf("leafPageElement: expected page type of 'leaf', but got '%s'", p.Typ())
+		return nil, nil, fmt.Errorf("leafPageElement: expected page type of 'leaf', but got '%s'", p.Typ())
 	}
 
-	return p, nil
+	e := p.LeafPageElement(index)
+	return e.Key(), e.Value(), nil
 }
 
 const FORMAT_MODES = "auto|ascii-encoded|hex|bytes|redacted"
@@ -561,22 +562,21 @@ func writelnBytes(w io.Writer, b []byte, format string) error {
 
 // PrintLeafItemKey writes the bytes of a leaf element's key.
 func (cmd *pageItemCommand) PrintLeafItemKey(w io.Writer, pageBytes []byte, index uint16, format string) error {
-	p, err := cmd.validateLeafPage(pageBytes, index)
+	k, _, err := cmd.leafPageElement(pageBytes, index)
 	if err != nil {
 		return err
 	}
-	e := p.LeafPageElement(index)
-	return writelnBytes(w, e.Key(), format)
+
+	return writelnBytes(w, k, format)
 }
 
 // PrintLeafItemValue writes the bytes of a leaf element's value.
 func (cmd *pageItemCommand) PrintLeafItemValue(w io.Writer, pageBytes []byte, index uint16, format string) error {
-	p, err := cmd.validateLeafPage(pageBytes, index)
+	_, v, err := cmd.leafPageElement(pageBytes, index)
 	if err != nil {
 		return err
 	}
-	e := p.LeafPageElement(index)
-	return writelnBytes(w, e.Value(), format)
+	return writelnBytes(w, v, format)
 }
 
 // Usage returns the help message.
