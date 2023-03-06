@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
+
+	"go.etcd.io/bbolt/internal/common"
 )
 
 // Cursor represents an iterator that can traverse over all key/value pairs in a bucket
@@ -30,9 +32,9 @@ func (c *Cursor) Bucket() *Bucket {
 // If the bucket is empty then a nil key and value are returned.
 // The returned key and value are only valid for the life of the transaction.
 func (c *Cursor) First() (key []byte, value []byte) {
-	_assert(c.bucket.tx.db != nil, "tx closed")
+	common.Assert(c.bucket.tx.db != nil, "tx closed")
 	k, v, flags := c.first()
-	if (flags & uint32(bucketLeafFlag)) != 0 {
+	if (flags & uint32(common.BucketLeafFlag)) != 0 {
 		return k, nil
 	}
 	return k, v
@@ -40,7 +42,7 @@ func (c *Cursor) First() (key []byte, value []byte) {
 
 func (c *Cursor) first() (key []byte, value []byte, flags uint32) {
 	c.stack = c.stack[:0]
-	p, n := c.bucket.pageNode(c.bucket.root)
+	p, n := c.bucket.pageNode(c.bucket.RootPage())
 	c.stack = append(c.stack, elemRef{page: p, node: n, index: 0})
 	c.goToFirstElementOnTheStack()
 
@@ -51,7 +53,7 @@ func (c *Cursor) first() (key []byte, value []byte, flags uint32) {
 	}
 
 	k, v, flags := c.keyValue()
-	if (flags & uint32(bucketLeafFlag)) != 0 {
+	if (flags & uint32(common.BucketLeafFlag)) != 0 {
 		return k, nil, flags
 	}
 	return k, v, flags
@@ -61,9 +63,9 @@ func (c *Cursor) first() (key []byte, value []byte, flags uint32) {
 // If the bucket is empty then a nil key and value are returned.
 // The returned key and value are only valid for the life of the transaction.
 func (c *Cursor) Last() (key []byte, value []byte) {
-	_assert(c.bucket.tx.db != nil, "tx closed")
+	common.Assert(c.bucket.tx.db != nil, "tx closed")
 	c.stack = c.stack[:0]
-	p, n := c.bucket.pageNode(c.bucket.root)
+	p, n := c.bucket.pageNode(c.bucket.RootPage())
 	ref := elemRef{page: p, node: n}
 	ref.index = ref.count() - 1
 	c.stack = append(c.stack, ref)
@@ -80,7 +82,7 @@ func (c *Cursor) Last() (key []byte, value []byte) {
 	}
 
 	k, v, flags := c.keyValue()
-	if (flags & uint32(bucketLeafFlag)) != 0 {
+	if (flags & uint32(common.BucketLeafFlag)) != 0 {
 		return k, nil
 	}
 	return k, v
@@ -90,9 +92,9 @@ func (c *Cursor) Last() (key []byte, value []byte) {
 // If the cursor is at the end of the bucket then a nil key and value are returned.
 // The returned key and value are only valid for the life of the transaction.
 func (c *Cursor) Next() (key []byte, value []byte) {
-	_assert(c.bucket.tx.db != nil, "tx closed")
+	common.Assert(c.bucket.tx.db != nil, "tx closed")
 	k, v, flags := c.next()
-	if (flags & uint32(bucketLeafFlag)) != 0 {
+	if (flags & uint32(common.BucketLeafFlag)) != 0 {
 		return k, nil
 	}
 	return k, v
@@ -102,9 +104,9 @@ func (c *Cursor) Next() (key []byte, value []byte) {
 // If the cursor is at the beginning of the bucket then a nil key and value are returned.
 // The returned key and value are only valid for the life of the transaction.
 func (c *Cursor) Prev() (key []byte, value []byte) {
-	_assert(c.bucket.tx.db != nil, "tx closed")
+	common.Assert(c.bucket.tx.db != nil, "tx closed")
 	k, v, flags := c.prev()
-	if (flags & uint32(bucketLeafFlag)) != 0 {
+	if (flags & uint32(common.BucketLeafFlag)) != 0 {
 		return k, nil
 	}
 	return k, v
@@ -115,7 +117,7 @@ func (c *Cursor) Prev() (key []byte, value []byte) {
 // follow, a nil key is returned.
 // The returned key and value are only valid for the life of the transaction.
 func (c *Cursor) Seek(seek []byte) (key []byte, value []byte) {
-	_assert(c.bucket.tx.db != nil, "tx closed")
+	common.Assert(c.bucket.tx.db != nil, "tx closed")
 
 	k, v, flags := c.seek(seek)
 
@@ -126,7 +128,7 @@ func (c *Cursor) Seek(seek []byte) (key []byte, value []byte) {
 
 	if k == nil {
 		return nil, nil
-	} else if (flags & uint32(bucketLeafFlag)) != 0 {
+	} else if (flags & uint32(common.BucketLeafFlag)) != 0 {
 		return k, nil
 	}
 	return k, v
@@ -136,15 +138,15 @@ func (c *Cursor) Seek(seek []byte) (key []byte, value []byte) {
 // Delete fails if current key/value is a bucket or if the transaction is not writable.
 func (c *Cursor) Delete() error {
 	if c.bucket.tx.db == nil {
-		return ErrTxClosed
+		return common.ErrTxClosed
 	} else if !c.bucket.Writable() {
-		return ErrTxNotWritable
+		return common.ErrTxNotWritable
 	}
 
 	key, _, flags := c.keyValue()
 	// Return an error if current value is a bucket.
-	if (flags & bucketLeafFlag) != 0 {
-		return ErrIncompatibleValue
+	if (flags & common.BucketLeafFlag) != 0 {
+		return common.ErrIncompatibleValue
 	}
 	c.node().del(key)
 
@@ -156,7 +158,7 @@ func (c *Cursor) Delete() error {
 func (c *Cursor) seek(seek []byte) (key []byte, value []byte, flags uint32) {
 	// Start from root page/node and traverse to correct page.
 	c.stack = c.stack[:0]
-	c.search(seek, c.bucket.root)
+	c.search(seek, c.bucket.RootPage())
 
 	// If this is a bucket then return a nil value.
 	return c.keyValue()
@@ -172,11 +174,11 @@ func (c *Cursor) goToFirstElementOnTheStack() {
 		}
 
 		// Keep adding pages pointing to the first element to the stack.
-		var pgId pgid
+		var pgId common.Pgid
 		if ref.node != nil {
-			pgId = ref.node.inodes[ref.index].pgid
+			pgId = ref.node.inodes[ref.index].Pgid()
 		} else {
-			pgId = ref.page.branchPageElement(uint16(ref.index)).pgid
+			pgId = ref.page.BranchPageElement(uint16(ref.index)).Pgid()
 		}
 		p, n := c.bucket.pageNode(pgId)
 		c.stack = append(c.stack, elemRef{page: p, node: n, index: 0})
@@ -193,11 +195,11 @@ func (c *Cursor) last() {
 		}
 
 		// Keep adding pages pointing to the last element in the stack.
-		var pgId pgid
+		var pgId common.Pgid
 		if ref.node != nil {
-			pgId = ref.node.inodes[ref.index].pgid
+			pgId = ref.node.inodes[ref.index].Pgid()
 		} else {
-			pgId = ref.page.branchPageElement(uint16(ref.index)).pgid
+			pgId = ref.page.BranchPageElement(uint16(ref.index)).Pgid()
 		}
 		p, n := c.bucket.pageNode(pgId)
 
@@ -268,10 +270,10 @@ func (c *Cursor) prev() (key []byte, value []byte, flags uint32) {
 }
 
 // search recursively performs a binary search against a given page/node until it finds a given key.
-func (c *Cursor) search(key []byte, pgId pgid) {
+func (c *Cursor) search(key []byte, pgId common.Pgid) {
 	p, n := c.bucket.pageNode(pgId)
-	if p != nil && (p.flags&(branchPageFlag|leafPageFlag)) == 0 {
-		panic(fmt.Sprintf("invalid page type: %d: %x", p.id, p.flags))
+	if p != nil && (p.Flags()&(common.BranchPageFlag|common.LeafPageFlag)) == 0 {
+		panic(fmt.Sprintf("invalid page type: %d: %x", p.Id(), p.Flags()))
 	}
 	e := elemRef{page: p, node: n}
 	c.stack = append(c.stack, e)
@@ -294,7 +296,7 @@ func (c *Cursor) searchNode(key []byte, n *node) {
 	index := sort.Search(len(n.inodes), func(i int) bool {
 		// TODO(benbjohnson): Optimize this range search. It's a bit hacky right now.
 		// sort.Search() finds the lowest index where f() != -1 but we need the highest index.
-		ret := bytes.Compare(n.inodes[i].key, key)
+		ret := bytes.Compare(n.inodes[i].Key(), key)
 		if ret == 0 {
 			exact = true
 		}
@@ -306,18 +308,18 @@ func (c *Cursor) searchNode(key []byte, n *node) {
 	c.stack[len(c.stack)-1].index = index
 
 	// Recursively search to the next page.
-	c.search(key, n.inodes[index].pgid)
+	c.search(key, n.inodes[index].Pgid())
 }
 
-func (c *Cursor) searchPage(key []byte, p *page) {
+func (c *Cursor) searchPage(key []byte, p *common.Page) {
 	// Binary search for the correct range.
-	inodes := p.branchPageElements()
+	inodes := p.BranchPageElements()
 
 	var exact bool
-	index := sort.Search(int(p.count), func(i int) bool {
+	index := sort.Search(int(p.Count()), func(i int) bool {
 		// TODO(benbjohnson): Optimize this range search. It's a bit hacky right now.
 		// sort.Search() finds the lowest index where f() != -1 but we need the highest index.
-		ret := bytes.Compare(inodes[i].key(), key)
+		ret := bytes.Compare(inodes[i].Key(), key)
 		if ret == 0 {
 			exact = true
 		}
@@ -329,7 +331,7 @@ func (c *Cursor) searchPage(key []byte, p *page) {
 	c.stack[len(c.stack)-1].index = index
 
 	// Recursively search to the next page.
-	c.search(key, inodes[index].pgid)
+	c.search(key, inodes[index].Pgid())
 }
 
 // nsearch searches the leaf node on the top of the stack for a key.
@@ -340,16 +342,16 @@ func (c *Cursor) nsearch(key []byte) {
 	// If we have a node then search its inodes.
 	if n != nil {
 		index := sort.Search(len(n.inodes), func(i int) bool {
-			return bytes.Compare(n.inodes[i].key, key) != -1
+			return bytes.Compare(n.inodes[i].Key(), key) != -1
 		})
 		e.index = index
 		return
 	}
 
 	// If we have a page then search its leaf elements.
-	inodes := p.leafPageElements()
-	index := sort.Search(int(p.count), func(i int) bool {
-		return bytes.Compare(inodes[i].key(), key) != -1
+	inodes := p.LeafPageElements()
+	index := sort.Search(int(p.Count()), func(i int) bool {
+		return bytes.Compare(inodes[i].Key(), key) != -1
 	})
 	e.index = index
 }
@@ -366,17 +368,17 @@ func (c *Cursor) keyValue() ([]byte, []byte, uint32) {
 	// Retrieve value from node.
 	if ref.node != nil {
 		inode := &ref.node.inodes[ref.index]
-		return inode.key, inode.value, inode.flags
+		return inode.Key(), inode.Value(), inode.Flags()
 	}
 
 	// Or retrieve value from page.
-	elem := ref.page.leafPageElement(uint16(ref.index))
-	return elem.key(), elem.value(), elem.flags
+	elem := ref.page.LeafPageElement(uint16(ref.index))
+	return elem.Key(), elem.Value(), elem.Flags()
 }
 
 // node returns the node that the cursor is currently positioned on.
 func (c *Cursor) node() *node {
-	_assert(len(c.stack) > 0, "accessing a node with a zero-length cursor stack")
+	common.Assert(len(c.stack) > 0, "accessing a node with a zero-length cursor stack")
 
 	// If the top of the stack is a leaf node then just return it.
 	if ref := &c.stack[len(c.stack)-1]; ref.node != nil && ref.isLeaf() {
@@ -386,19 +388,19 @@ func (c *Cursor) node() *node {
 	// Start from root and traverse down the hierarchy.
 	var n = c.stack[0].node
 	if n == nil {
-		n = c.bucket.node(c.stack[0].page.id, nil)
+		n = c.bucket.node(c.stack[0].page.Id(), nil)
 	}
 	for _, ref := range c.stack[:len(c.stack)-1] {
-		_assert(!n.isLeaf, "expected branch node")
+		common.Assert(!n.isLeaf, "expected branch node")
 		n = n.childAt(ref.index)
 	}
-	_assert(n.isLeaf, "expected leaf node")
+	common.Assert(n.isLeaf, "expected leaf node")
 	return n
 }
 
 // elemRef represents a reference to an element on a given page/node.
 type elemRef struct {
-	page  *page
+	page  *common.Page
 	node  *node
 	index int
 }
@@ -408,7 +410,7 @@ func (r *elemRef) isLeaf() bool {
 	if r.node != nil {
 		return r.node.isLeaf
 	}
-	return (r.page.flags & leafPageFlag) != 0
+	return (r.page.Flags() & common.LeafPageFlag) != 0
 }
 
 // count returns the number of inodes or page elements.
@@ -416,5 +418,5 @@ func (r *elemRef) count() int {
 	if r.node != nil {
 		return len(r.node.inodes)
 	}
-	return int(r.page.count)
+	return int(r.page.Count())
 }

@@ -2,10 +2,11 @@ package surgeon
 
 import (
 	"fmt"
+	"go.etcd.io/bbolt/internal/common"
 	"go.etcd.io/bbolt/internal/guts_cli"
 )
 
-func CopyPage(path string, srcPage guts_cli.Pgid, target guts_cli.Pgid) error {
+func CopyPage(path string, srcPage common.Pgid, target common.Pgid) error {
 	p1, d1, err1 := guts_cli.ReadPage(path, uint64(srcPage))
 	if err1 != nil {
 		return err1
@@ -14,7 +15,7 @@ func CopyPage(path string, srcPage guts_cli.Pgid, target guts_cli.Pgid) error {
 	return guts_cli.WritePage(path, d1)
 }
 
-func ClearPage(path string, pgId guts_cli.Pgid) error {
+func ClearPage(path string, pgId common.Pgid) error {
 	// Read the page
 	p, buf, err := guts_cli.ReadPage(path, uint64(pgId))
 	if err != nil {
