@@ -162,7 +162,7 @@ func (n *node) del(key []byte) {
 // read initializes the node from a page.
 func (n *node) read(p *common.Page) {
 	n.pgid = p.Id()
-	n.isLeaf = (p.Flags() & common.LeafPageFlag) != 0
+	n.isLeaf = p.IsLeafPage()
 	n.inodes = make(common.Inodes, int(p.Count()))
 
 	for i := 0; i < int(p.Count()); i++ {

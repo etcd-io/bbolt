@@ -272,7 +272,7 @@ func (c *Cursor) prev() (key []byte, value []byte, flags uint32) {
 // search recursively performs a binary search against a given page/node until it finds a given key.
 func (c *Cursor) search(key []byte, pgId common.Pgid) {
 	p, n := c.bucket.pageNode(pgId)
-	if p != nil && (p.Flags()&(common.BranchPageFlag|common.LeafPageFlag)) == 0 {
+	if p != nil && !p.IsBranchPage() && !p.IsLeafPage() {
 		panic(fmt.Sprintf("invalid page type: %d: %x", p.Id(), p.Flags()))
 	}
 	e := elemRef{page: p, node: n}
@@ -410,7 +410,7 @@ func (r *elemRef) isLeaf() bool {
 	if r.node != nil {
 		return r.node.isLeaf
 	}
-	return (r.page.Flags() & common.LeafPageFlag) != 0
+	return r.page.IsLeafPage()
 }
 
 // count returns the number of inodes or page elements.

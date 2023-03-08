@@ -166,7 +166,7 @@ func (f *freelist) free(txid common.Txid, p *common.Page) {
 	allocTxid, ok := f.allocs[p.Id()]
 	if ok {
 		delete(f.allocs, p.Id())
-	} else if (p.Flags() & common.FreelistPageFlag) != 0 {
+	} else if p.IsFreelistPage() {
 		// Freelist is always allocated by prior tx.
 		allocTxid = txid - 1
 	}
@@ -265,7 +265,7 @@ func (f *freelist) freed(pgId common.Pgid) bool {
 
 // read initializes the freelist from a freelist page.
 func (f *freelist) read(p *common.Page) {
-	if (p.Flags() & common.FreelistPageFlag) == 0 {
+	if !p.IsFreelistPage() {
 		panic(fmt.Sprintf("invalid freelist page: %d, page type is %s", p.Id(), p.Typ()))
 	}
 

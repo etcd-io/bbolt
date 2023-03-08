@@ -45,16 +45,32 @@ func NewPage(id Pgid, flags, count uint16, overflow uint32) *Page {
 
 // Typ returns a human-readable page type string used for debugging.
 func (p *Page) Typ() string {
-	if (p.flags & BranchPageFlag) != 0 {
+	if p.IsBranchPage() {
 		return "branch"
-	} else if (p.flags & LeafPageFlag) != 0 {
+	} else if p.IsLeafPage() {
 		return "leaf"
-	} else if (p.flags & MetaPageFlag) != 0 {
+	} else if p.IsMetaPage() {
 		return "meta"
-	} else if (p.flags & FreelistPageFlag) != 0 {
+	} else if p.IsFreelistPage() {
 		return "freelist"
 	}
 	return fmt.Sprintf("unknown<%02x>", p.flags)
+}
+
+func (p *Page) IsBranchPage() bool {
+	return p.flags&BranchPageFlag != 0
+}
+
+func (p *Page) IsLeafPage() bool {
+	return p.flags&LeafPageFlag != 0
+}
+
+func (p *Page) IsMetaPage() bool {
+	return p.flags&MetaPageFlag != 0
+}
+
+func (p *Page) IsFreelistPage() bool {
+	return p.flags&FreelistPageFlag != 0
 }
 
 // Meta returns a pointer to the metadata section of the page.
