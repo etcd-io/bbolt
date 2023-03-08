@@ -548,7 +548,7 @@ func (tx *Tx) forEachPageInternal(pgidstack []common.Pgid, fn func(*common.Page,
 	fn(p, len(pgidstack)-1, pgidstack)
 
 	// Recursively loop over children.
-	if (p.Flags() & common.BranchPageFlag) != 0 {
+	if p.IsBranchPage() {
 		for i := 0; i < int(p.Count()); i++ {
 			elem := p.BranchPageElement(uint16(i))
 			tx.forEachPageInternal(append(pgidstack, elem.Pgid()), fn)

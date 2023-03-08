@@ -410,7 +410,7 @@ func (b *Bucket) Stats() BucketStats {
 		s.InlineBucketN += 1
 	}
 	b.forEachPage(func(p *common.Page, depth int, pgstack []common.Pgid) {
-		if (p.Flags() & common.LeafPageFlag) != 0 {
+		if p.IsLeafPage() {
 			s.KeyN += int(p.Count())
 
 			// used totals the used bytes for the page
@@ -450,7 +450,7 @@ func (b *Bucket) Stats() BucketStats {
 					}
 				}
 			}
-		} else if (p.Flags() & common.BranchPageFlag) != 0 {
+		} else if p.IsBranchPage() {
 			s.BranchPageN++
 			lastElement := p.BranchPageElement(p.Count() - 1)
 
@@ -514,7 +514,7 @@ func (b *Bucket) _forEachPageNode(pgId common.Pgid, depth int, fn func(*common.P
 
 	// Recursively loop over children.
 	if p != nil {
-		if (p.Flags() & common.BranchPageFlag) != 0 {
+		if p.IsBranchPage() {
 			for i := 0; i < int(p.Count()); i++ {
 				elem := p.BranchPageElement(uint16(i))
 				b._forEachPageNode(elem.Pgid(), depth+1, fn)

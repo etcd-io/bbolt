@@ -99,7 +99,7 @@ func (tx *Tx) checkBucket(b *Bucket, reachable map[common.Pgid]*common.Page, fre
 		// We should only encounter un-freed leaf and branch pages.
 		if freed[p.Id()] {
 			ch <- fmt.Errorf("page %d: reachable freed", int(p.Id()))
-		} else if (p.Flags()&common.BranchPageFlag) == 0 && (p.Flags()&common.LeafPageFlag) == 0 {
+		} else if !p.IsBranchPage() && !p.IsLeafPage() {
 			ch <- fmt.Errorf("page %d: invalid type: %s (stack: %v)", int(p.Id()), p.Typ(), stack)
 		}
 	})
@@ -135,7 +135,7 @@ func (tx *Tx) recursivelyCheckPagesInternal(
 	p := tx.page(pgId)
 	pagesStack = append(pagesStack, pgId)
 	switch {
-	case p.Flags()&common.BranchPageFlag != 0:
+	case p.IsBranchPage():
 		// For branch page we navigate ranges of all subpages.
 		runningMin := minKeyClosed
 		for i := range p.BranchPageElements() {
@@ -150,7 +150,7 @@ func (tx *Tx) recursivelyCheckPagesInternal(
 			runningMin = maxKeyInSubtree
 		}
 		return maxKeyInSubtree
-	case p.Flags()&common.LeafPageFlag != 0:
+	case p.IsLeafPage():
 		runningMin := minKeyClosed
 		for i := range p.LeafPageElements() {
 			elem := p.LeafPageElement(uint16(i))
