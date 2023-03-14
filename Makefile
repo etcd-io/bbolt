@@ -25,10 +25,12 @@ lint:
 test:
 	@echo "hashmap freelist test"
 	TEST_FREELIST_TYPE=hashmap go test -v ${TESTFLAGS} -timeout 30m
+	TEST_FREELIST_TYPE=hashmap go test -v ${TESTFLAGS} ./internal/...
 	TEST_FREELIST_TYPE=hashmap go test -v ${TESTFLAGS} ./cmd/bbolt
 
 	@echo "array freelist test"
 	TEST_FREELIST_TYPE=array go test -v ${TESTFLAGS} -timeout 30m
+	TEST_FREELIST_TYPE=array go test -v ${TESTFLAGS} ./internal/...
 	TEST_FREELIST_TYPE=array go test -v ${TESTFLAGS} ./cmd/bbolt
 
 .PHONY: coverage
