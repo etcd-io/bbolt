@@ -336,7 +336,17 @@ exists then it will return its byte slice value. If it doesn't exist then it
 will return `nil`. It's important to note that you can have a zero-length value
 set to a key which is different than the key not existing.
 
-Use the `Bucket.Delete()` function to delete a key from the bucket.
+Use the `Bucket.Delete()` function to delete a key from the bucket:
+
+```go
+db.Update(func (tx *bolt.Tx) error {
+    b := tx.Bucket([]byte("MyBucket"))
+    err := b.Delete([]byte("answer"))
+    return err
+})
+```
+
+This will delete the key `answers` from the bucket `MyBucket`.
 
 Please note that values returned from `Get()` are only valid while the
 transaction is open. If you need to use a value outside of the transaction
