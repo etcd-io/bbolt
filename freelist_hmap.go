@@ -80,12 +80,20 @@ func (f *freelist) hashmapGetFreePageIDs() []common.Pgid {
 	}
 
 	m := make([]common.Pgid, 0, count)
-	for start, size := range f.forwardMap {
-		for i := 0; i < int(size); i++ {
-			m = append(m, start+common.Pgid(i))
+
+	startPageIds := make([]common.Pgid, 0, len(f.forwardMap))
+	for k := range f.forwardMap {
+		startPageIds = append(startPageIds, k)
+	}
+	sort.Sort(common.Pgids(startPageIds))
+
+	for _, start := range startPageIds {
+		if size, ok := f.forwardMap[start]; ok {
+			for i := 0; i < int(size); i++ {
+				m = append(m, start+common.Pgid(i))
+			}
 		}
 	}
-	sort.Sort(common.Pgids(m))
 
 	return m
 }
