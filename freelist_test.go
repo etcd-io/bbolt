@@ -434,3 +434,52 @@ func newTestFreelist() *freelist {
 
 	return newFreelist(freelistType)
 }
+
+func Test_freelist_hashmapGetFreePageIDs(t *testing.T) {
+	f := newTestFreelist()
+	if f.freelistType == common.FreelistArrayType {
+		t.Skip()
+	}
+
+	N := int32(100000)
+	fm := make(map[common.Pgid]uint64)
+	i := int32(0)
+	val := int32(0)
+	for i = 0; i < N; {
+		val = rand.Int31n(1000)
+		fm[common.Pgid(i)] = uint64(val)
+		i += val
+	}
+
+	f.forwardMap = fm
+	res := f.hashmapGetFreePageIDs()
+
+	if !sort.SliceIsSorted(res, func(i, j int) bool { return res[i] < res[j] }) {
+		t.Fatalf("pgids not sorted")
+	}
+}
+
+func Benchmark_freelist_hashmapGetFreePageIDs(b *testing.B) {
+	f := newTestFreelist()
+	if f.freelistType == common.FreelistArrayType {
+		b.Skip()
+	}
+
+	N := int32(100000)
+	fm := make(map[common.Pgid]uint64)
+	i := int32(0)
+	val := int32(0)
+	for i = 0; i < N; {
+		val = rand.Int31n(1000)
+		fm[common.Pgid(i)] = uint64(val)
+		i += val
+	}
+
+	f.forwardMap = fm
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		f.hashmapGetFreePageIDs()
+	}
+}
