@@ -162,6 +162,13 @@ func (p *Page) hexdump(n int) {
 	fmt.Fprintf(os.Stderr, "%x\n", buf)
 }
 
+func (p *Page) PageElementSize() uintptr {
+	if p.IsLeafPage() {
+		return LeafPageElementSize
+	}
+	return BranchPageElementSize
+}
+
 func (p *Page) Id() Pgid {
 	return p.id
 }
