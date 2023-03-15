@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
-	"unsafe"
 
 	"go.etcd.io/bbolt/internal/common"
 )
@@ -163,22 +162,7 @@ func (n *node) del(key []byte) {
 func (n *node) read(p *common.Page) {
 	n.pgid = p.Id()
 	n.isLeaf = p.IsLeafPage()
-	n.inodes = make(common.Inodes, int(p.Count()))
-
-	for i := 0; i < int(p.Count()); i++ {
-		inode := &n.inodes[i]
-		if n.isLeaf {
-			elem := p.LeafPageElement(uint16(i))
-			inode.SetFlags(elem.Flags())
-			inode.SetKey(elem.Key())
-			inode.SetValue(elem.Value())
-		} else {
-			elem := p.BranchPageElement(uint16(i))
-			inode.SetPgid(elem.Pgid())
-			inode.SetKey(elem.Key())
-		}
-		common.Assert(len(inode.Key()) > 0, "read: zero-length inode key")
-	}
+	n.inodes = common.ReadInodeFromPage(p)
 
 	// Save first key, so we can find the node in the parent when we spill.
 	if len(n.inodes) > 0 {
@@ -212,37 +196,7 @@ func (n *node) write(p *common.Page) {
 		return
 	}
 
-	// Loop over each item and write it to the page.
-	// off tracks the offset into p of the start of the next data.
-	off := unsafe.Sizeof(*p) + n.pageElementSize()*uintptr(len(n.inodes))
-	for i, item := range n.inodes {
-		common.Assert(len(item.Key()) > 0, "write: zero-length inode key")
-
-		// Create a slice to write into of needed size and advance
-		// byte pointer for next iteration.
-		sz := len(item.Key()) + len(item.Value())
-		b := common.UnsafeByteSlice(unsafe.Pointer(p), off, 0, sz)
-		off += uintptr(sz)
-
-		// Write the page element.
-		if n.isLeaf {
-			elem := p.LeafPageElement(uint16(i))
-			elem.SetPos(uint32(uintptr(unsafe.Pointer(&b[0])) - uintptr(unsafe.Pointer(elem))))
-			elem.SetFlags(item.Flags())
-			elem.SetKsize(uint32(len(item.Key())))
-			elem.SetVsize(uint32(len(item.Value())))
-		} else {
-			elem := p.BranchPageElement(uint16(i))
-			elem.SetPos(uint32(uintptr(unsafe.Pointer(&b[0])) - uintptr(unsafe.Pointer(elem))))
-			elem.SetKsize(uint32(len(item.Key())))
-			elem.SetPgid(item.Pgid())
-			common.Assert(elem.Pgid() != p.Id(), "write: circular dependency occurred")
-		}
-
-		// Write data for the element to the end of the page.
-		l := copy(b, item.Key())
-		copy(b[l:], item.Value())
-	}
+	common.WriteInodeToPage(n.inodes, p)
 
 	// DEBUG ONLY: n.dump()
 }
