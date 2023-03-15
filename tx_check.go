@@ -15,13 +15,10 @@ import (
 // because of caching. This overhead can be removed if running on a read-only
 // transaction, however, it is not safe to execute other writer transactions at
 // the same time.
-func (tx *Tx) Check() <-chan error {
-	return tx.CheckWithOptions()
-}
-
-// CheckWithOptions allows users to provide a customized `KVStringer` implementation,
+//
+// It also allows users to provide a customized `KVStringer` implementation,
 // so that bolt can generate human-readable diagnostic messages.
-func (tx *Tx) CheckWithOptions(options ...CheckOption) <-chan error {
+func (tx *Tx) Check(options ...CheckOption) <-chan error {
 	chkConfig := checkConfig{
 		kvStringer: HexKVStringer(),
 	}
