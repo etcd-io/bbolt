@@ -12,6 +12,41 @@ import (
 	"go.etcd.io/bbolt/internal/common"
 )
 
+// pwritev on Windows does not make use of vectorized io, it merely writes the bytes using the db ops.writeAt.
+// The pages must be sorted by their id indicating their sequence.
+func pwritev(db *DB, pages []*page) error {
+	for _, p := range pages {
+		rem := (uint64(p.overflow) + 1) * uint64(db.pageSize)
+		offset := int64(p.id) * int64(db.pageSize)
+		var written uintptr
+
+		// Write out page in "max allocation" sized chunks.
+		for {
+			sz := rem
+			if sz > maxAllocSize-1 {
+				sz = maxAllocSize - 1
+			}
+			buf := unsafeByteSlice(unsafe.Pointer(p), written, 0, int(sz))
+
+			if _, err := db.ops.writeAt(buf, offset); err != nil {
+				return err
+			}
+
+			// Exit inner for loop if we've written all the chunks.
+			rem -= sz
+			if rem == 0 {
+				break
+			}
+
+			// Otherwise move offset forward and move pointer to next chunk.
+			offset += int64(sz)
+			written += uintptr(sz)
+		}
+	}
+
+	return nil
+}
+
 // fdatasync flushes written data to a file descriptor.
 func fdatasync(db *DB) error {
 	return db.file.Sync()

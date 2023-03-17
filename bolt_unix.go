@@ -14,6 +14,63 @@ import (
 	"go.etcd.io/bbolt/internal/common"
 )
 
+// pwritev writes the given pages using vectorized io. The pages must be sorted by their id indicating their sequence.
+// The logic identifies runs of consecutive pages that are written with vectorized io using the pwritev syscall.
+func pwritev(db *DB, pages []*common.Page) error {
+	if len(pages) == 0 {
+		return nil
+	}
+
+	offsets, iovecs := pagesToIovec(db, pages)
+
+	var (
+		e syscall.Errno
+	)
+	for i := 0; i < len(offsets); i++ {
+		_, _, e = syscall.Syscall6(syscall.SYS_PWRITEV, db.file.Fd(), uintptr(unsafe.Pointer(&iovecs[i][0])),
+			uintptr(len(iovecs[i])), uintptr(offsets[i]), uintptr(offsets[i]>>0x8), 0)
+		if e != 0 {
+			return e
+		}
+	}
+
+	return nil
+}
+
+func pagesToIovec(db *DB, pages []*common.Page) ([]uint64, [][]syscall.Iovec) {
+	var offsets []uint64
+	var iovecs [][]syscall.Iovec
+
+	// TODO: read from this from sysconf(_SC_IOV_MAX)?
+	// linux and darwin default is 1024
+	const maxVec = 1024
+
+	lastPid := pages[0].Id() - 1
+	begin := 0
+	var curVecs []syscall.Iovec
+	for i := 0; i < len(pages); i++ {
+		p := pages[i]
+		if p.Id() != (lastPid+1) || len(curVecs) >= maxVec {
+			offsets = append(offsets, uint64(pages[begin].Id())*uint64(db.pageSize))
+			iovecs = append(iovecs, curVecs)
+
+			begin = i
+			curVecs = []syscall.Iovec{}
+		}
+		curVecs = append(curVecs, syscall.Iovec{
+			Base: (*byte)(unsafe.Pointer(p)),
+			Len:  (uint64(p.Overflow()) + 1) * uint64(db.pageSize),
+		})
+		lastPid = p.Id() + common.Pgid(p.Overflow())
+	}
+
+	if len(curVecs) > 0 {
+		offsets = append(offsets, uint64(pages[begin].Id())*uint64(db.pageSize))
+		iovecs = append(iovecs, curVecs)
+	}
+	return offsets, iovecs
+}
+
 // flock acquires an advisory lock on a file descriptor.
 func flock(db *DB, exclusive bool, timeout time.Duration) error {
 	var t time.Time
