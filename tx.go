@@ -22,14 +22,16 @@ import (
 // are using them. A long running read transaction can cause the database to
 // quickly grow.
 type Tx struct {
-	writable       bool
-	managed        bool
-	db             *DB
-	meta           *common.Meta
-	root           Bucket
-	pages          map[common.Pgid]*common.Page
-	stats          TxStats
-	commitHandlers []func()
+	writable          bool
+	managed           bool
+	db                *DB
+	meta              *common.Meta
+	root              Bucket
+	pages             map[common.Pgid]*common.Page
+	stats             TxStats
+	reusableRef       []elemRef // always stored with 0 len
+	reusableRefLocked uint32
+	commitHandlers    []func()
 
 	// WriteFlag specifies the flag for write-related methods like WriteTo().
 	// Tx opens the database file with the specified flag to copy the data.
@@ -585,6 +587,31 @@ func (tx *Tx) Page(id int) (*common.PageInfo, error) {
 	}
 
 	return info, nil
+}
+
+// seekWithSharedCursorThreadUnsafe should be used in internal functions (for thread safe version look at seekWithSharedCursorThreadSafe).
+// Reuses []elemRef stored in Tx to remove unnecessary allocations.
+func (tx *Tx) seekWithSharedCursorThreadUnsafe(b *Bucket, seek []byte) (key []byte, value []byte, flags uint32, cursor Cursor) {
+	// should be 100% compatible with Bucket.Cursor()
+	cursor = Cursor{bucket: b, stack: tx.reusableRef}
+	key, value, flags = cursor.seek(seek)
+	tx.reusableRef = cursor.stack[:0]
+	return
+}
+
+// seekWithSharedCursorThreadSafe should be used in internal functions.
+// Reuses []elemRef stored in Tx to remove unnecessary allocations.
+// It doesn't return a cursor because it's not thread safe
+func (tx *Tx) seekWithSharedCursorThreadSafe(b *Bucket, seek []byte) (key []byte, value []byte, flags uint32) {
+	if atomic.CompareAndSwapUint32(&tx.reusableRefLocked, 0, 1) {
+		// should be 100% compatible with Bucket.Cursor()
+		c := Cursor{bucket: b, stack: tx.reusableRef}
+		key, value, flags = c.seek(seek)
+		tx.reusableRef = c.stack[:0]
+		atomic.StoreUint32(&tx.reusableRefLocked, 0)
+		return
+	}
+	return b.Cursor().seek(seek)
 }
 
 // TxStats represents statistics about the actions performed by the transaction.

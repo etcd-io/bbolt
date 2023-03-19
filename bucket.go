@@ -75,6 +75,7 @@ func (b *Bucket) Cursor() *Cursor {
 	b.tx.stats.IncCursorCount(1)
 
 	// Allocate and return a cursor.
+	// If changed, update the code in Tx.seekWithSharedCursor.*()
 	return &Cursor{
 		bucket: b,
 		stack:  make([]elemRef, 0),
@@ -92,8 +93,7 @@ func (b *Bucket) Bucket(name []byte) *Bucket {
 	}
 
 	// Move cursor to key.
-	c := b.Cursor()
-	k, v, flags := c.seek(name)
+	k, v, flags := b.tx.seekWithSharedCursorThreadSafe(b, name)
 
 	// Return nil if the key doesn't exist or it is not a bucket.
 	if !bytes.Equal(name, k) || (flags&common.BucketLeafFlag) == 0 {
@@ -154,8 +154,7 @@ func (b *Bucket) CreateBucket(key []byte) (*Bucket, error) {
 	}
 
 	// Move cursor to correct position.
-	c := b.Cursor()
-	k, _, flags := c.seek(key)
+	k, _, flags, c := b.tx.seekWithSharedCursorThreadUnsafe(b, key)
 
 	// Return an error if there is an existing key.
 	if bytes.Equal(key, k) {
@@ -248,7 +247,7 @@ func (b *Bucket) DeleteBucket(key []byte) error {
 // Returns a nil value if the key does not exist or if the key is a nested bucket.
 // The returned value is only valid for the life of the transaction.
 func (b *Bucket) Get(key []byte) []byte {
-	k, v, flags := b.Cursor().seek(key)
+	k, v, flags := b.tx.seekWithSharedCursorThreadSafe(b, key)
 
 	// Return nil if this is a bucket.
 	if (flags & common.BucketLeafFlag) != 0 {
@@ -280,8 +279,7 @@ func (b *Bucket) Put(key []byte, value []byte) error {
 	}
 
 	// Move cursor to correct position.
-	c := b.Cursor()
-	k, _, flags := c.seek(key)
+	k, _, flags, c := b.tx.seekWithSharedCursorThreadUnsafe(b, key)
 
 	// Return an error if there is an existing key with a bucket value.
 	if bytes.Equal(key, k) && (flags&common.BucketLeafFlag) != 0 {
@@ -557,8 +555,7 @@ func (b *Bucket) spill() error {
 		}
 
 		// Update parent node.
-		var c = b.Cursor()
-		k, _, flags := c.seek([]byte(name))
+		k, _, flags, c := b.tx.seekWithSharedCursorThreadUnsafe(b, []byte(name))
 		if !bytes.Equal([]byte(name), k) {
 			panic(fmt.Sprintf("misplaced bucket header: %x -> %x", []byte(name), k))
 		}
