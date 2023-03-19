@@ -60,9 +60,23 @@ func main() {
 	m := NewMain()
 	if err := m.Run(os.Args[1:]...); err == ErrUsage {
 		os.Exit(2)
+	} else if err == ErrUnknownCommand {
+		execute()
 	} else if err != nil {
 		fmt.Println(err.Error())
 		os.Exit(1)
+	}
+}
+
+func execute() {
+	rootCmd := NewRootCommand()
+	if err := rootCmd.Execute(); err != nil {
+		if rootCmd.SilenceErrors {
+			fmt.Fprintln(os.Stderr, "Error:", err)
+			os.Exit(1)
+		} else {
+			os.Exit(1)
+		}
 	}
 }
 
