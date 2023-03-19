@@ -181,4 +181,30 @@ func testSurgeryClearPageElement(t *testing.T, startIdx, endIdx int, setEndIdxAs
 	p, _, err := guts_cli.ReadPage(output, pageId)
 	require.NoError(t, err)
 	assert.Equal(t, expectedCnt, int(p.Count()))
+
+	compareDataAfterClearingElement(t, srcPath, output, pageId, startIdx, endIdx)
+}
+
+func compareDataAfterClearingElement(t *testing.T, srcPath, dstPath string, pageId uint64, startIdx, endIdx int) {
+	srcPage, _, err := guts_cli.ReadPage(srcPath, pageId)
+	require.NoError(t, err)
+
+	dstPage, _, err := guts_cli.ReadPage(dstPath, pageId)
+	require.NoError(t, err)
+
+	var dstIdx uint16
+	for i := uint16(0); i < srcPage.Count(); i++ {
+		// skip the cleared elements
+		if dstIdx >= uint16(startIdx) && (dstIdx < uint16(endIdx) || endIdx == -1) {
+			continue
+		}
+		srcElement := srcPage.LeafPageElement(i)
+		dstElement := dstPage.LeafPageElement(dstIdx)
+
+		require.Equal(t, srcElement.Flags(), dstElement.Flags())
+		require.Equal(t, srcElement.Key(), dstElement.Key())
+		require.Equal(t, srcElement.Value(), dstElement.Value())
+
+		dstIdx++
+	}
 }
