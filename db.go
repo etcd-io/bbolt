@@ -517,6 +517,8 @@ func (db *DB) mmapSize(size int) (int, error) {
 }
 
 func (db *DB) munlock(fileSize int) error {
+	// gofail: var munlockError string
+	// return errors.New(munlockError)
 	if err := munlock(db, fileSize); err != nil {
 		return fmt.Errorf("munlock error: " + err.Error())
 	}
@@ -524,6 +526,8 @@ func (db *DB) munlock(fileSize int) error {
 }
 
 func (db *DB) mlock(fileSize int) error {
+	// gofail: var mlockError string
+	// return errors.New(mlockError)
 	if err := mlock(db, fileSize); err != nil {
 		return fmt.Errorf("mlock error: " + err.Error())
 	}
