@@ -2,7 +2,6 @@ package failpoint
 
 import (
 	"fmt"
-	"go.etcd.io/bbolt/internal/btesting"
 	"path/filepath"
 	"testing"
 	"time"
@@ -10,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	bolt "go.etcd.io/bbolt"
+	"go.etcd.io/bbolt/internal/btesting"
 	gofail "go.etcd.io/gofail/runtime"
 )
 
