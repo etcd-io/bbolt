@@ -1,6 +1,8 @@
 package failpoint
 
 import (
+	"fmt"
+	"go.etcd.io/bbolt/internal/btesting"
 	"path/filepath"
 	"testing"
 	"time"
@@ -44,5 +46,51 @@ func TestFailpoint_UnmapFail_DbClose(t *testing.T) {
 	db, err := bolt.Open(f, 0666, &bolt.Options{Timeout: 30 * time.Second})
 	require.NoError(t, err)
 	err = db.Close()
+	require.NoError(t, err)
+}
+
+func TestFailpoint_mLockFail(t *testing.T) {
+	err := gofail.Enable("mlockError", `return("mlock somehow failed")`)
+	require.NoError(t, err)
+
+	f := filepath.Join(t.TempDir(), "db")
+	_, err = bolt.Open(f, 0666, &bolt.Options{Mlock: true})
+	require.Error(t, err)
+	require.ErrorContains(t, err, "mlock somehow failed")
+
+	// It should work after disabling the failpoint.
+	err = gofail.Disable("mlockError")
+	require.NoError(t, err)
+
+	_, err = bolt.Open(f, 0666, &bolt.Options{Mlock: true})
+	require.NoError(t, err)
+}
+
+func TestFailpoint_mLockFail_When_remap(t *testing.T) {
+	db := btesting.MustCreateDB(t)
+	db.Mlock = true
+
+	err := gofail.Enable("mlockError", `return("mlock somehow failed in allocate")`)
+	require.NoError(t, err)
+
+	err = db.Fill([]byte("data"), 1, 10000,
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
+		func(tx int, k int) []byte { return make([]byte, 100) },
+	)
+
+	require.Error(t, err)
+	require.ErrorContains(t, err, "mlock somehow failed in allocate")
+
+	// It should work after disabling the failpoint.
+	err = gofail.Disable("mlockError")
+	require.NoError(t, err)
+	db.MustClose()
+	db.MustReopen()
+
+	err = db.Fill([]byte("data"), 1, 10000,
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
+		func(tx int, k int) []byte { return make([]byte, 100) },
+	)
+
 	require.NoError(t, err)
 }
