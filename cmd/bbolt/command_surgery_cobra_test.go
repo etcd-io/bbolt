@@ -19,34 +19,66 @@ func TestSurgery_ClearPageElement(t *testing.T) {
 		name                 string
 		from                 int
 		to                   int
+		isBranchPage         bool
 		setEndIdxAsCount     bool
 		removeOnlyOneElement bool // only valid when setEndIdxAsCount == true, and startIdx = endIdx -1 in this case.
 		expectError          bool
 	}{
-		// normal range
+		// normal range in leaf page
 		{
-			name: "normal range: [4, 8)",
+			name: "normal range in leaf page: [4, 8)",
 			from: 4,
 			to:   8,
 		},
 		{
-			name: "normal range: [5, -1)",
+			name: "normal range in leaf page: [5, -1)",
 			from: 4,
 			to:   -1,
 		},
 		{
-			name: "normal range: all",
+			name: "normal range in leaf page: all",
 			from: 0,
 			to:   -1,
 		},
 		{
-			name: "normal range: [0, 7)",
+			name: "normal range in leaf page: [0, 7)",
 			from: 0,
 			to:   7,
 		},
 		{
-			name:             "normal range: [3, count)",
+			name:             "normal range in leaf page: [3, count)",
 			from:             4,
+			setEndIdxAsCount: true,
+		},
+		// normal range in branch page
+		{
+			name:         "normal range in branch page: [4, 8)",
+			from:         4,
+			to:           8,
+			isBranchPage: true,
+		},
+		{
+			name:         "normal range in branch page: [5, -1)",
+			from:         4,
+			to:           -1,
+			isBranchPage: true,
+		},
+		{
+			name:         "normal range in branch page: all",
+			from:         0,
+			to:           -1,
+			isBranchPage: true,
+		},
+		{
+			name:         "normal range in branch page: [0, 7)",
+			from:         0,
+			to:           7,
+			isBranchPage: true,
+		},
+		{
+			name:             "normal range in branch page: [3, count)",
+			from:             4,
+			isBranchPage:     true,
 			setEndIdxAsCount: true,
 		},
 		// remove only one element
@@ -106,12 +138,12 @@ func TestSurgery_ClearPageElement(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			testSurgeryClearPageElement(t, tc.from, tc.to, tc.setEndIdxAsCount, tc.removeOnlyOneElement, tc.expectError)
+			testSurgeryClearPageElement(t, tc.from, tc.to, tc.isBranchPage, tc.setEndIdxAsCount, tc.removeOnlyOneElement, tc.expectError)
 		})
 	}
 }
 
-func testSurgeryClearPageElement(t *testing.T, startIdx, endIdx int, setEndIdxAsCount, removeOnlyOne, expectError bool) {
+func testSurgeryClearPageElement(t *testing.T, startIdx, endIdx int, isBranchPage, setEndIdxAsCount, removeOnlyOne, expectError bool) {
 	pageSize := 4096
 	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: pageSize})
 	srcPath := db.Path()
@@ -135,9 +167,16 @@ func testSurgeryClearPageElement(t *testing.T, startIdx, endIdx int, setEndIdxAs
 		p, _, err := guts_cli.ReadPage(srcPath, pageId)
 		require.NoError(t, err)
 
-		if p.IsLeafPage() && p.Count() > 10 {
-			elementCount = p.Count()
-			break
+		if isBranchPage {
+			if p.IsBranchPage() && p.Count() > 10 {
+				elementCount = p.Count()
+				break
+			}
+		} else {
+			if p.IsLeafPage() && p.Count() > 10 {
+				elementCount = p.Count()
+				break
+			}
 		}
 		pageId++
 	}
@@ -181,10 +220,10 @@ func testSurgeryClearPageElement(t *testing.T, startIdx, endIdx int, setEndIdxAs
 	require.NoError(t, err)
 	assert.Equal(t, expectedCnt, int(p.Count()))
 
-	compareDataAfterClearingElement(t, srcPath, output, pageId, startIdx, endIdx)
+	compareDataAfterClearingElement(t, srcPath, output, pageId, isBranchPage, startIdx, endIdx)
 }
 
-func compareDataAfterClearingElement(t *testing.T, srcPath, dstPath string, pageId uint64, startIdx, endIdx int) {
+func compareDataAfterClearingElement(t *testing.T, srcPath, dstPath string, pageId uint64, isBranchPage bool, startIdx, endIdx int) {
 	srcPage, _, err := guts_cli.ReadPage(srcPath, pageId)
 	require.NoError(t, err)
 
@@ -197,12 +236,21 @@ func compareDataAfterClearingElement(t *testing.T, srcPath, dstPath string, page
 		if dstIdx >= uint16(startIdx) && (dstIdx < uint16(endIdx) || endIdx == -1) {
 			continue
 		}
-		srcElement := srcPage.LeafPageElement(i)
-		dstElement := dstPage.LeafPageElement(dstIdx)
 
-		require.Equal(t, srcElement.Flags(), dstElement.Flags())
-		require.Equal(t, srcElement.Key(), dstElement.Key())
-		require.Equal(t, srcElement.Value(), dstElement.Value())
+		if isBranchPage {
+			srcElement := srcPage.BranchPageElement(i)
+			dstElement := dstPage.BranchPageElement(dstIdx)
+
+			require.Equal(t, srcElement.Key(), dstElement.Key())
+			require.Equal(t, srcElement.Pgid(), dstElement.Pgid())
+		} else {
+			srcElement := srcPage.LeafPageElement(i)
+			dstElement := dstPage.LeafPageElement(dstIdx)
+
+			require.Equal(t, srcElement.Flags(), dstElement.Flags())
+			require.Equal(t, srcElement.Key(), dstElement.Key())
+			require.Equal(t, srcElement.Value(), dstElement.Value())
+		}
 
 		dstIdx++
 	}
