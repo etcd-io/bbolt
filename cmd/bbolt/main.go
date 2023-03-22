@@ -61,14 +61,14 @@ func main() {
 	if err := m.Run(os.Args[1:]...); err == ErrUsage {
 		os.Exit(2)
 	} else if err == ErrUnknownCommand {
-		execute()
+		cobraExecute()
 	} else if err != nil {
 		fmt.Println(err.Error())
 		os.Exit(1)
 	}
 }
 
-func execute() {
+func cobraExecute() {
 	rootCmd := NewRootCommand()
 	if err := rootCmd.Execute(); err != nil {
 		if rootCmd.SilenceErrors {

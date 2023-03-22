@@ -2,7 +2,6 @@ package main_test
 
 import (
 	"fmt"
-	"math/rand"
 	"path/filepath"
 	"testing"
 
@@ -155,7 +154,7 @@ func testSurgeryClearPageElement(t *testing.T, startIdx, endIdx int, setEndIdxAs
 
 	// clear elements [startIdx, endIdx) in the page
 	rootCmd := main.NewRootCommand()
-	output := filepath.Join(t.TempDir(), fmt.Sprintf("db_%d", rand.Intn(100)))
+	output := filepath.Join(t.TempDir(), "db")
 	rootCmd.SetArgs([]string{
 		"surgery", "clear-page-elements", srcPath,
 		"--output", output,

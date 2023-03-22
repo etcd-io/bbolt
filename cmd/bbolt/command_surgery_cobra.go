@@ -31,8 +31,8 @@ func newSurgeryCobraCommand() *cobra.Command {
 
 func newSurgeryClearPageElementsCommand() *cobra.Command {
 	clearElementCmd := &cobra.Command{
-		Use:   "clear-page-elements [options]",
-		Short: "Clears elements from the given page",
+		Use:   "clear-page-elements <bbolt-file> [options]",
+		Short: "Clears elements from the given page, which can be a branch or leaf page",
 		Args: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return errors.New("db file path not provided")
