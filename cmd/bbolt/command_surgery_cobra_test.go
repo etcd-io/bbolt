@@ -14,7 +14,7 @@ import (
 	"go.etcd.io/bbolt/internal/guts_cli"
 )
 
-func TestSurgery_ClearPageElement(t *testing.T) {
+func TestSurgery_ClearPageElements_Without_Overflow(t *testing.T) {
 	testCases := []struct {
 		name                 string
 		from                 int
@@ -138,12 +138,12 @@ func TestSurgery_ClearPageElement(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			testSurgeryClearPageElement(t, tc.from, tc.to, tc.isBranchPage, tc.setEndIdxAsCount, tc.removeOnlyOneElement, tc.expectError)
+			testSurgeryClearPageElementsWithoutOverflow(t, tc.from, tc.to, tc.isBranchPage, tc.setEndIdxAsCount, tc.removeOnlyOneElement, tc.expectError)
 		})
 	}
 }
 
-func testSurgeryClearPageElement(t *testing.T, startIdx, endIdx int, isBranchPage, setEndIdxAsCount, removeOnlyOne, expectError bool) {
+func testSurgeryClearPageElementsWithoutOverflow(t *testing.T, startIdx, endIdx int, isBranchPage, setEndIdxAsCount, removeOnlyOne, expectError bool) {
 	pageSize := 4096
 	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: pageSize})
 	srcPath := db.Path()
@@ -254,4 +254,177 @@ func compareDataAfterClearingElement(t *testing.T, srcPath, dstPath string, page
 
 		dstIdx++
 	}
+}
+
+func TestSurgery_ClearPageElements_With_Overflow(t *testing.T) {
+	testCases := []struct {
+		name             string
+		from             int
+		to               int
+		valueSizes       []int
+		expectedOverflow int
+	}{
+		// big element
+		{
+			name:             "remove a big element at the end",
+			valueSizes:       []int{500, 500, 500, 2600},
+			from:             3,
+			to:               4,
+			expectedOverflow: 0,
+		},
+		{
+			name:             "remove a big element at the begin",
+			valueSizes:       []int{2600, 500, 500, 500},
+			from:             0,
+			to:               1,
+			expectedOverflow: 0,
+		},
+		{
+			name:             "remove a big element in the middle",
+			valueSizes:       []int{500, 2600, 500, 500},
+			from:             1,
+			to:               2,
+			expectedOverflow: 0,
+		},
+		// small element
+		{
+			name:             "remove a small element at the end",
+			valueSizes:       []int{500, 500, 3100, 100},
+			from:             3,
+			to:               4,
+			expectedOverflow: 1,
+		},
+		{
+			name:             "remove a small element at the begin",
+			valueSizes:       []int{100, 500, 3100, 500},
+			from:             0,
+			to:               1,
+			expectedOverflow: 1,
+		},
+		{
+			name:             "remove a small element in the middle",
+			valueSizes:       []int{500, 100, 3100, 500},
+			from:             1,
+			to:               2,
+			expectedOverflow: 1,
+		},
+		{
+			name:             "remove a small element at the end of page with big overflow",
+			valueSizes:       []int{500, 500, 4096 * 5, 100},
+			from:             3,
+			to:               4,
+			expectedOverflow: 5,
+		},
+		{
+			name:             "remove a small element at the begin of page with big overflow",
+			valueSizes:       []int{100, 500, 4096 * 6, 500},
+			from:             0,
+			to:               1,
+			expectedOverflow: 6,
+		},
+		{
+			name:             "remove a small element in the middle of page with big overflow",
+			valueSizes:       []int{500, 100, 4096 * 4, 500},
+			from:             1,
+			to:               2,
+			expectedOverflow: 4,
+		},
+		// huge element
+		{
+			name:             "remove a huge element at the end",
+			valueSizes:       []int{500, 500, 500, 4096 * 5},
+			from:             3,
+			to:               4,
+			expectedOverflow: 0,
+		},
+		{
+			name:             "remove a huge element at the begin",
+			valueSizes:       []int{4096 * 5, 500, 500, 500},
+			from:             0,
+			to:               1,
+			expectedOverflow: 0,
+		},
+		{
+			name:             "remove a huge element in the middle",
+			valueSizes:       []int{500, 4096 * 5, 500, 500},
+			from:             1,
+			to:               2,
+			expectedOverflow: 0,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			testSurgeryClearPageElementsWithOverflow(t, tc.from, tc.to, tc.valueSizes, tc.expectedOverflow)
+		})
+	}
+}
+
+func testSurgeryClearPageElementsWithOverflow(t *testing.T, startIdx, endIdx int, valueSizes []int, expectedOverflow int) {
+	pageSize := 4096
+	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: pageSize})
+	srcPath := db.Path()
+
+	// Generate sample db
+	err := db.Update(func(tx *bolt.Tx) error {
+		b, _ := tx.CreateBucketIfNotExists([]byte("data"))
+		for i, valueSize := range valueSizes {
+			key := []byte(fmt.Sprintf("%04d", i))
+			val := make([]byte, valueSize)
+			if putErr := b.Put(key, val); putErr != nil {
+				return putErr
+			}
+		}
+		return nil
+	})
+	require.NoError(t, err)
+
+	defer requireDBNoChange(t, dbData(t, srcPath), srcPath)
+
+	// find a page with overflow pages
+	var (
+		pageId       uint64 = 2
+		elementCount uint16 = 0
+	)
+	for {
+		p, _, err := guts_cli.ReadPage(srcPath, pageId)
+		require.NoError(t, err)
+
+		if p.Overflow() > 0 {
+			elementCount = p.Count()
+			break
+		}
+		pageId++
+	}
+	t.Logf("The original element count: %d", elementCount)
+
+	// clear elements [startIdx, endIdx) in the page
+	rootCmd := main.NewRootCommand()
+	output := filepath.Join(t.TempDir(), "db")
+	rootCmd.SetArgs([]string{
+		"surgery", "clear-page-elements", srcPath,
+		"--output", output,
+		"--pageId", fmt.Sprintf("%d", pageId),
+		"--from", fmt.Sprintf("%d", startIdx),
+		"--to", fmt.Sprintf("%d", endIdx),
+	})
+	err = rootCmd.Execute()
+	require.NoError(t, err)
+
+	// check the element count again
+	expectedCnt := 0
+	if endIdx == -1 {
+		expectedCnt = startIdx
+	} else {
+		expectedCnt = int(elementCount) - (endIdx - startIdx)
+	}
+	p, _, err := guts_cli.ReadPage(output, pageId)
+	require.NoError(t, err)
+	assert.Equal(t, expectedCnt, int(p.Count()))
+
+	assert.Equal(t, expectedOverflow, int(p.Overflow()))
+
+	compareDataAfterClearingElement(t, srcPath, output, pageId, false, startIdx, endIdx)
 }

@@ -61,33 +61,37 @@ func ClearPageElements(path string, pgId common.Pgid, start, end int) error {
 
 	preOverflow := p.Overflow()
 
+	var (
+		dataWritten uint32
+	)
 	if end == int(p.Count()) || end == -1 {
+		inodes := common.ReadInodeFromPage(p)
+		inodes = inodes[:start]
+
 		p.SetCount(uint16(start))
-		p.SetOverflow(0)
-		if preOverflow != 0 || p.IsBranchPage() {
-			if err := clearFreelist(path); err != nil {
-				return err
-			}
-		}
+		// no need to write inode & data again, we just need to get
+		// the data size which will be kept.
+		dataWritten = common.UsedSpaceInPage(inodes, p)
 	} else {
 		inodes := common.ReadInodeFromPage(p)
 		inodes = append(inodes[:start], inodes[end:]...)
 
 		p.SetCount(uint16(len(inodes)))
-		dataWritten := common.WriteInodeToPage(inodes, p)
-
-		pageSize, _, err := guts_cli.ReadPageAndHWMSize(path)
-		if err != nil {
-			return fmt.Errorf("ReadPageAndHWMSize failed: %w", err)
-		}
-		if dataWritten%uint32(pageSize) == 0 {
-			p.SetOverflow(dataWritten/uint32(pageSize) - 1)
-		} else {
-			p.SetOverflow(dataWritten / uint32(pageSize))
-		}
+		dataWritten = common.WriteInodeToPage(inodes, p)
 	}
 
-	if err := guts_cli.WritePage(path, buf); err != nil {
+	pageSize, _, err := guts_cli.ReadPageAndHWMSize(path)
+	if err != nil {
+		return fmt.Errorf("ReadPageAndHWMSize failed: %w", err)
+	}
+	if dataWritten%uint32(pageSize) == 0 {
+		p.SetOverflow(dataWritten/uint32(pageSize) - 1)
+	} else {
+		p.SetOverflow(dataWritten / uint32(pageSize))
+	}
+
+	datasz := pageSize * (uint64(p.Overflow()) + 1)
+	if err := guts_cli.WritePage(path, buf[0:datasz]); err != nil {
 		return fmt.Errorf("WritePage failed: %w", err)
 	}
 
