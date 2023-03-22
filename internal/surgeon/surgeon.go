@@ -20,6 +20,12 @@ func ClearPage(path string, pgId common.Pgid) error {
 	return ClearPageElements(path, pgId, 0, -1)
 }
 
+// ClearPageElements supports clearing elements in both branch and leaf
+// pages. Note the freelist may be cleaned in the meta pages in the following
+// two cases, and bbolt needs to scan the db to reconstruct free list. It may
+// cause some delay on next startup, depending on the db size.
+//  1. Any branch elements are cleared;
+//  2. An object saved in overflow pages is cleared;
 func ClearPageElements(path string, pgId common.Pgid, start, end int) error {
 	// Read the page
 	p, buf, err := guts_cli.ReadPage(path, uint64(pgId))
@@ -93,16 +99,16 @@ func ClearPageElements(path string, pgId common.Pgid, start, end int) error {
 }
 
 func clearFreelist(path string) error {
-	if err := clearFreelistAt(path, 0); err != nil {
+	if err := clearFreelistInMetaPage(path, 0); err != nil {
 		return fmt.Errorf("clearFreelist on meta page 0 failed: %w", err)
 	}
-	if err := clearFreelistAt(path, 1); err != nil {
+	if err := clearFreelistInMetaPage(path, 1); err != nil {
 		return fmt.Errorf("clearFreelist on meta page 1 failed: %w", err)
 	}
 	return nil
 }
 
-func clearFreelistAt(path string, pageId uint64) error {
+func clearFreelistInMetaPage(path string, pageId uint64) error {
 	_, buf, err := guts_cli.ReadPage(path, pageId)
 	if err != nil {
 		return fmt.Errorf("ReadPage %d failed: %w", pageId, err)
