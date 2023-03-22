@@ -103,3 +103,13 @@ func WriteInodeToPage(inodes Inodes, p *Page) uint32 {
 
 	return uint32(off)
 }
+
+func UsedSpaceInPage(inodes Inodes, p *Page) uint32 {
+	off := unsafe.Sizeof(*p) + p.PageElementSize()*uintptr(len(inodes))
+	for _, item := range inodes {
+		sz := len(item.Key()) + len(item.Value())
+		off += uintptr(sz)
+	}
+
+	return uint32(off)
+}
