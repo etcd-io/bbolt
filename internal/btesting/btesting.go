@@ -54,6 +54,7 @@ func MustOpenDBWithOption(t testing.TB, f string, o *bolt.Options) *DB {
 
 	db, err := bolt.Open(f, 0666, o)
 	require.NoError(t, err)
+	db.StrictMode = true
 	resDB := &DB{
 		DB: db,
 		f:  f,
@@ -112,6 +113,7 @@ func (db *DB) MustReopen() {
 	db.t.Logf("Reopening bbolt DB at: %s", db.f)
 	indb, err := bolt.Open(db.Path(), 0666, db.o)
 	require.NoError(db.t, err)
+	indb.StrictMode = true
 	db.DB = indb
 }
 
