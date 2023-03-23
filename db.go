@@ -439,7 +439,7 @@ func (db *DB) mmap(minsz int) (err error) {
 	defer func() {
 		if err != nil {
 			if unmapErr := db.munmap(); unmapErr != nil {
-				err = fmt.Errorf("%w; unmap failed: %v", err, unmapErr)
+				err = fmt.Errorf("%w; rollback unmap also failed: %v", err, unmapErr)
 			}
 		}
 	}()
