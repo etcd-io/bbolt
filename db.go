@@ -388,7 +388,7 @@ func (db *DB) hasSyncedFreelist() bool {
 
 // mmap opens the underlying memory-mapped file and initializes the meta references.
 // minsz is the minimum size that the new mmap can be.
-func (db *DB) mmap(minsz int) error {
+func (db *DB) mmap(minsz int) (err error) {
 	db.mmaplock.Lock()
 	defer db.mmaplock.Unlock()
 
@@ -423,16 +423,26 @@ func (db *DB) mmap(minsz int) error {
 	}
 
 	// Unmap existing data before continuing.
-	if err := db.munmap(); err != nil {
+	if err = db.munmap(); err != nil {
 		return err
 	}
 
 	// Memory-map the data file as a byte slice.
 	// gofail: var mapError string
 	// return errors.New(mapError)
-	if err := mmap(db, size); err != nil {
+	if err = mmap(db, size); err != nil {
 		return err
 	}
+
+	// Perform unmmap on any error to reset all data fields:
+	// dataref, data, datasz, meta0 and meta1.
+	defer func() {
+		if err != nil {
+			if unmapErr := db.munmap(); unmapErr != nil {
+				err = fmt.Errorf("%w; unmap failed: %v", err, unmapErr)
+			}
+		}
+	}()
 
 	if db.Mlock {
 		// Don't allow swapping of data file
@@ -517,6 +527,8 @@ func (db *DB) mmapSize(size int) (int, error) {
 }
 
 func (db *DB) munlock(fileSize int) error {
+	// gofail: var munlockError string
+	// return errors.New(munlockError)
 	if err := munlock(db, fileSize); err != nil {
 		return fmt.Errorf("munlock error: " + err.Error())
 	}
@@ -524,6 +536,8 @@ func (db *DB) munlock(fileSize int) error {
 }
 
 func (db *DB) mlock(fileSize int) error {
+	// gofail: var mlockError string
+	// return errors.New(mlockError)
 	if err := mlock(db, fileSize); err != nil {
 		return fmt.Errorf("mlock error: " + err.Error())
 	}
