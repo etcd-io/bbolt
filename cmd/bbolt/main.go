@@ -15,7 +15,7 @@ import (
 	"runtime/pprof"
 	"strconv"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -1223,6 +1223,7 @@ func (cmd *benchCommand) runWritesWithSource(db *bolt.DB, options *BenchOptions,
 			b, _ := tx.CreateBucketIfNotExists(benchBucketName)
 			b.FillPercent = options.FillPercent
 
+			fmt.Fprintf(cmd.Stderr, "Starting write iteration %d\n", i)
 			for j := int64(0); j < options.BatchSize; j++ {
 				key := make([]byte, options.KeySize)
 				value := make([]byte, options.ValueSize)
@@ -1234,13 +1235,14 @@ func (cmd *benchCommand) runWritesWithSource(db *bolt.DB, options *BenchOptions,
 				if err := b.Put(key, value); err != nil {
 					return err
 				}
+
+				results.AddCompletedOps(1)
 			}
+			fmt.Fprintf(cmd.Stderr, "Finished write iteration %d\n", i)
 
 			return nil
 		}); err != nil {
 			return err
-		} else {
-			results.AddCompletedOps(options.BatchSize)
 		}
 	}
 	return nil
@@ -1266,6 +1268,7 @@ func (cmd *benchCommand) runWritesNestedWithSource(db *bolt.DB, options *BenchOp
 			}
 			b.FillPercent = options.FillPercent
 
+			fmt.Fprintf(cmd.Stderr, "Starting write iteration %d\n", i)
 			for j := int64(0); j < options.BatchSize; j++ {
 				var key = make([]byte, options.KeySize)
 				var value = make([]byte, options.ValueSize)
@@ -1277,13 +1280,14 @@ func (cmd *benchCommand) runWritesNestedWithSource(db *bolt.DB, options *BenchOp
 				if err := b.Put(key, value); err != nil {
 					return err
 				}
+
+				results.AddCompletedOps(1)
 			}
+			fmt.Fprintf(cmd.Stderr, "Finished write iteration %d\n", i)
 
 			return nil
 		}); err != nil {
 			return err
-		} else {
-			results.AddCompletedOps(options.BatchSize)
 		}
 	}
 	return nil
@@ -1335,6 +1339,7 @@ func (cmd *benchCommand) runReadsSequential(db *bolt.DB, options *BenchOptions, 
 			c := tx.Bucket(benchBucketName).Cursor()
 			for k, v := c.First(); k != nil; k, v = c.Next() {
 				numReads++
+				results.AddCompletedOps(1)
 				if v == nil {
 					return errors.New("invalid value")
 				}
@@ -1343,8 +1348,6 @@ func (cmd *benchCommand) runReadsSequential(db *bolt.DB, options *BenchOptions, 
 			if options.WriteMode == "seq" && numReads != options.Iterations {
 				return fmt.Errorf("read seq: iter mismatch: expected %d, got %d", options.Iterations, numReads)
 			}
-
-			results.AddCompletedOps(numReads)
 
 			// Make sure we do this for at least a second.
 			if time.Since(t) >= time.Second {
@@ -1368,6 +1371,7 @@ func (cmd *benchCommand) runReadsSequentialNested(db *bolt.DB, options *BenchOpt
 					c := b.Cursor()
 					for k, v := c.First(); k != nil; k, v = c.Next() {
 						numReads++
+						results.AddCompletedOps(1)
 						if v == nil {
 							return ErrInvalidValue
 						}
@@ -1381,8 +1385,6 @@ func (cmd *benchCommand) runReadsSequentialNested(db *bolt.DB, options *BenchOpt
 			if options.WriteMode == "seq-nest" && numReads != options.Iterations {
 				return fmt.Errorf("read seq-nest: iter mismatch: expected %d, got %d", options.Iterations, numReads)
 			}
-
-			results.AddCompletedOps(numReads)
 
 			// Make sure we do this for at least a second.
 			if time.Since(t) >= time.Second {
@@ -1502,37 +1504,24 @@ type BenchOptions struct {
 
 // BenchResults represents the performance results of the benchmark and is thread-safe.
 type BenchResults struct {
-	m            sync.Mutex
 	completedOps int64
-	duration     time.Duration
+	duration     int64
 }
 
 func (r *BenchResults) AddCompletedOps(amount int64) {
-	r.m.Lock()
-	defer r.m.Unlock()
-
-	r.completedOps += amount
+	atomic.AddInt64(&r.completedOps, amount)
 }
 
 func (r *BenchResults) CompletedOps() int64 {
-	r.m.Lock()
-	defer r.m.Unlock()
-
-	return r.completedOps
+	return atomic.LoadInt64(&r.completedOps)
 }
 
 func (r *BenchResults) SetDuration(dur time.Duration) {
-	r.m.Lock()
-	defer r.m.Unlock()
-
-	r.duration = dur
+	atomic.StoreInt64(&r.duration, int64(dur))
 }
 
 func (r *BenchResults) Duration() time.Duration {
-	r.m.Lock()
-	defer r.m.Unlock()
-
-	return r.duration
+	return time.Duration(atomic.LoadInt64(&r.duration))
 }
 
 // Returns the duration for a single read/write operation.
