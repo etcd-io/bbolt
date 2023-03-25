@@ -48,8 +48,8 @@ func newSurgeryClearPageElementsCommand() *cobra.Command {
 
 	clearElementCmd.Flags().StringVar(&surgeryTargetDBFilePath, "output", "", "path to the target db file")
 	clearElementCmd.Flags().Uint64VarP(&surgeryPageId, "pageId", "", 0, "page id")
-	clearElementCmd.Flags().IntVarP(&surgeryStartElementIdx, "from", "", 0, "start element index (included) to clear, starting from 0")
-	clearElementCmd.Flags().IntVarP(&surgeryEndElementIdx, "to", "", 0, "end element index (excluded) to clear, starting from 0, -1 means to the end of page")
+	clearElementCmd.Flags().IntVarP(&surgeryStartElementIdx, "from-index", "", 0, "start element index (included) to clear, starting from 0")
+	clearElementCmd.Flags().IntVarP(&surgeryEndElementIdx, "to-index", "", 0, "end element index (excluded) to clear, starting from 0, -1 means to the end of page")
 
 	return clearElementCmd
 }
@@ -65,8 +65,14 @@ func surgeryClearPageElementFunc(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("the pageId must be at least 2, but got %d", surgeryPageId)
 	}
 
-	if err := surgeon.ClearPageElements(surgeryTargetDBFilePath, common.Pgid(surgeryPageId), surgeryStartElementIdx, surgeryEndElementIdx); err != nil {
+	needAbandonFreelist, err := surgeon.ClearPageElements(surgeryTargetDBFilePath, common.Pgid(surgeryPageId), surgeryStartElementIdx, surgeryEndElementIdx, false)
+	if err != nil {
 		return fmt.Errorf("clear-page-element command failed: %w", err)
+	}
+
+	if needAbandonFreelist {
+		fmt.Fprintf(os.Stdout, "WARNING: The clearing has abandoned some pages that are not yet referenced from free list.\n")
+		fmt.Fprintf(os.Stdout, "Please consider executing `./bbolt surgery abandon-freelist ...`\n")
 	}
 
 	fmt.Fprintf(os.Stdout, "All elements in [%d, %d) in page %d were cleared\n", surgeryStartElementIdx, surgeryEndElementIdx, surgeryPageId)
