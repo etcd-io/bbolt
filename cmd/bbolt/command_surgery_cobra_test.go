@@ -198,8 +198,8 @@ func testSurgeryClearPageElementsWithoutOverflow(t *testing.T, startIdx, endIdx 
 		"surgery", "clear-page-elements", srcPath,
 		"--output", output,
 		"--pageId", fmt.Sprintf("%d", pageId),
-		"--from", fmt.Sprintf("%d", startIdx),
-		"--to", fmt.Sprintf("%d", endIdx),
+		"--from-index", fmt.Sprintf("%d", startIdx),
+		"--to-index", fmt.Sprintf("%d", endIdx),
 	})
 	err = rootCmd.Execute()
 	if expectError {
@@ -407,8 +407,8 @@ func testSurgeryClearPageElementsWithOverflow(t *testing.T, startIdx, endIdx int
 		"surgery", "clear-page-elements", srcPath,
 		"--output", output,
 		"--pageId", fmt.Sprintf("%d", pageId),
-		"--from", fmt.Sprintf("%d", startIdx),
-		"--to", fmt.Sprintf("%d", endIdx),
+		"--from-index", fmt.Sprintf("%d", startIdx),
+		"--to-index", fmt.Sprintf("%d", endIdx),
 	})
 	err = rootCmd.Execute()
 	require.NoError(t, err)

@@ -16,47 +16,54 @@ func CopyPage(path string, srcPage common.Pgid, target common.Pgid) error {
 	return guts_cli.WritePage(path, d1)
 }
 
-func ClearPage(path string, pgId common.Pgid) error {
-	return ClearPageElements(path, pgId, 0, -1)
+func ClearPage(path string, pgId common.Pgid) (bool, error) {
+	return ClearPageElements(path, pgId, 0, -1, false)
 }
 
 // ClearPageElements supports clearing elements in both branch and leaf
-// pages. Note the freelist may be cleaned in the meta pages in the following
-// two cases, and bbolt needs to scan the db to reconstruct free list. It may
-// cause some delay on next startup, depending on the db size.
+// pages. Note if the ${abandonFreelist} is true, the freelist may be cleaned
+// in the meta pages in the following two cases, and bbolt needs to scan the
+// db to reconstruct free list. It may cause some delay on next startup,
+// depending on the db size.
 //  1. Any branch elements are cleared;
 //  2. An object saved in overflow pages is cleared;
-func ClearPageElements(path string, pgId common.Pgid, start, end int) error {
+//
+// Usually ${abandonFreelist} defaults to false, it means it will not clear the
+// freelist in meta pages automatically. Users will receive a warning message
+// to remind them to explicitly execute `bbolt surgery abandom-freelist`
+// afterwards; the first return parameter will be true in such case. But if
+// the freelist isn't synced at all, no warning message will be displayed.
+func ClearPageElements(path string, pgId common.Pgid, start, end int, abandonFreelist bool) (bool, error) {
 	// Read the page
 	p, buf, err := guts_cli.ReadPage(path, uint64(pgId))
 	if err != nil {
-		return fmt.Errorf("ReadPage failed: %w", err)
+		return false, fmt.Errorf("ReadPage failed: %w", err)
 	}
 
 	if !p.IsLeafPage() && !p.IsBranchPage() {
-		return fmt.Errorf("can't clear elements in %q page", p.Typ())
+		return false, fmt.Errorf("can't clear elements in %q page", p.Typ())
 	}
 
 	elementCnt := int(p.Count())
 
 	if elementCnt == 0 {
-		return nil
+		return false, nil
 	}
 
 	if start < 0 || start >= elementCnt {
-		return fmt.Errorf("the start index (%d) is out of range [0, %d)", start, elementCnt)
+		return false, fmt.Errorf("the start index (%d) is out of range [0, %d)", start, elementCnt)
 	}
 
 	if (end < 0 || end > elementCnt) && end != -1 {
-		return fmt.Errorf("the end index (%d) is out of range [0, %d]", end, elementCnt)
+		return false, fmt.Errorf("the end index (%d) is out of range [0, %d]", end, elementCnt)
 	}
 
 	if start > end && end != -1 {
-		return fmt.Errorf("the start index (%d) is bigger than the end index (%d)", start, end)
+		return false, fmt.Errorf("the start index (%d) is bigger than the end index (%d)", start, end)
 	}
 
 	if start == end {
-		return fmt.Errorf("invalid: the start index (%d) is equal to the end index (%d)", start, end)
+		return false, fmt.Errorf("invalid: the start index (%d) is equal to the end index (%d)", start, end)
 	}
 
 	preOverflow := p.Overflow()
@@ -82,7 +89,7 @@ func ClearPageElements(path string, pgId common.Pgid, start, end int) error {
 
 	pageSize, _, err := guts_cli.ReadPageAndHWMSize(path)
 	if err != nil {
-		return fmt.Errorf("ReadPageAndHWMSize failed: %w", err)
+		return false, fmt.Errorf("ReadPageAndHWMSize failed: %w", err)
 	}
 	if dataWritten%uint32(pageSize) == 0 {
 		p.SetOverflow(dataWritten/uint32(pageSize) - 1)
@@ -92,14 +99,17 @@ func ClearPageElements(path string, pgId common.Pgid, start, end int) error {
 
 	datasz := pageSize * (uint64(p.Overflow()) + 1)
 	if err := guts_cli.WritePage(path, buf[0:datasz]); err != nil {
-		return fmt.Errorf("WritePage failed: %w", err)
+		return false, fmt.Errorf("WritePage failed: %w", err)
 	}
 
 	if preOverflow != p.Overflow() || p.IsBranchPage() {
-		return clearFreelist(path)
+		if abandonFreelist {
+			return false, clearFreelist(path)
+		}
+		return true, nil
 	}
 
-	return nil
+	return false, nil
 }
 
 func clearFreelist(path string) error {
