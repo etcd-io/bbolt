@@ -14,6 +14,7 @@ import (
 
 func TestTx_RecursivelyCheckPages_MisplacedPage(t *testing.T) {
 	db := btesting.MustCreateDB(t)
+	db.ForceDisableStrictMode()
 	require.NoError(t,
 		db.Fill([]byte("data"), 1, 10000,
 			func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
@@ -36,6 +37,7 @@ func TestTx_RecursivelyCheckPages_MisplacedPage(t *testing.T) {
 	require.NoError(t, surgeon.CopyPage(db.Path(), srcPage, targetPage))
 
 	db.MustReopen()
+	db.ForceDisableStrictMode()
 	require.NoError(t, db.Update(func(tx *bolt.Tx) error {
 		// Collect all the errors.
 		var errors []error
@@ -51,6 +53,7 @@ func TestTx_RecursivelyCheckPages_MisplacedPage(t *testing.T) {
 
 func TestTx_RecursivelyCheckPages_CorruptedLeaf(t *testing.T) {
 	db := btesting.MustCreateDB(t)
+	db.ForceDisableStrictMode()
 	require.NoError(t,
 		db.Fill([]byte("data"), 1, 10000,
 			func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
@@ -72,6 +75,7 @@ func TestTx_RecursivelyCheckPages_CorruptedLeaf(t *testing.T) {
 	require.NoError(t, guts_cli.WritePage(db.Path(), pbuf))
 
 	db.MustReopen()
+	db.ForceDisableStrictMode()
 	require.NoError(t, db.Update(func(tx *bolt.Tx) error {
 		// Collect all the errors.
 		var errors []error

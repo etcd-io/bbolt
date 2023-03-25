@@ -18,6 +18,14 @@ ifdef TIMEOUT
 	TESTFLAGS_TIMEOUT=$(TIMEOUT)
 endif
 
+TESTFLAGS_ENABLE_STRICT_MODE=false
+ifdef ENABLE_STRICT_MODE
+	TESTFLAGS_ENABLE_STRICT_MODE=$(ENABLE_STRICT_MODE)
+endif
+
+.EXPORT_ALL_VARIABLES:
+TEST_ENABLE_STRICT_MODE=${TESTFLAGS_ENABLE_STRICT_MODE}
+
 .PHONY: fmt
 fmt:
 	!(gofmt -l -s -d $(shell find . -name \*.go) | grep '[a-z]')
@@ -53,7 +61,7 @@ gofail-enable: install-gofail
 	gofail enable .
 
 .PHONY: gofail-disable
-gofail-disable:
+gofail-disable: install-gofail
 	gofail disable .
 
 .PHONY: install-gofail

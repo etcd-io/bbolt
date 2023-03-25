@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,8 +18,12 @@ import (
 
 var statsFlag = flag.Bool("stats", false, "show performance stats")
 
-// TestFreelistType is used as a env variable for test to indicate the backend type
-const TestFreelistType = "TEST_FREELIST_TYPE"
+const (
+	// TestFreelistType is used as an env variable for test to indicate the backend type.
+	TestFreelistType = "TEST_FREELIST_TYPE"
+	// TestEnableStrictMode is used to enable strict check by default after opening each DB.
+	TestEnableStrictMode = "TEST_ENABLE_STRICT_MODE"
+)
 
 // DB is a test wrapper for bolt.DB.
 type DB struct {
@@ -60,6 +65,7 @@ func MustOpenDBWithOption(t testing.TB, f string, o *bolt.Options) *DB {
 		o:  o,
 		t:  t,
 	}
+	resDB.strictModeEnabledDefault()
 	t.Cleanup(resDB.PostTestCleanup)
 	return resDB
 }
@@ -113,6 +119,7 @@ func (db *DB) MustReopen() {
 	indb, err := bolt.Open(db.Path(), 0666, db.o)
 	require.NoError(db.t, err)
 	db.DB = indb
+	db.strictModeEnabledDefault()
 }
 
 // MustCheck runs a consistency check on the database and panics if any errors are found.
@@ -203,4 +210,13 @@ func (db *DB) PrintStats() {
 
 func truncDuration(d time.Duration) string {
 	return regexp.MustCompile(`^(\d+)(\.\d+)`).ReplaceAllString(d.String(), "$1")
+}
+
+func (db *DB) strictModeEnabledDefault() {
+	strictModeEnabled := strings.ToLower(os.Getenv(TestEnableStrictMode))
+	db.StrictMode = strictModeEnabled == "true"
+}
+
+func (db *DB) ForceDisableStrictMode() {
+	db.StrictMode = false
 }
