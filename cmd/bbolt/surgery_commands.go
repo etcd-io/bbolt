@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -233,8 +234,14 @@ func (cmd *clearPageCommand) Run(args ...string) error {
 		return err
 	}
 
-	if err := surgeon.ClearPage(cmd.dstPath, common.Pgid(pageId)); err != nil {
+	needAbandonFreelist, err := surgeon.ClearPage(cmd.dstPath, common.Pgid(pageId))
+	if err != nil {
 		return fmt.Errorf("clearPageCommand failed: %w", err)
+	}
+
+	if needAbandonFreelist {
+		fmt.Fprintf(os.Stdout, "WARNING: The clearing has abandoned some pages that are not yet referenced from free list.\n")
+		fmt.Fprintf(os.Stdout, "Please consider executing `./bbolt surgery abandon-freelist ...`\n")
 	}
 
 	fmt.Fprintf(cmd.Stdout, "Page (%d) was cleared\n", pageId)
