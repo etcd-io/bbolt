@@ -649,9 +649,10 @@ func (db *DB) close() error {
 	// Clear ops.
 	db.ops.writeAt = nil
 
+	var errs []error
 	// Close the mmap.
 	if err := db.munmap(); err != nil {
-		return err
+		errs = append(errs, err)
 	}
 
 	// Close file handles.
@@ -660,18 +661,22 @@ func (db *DB) close() error {
 		if !db.readOnly {
 			// Unlock the file.
 			if err := funlock(db); err != nil {
-				return fmt.Errorf("bolt.Close(): funlock error: %w", err)
+				errs = append(errs, fmt.Errorf("bolt.Close(): funlock error: %w", err))
 			}
 		}
 
 		// Close the file descriptor.
 		if err := db.file.Close(); err != nil {
-			return fmt.Errorf("db file close: %s", err)
+			errs = append(errs, fmt.Errorf("db file close: %w", err))
 		}
 		db.file = nil
 	}
 
 	db.path = ""
+
+	if len(errs) > 0 {
+		return errs[0]
+	}
 	return nil
 }
 
