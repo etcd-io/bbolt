@@ -747,11 +747,15 @@ func testDB_Close_PendingTx(t *testing.T, writable bool) {
 	}
 
 	// Open update in separate goroutine.
+	startCh := make(chan struct{}, 1)
 	done := make(chan error, 1)
 	go func() {
+		startCh <- struct{}{}
 		err := db.Close()
 		done <- err
 	}()
+	// wait for the above goroutine to get scheduled.
+	<-startCh
 
 	// Ensure database hasn't closed.
 	time.Sleep(100 * time.Millisecond)
@@ -775,14 +779,13 @@ func testDB_Close_PendingTx(t *testing.T, writable bool) {
 	}
 
 	// Ensure database closed now.
-	time.Sleep(100 * time.Millisecond)
 	select {
 	case err := <-done:
 		if err != nil {
 			t.Fatalf("error from inside goroutine: %v", err)
 		}
-	default:
-		t.Fatal("database did not close")
+	case <-time.After(5 * time.Second):
+		t.Fatalf("database did not close")
 	}
 }
 
