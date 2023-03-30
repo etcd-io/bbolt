@@ -19,14 +19,15 @@ var (
 )
 
 func newSurgeryCobraCommand() *cobra.Command {
-	cmd := &cobra.Command{
+	surgeryCmd := &cobra.Command{
 		Use:   "surgery <subcommand>",
 		Short: "surgery related commands",
 	}
 
-	cmd.AddCommand(newSurgeryClearPageElementsCommand())
+	surgeryCmd.AddCommand(newSurgeryClearPageElementsCommand())
+	surgeryCmd.AddCommand(newSurgeryFreelistCommand())
 
-	return cmd
+	return surgeryCmd
 }
 
 func newSurgeryClearPageElementsCommand() *cobra.Command {
@@ -42,7 +43,6 @@ func newSurgeryClearPageElementsCommand() *cobra.Command {
 			}
 			return nil
 		},
-
 		RunE: surgeryClearPageElementFunc,
 	}
 
@@ -76,5 +76,55 @@ func surgeryClearPageElementFunc(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Fprintf(os.Stdout, "All elements in [%d, %d) in page %d were cleared\n", surgeryStartElementIdx, surgeryEndElementIdx, surgeryPageId)
+	return nil
+}
+
+// TODO(ahrtr): add `bbolt surgery freelist rebuild/check ...` commands,
+// and move all `surgery freelist` commands into a separate file,
+// e.g command_surgery_freelist.go.
+func newSurgeryFreelistCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "freelist <subcommand>",
+		Short: "freelist related surgery commands",
+	}
+
+	cmd.AddCommand(newSurgeryFreelistAbandonCommand())
+
+	return cmd
+}
+
+func newSurgeryFreelistAbandonCommand() *cobra.Command {
+	abandonFreelistCmd := &cobra.Command{
+		Use:   "abandon <bbolt-file> [options]",
+		Short: "Abandon the freelist from both meta pages",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return errors.New("db file path not provided")
+			}
+			if len(args) > 1 {
+				return errors.New("too many arguments")
+			}
+			return nil
+		},
+		RunE: surgeryFreelistAbandonFunc,
+	}
+
+	abandonFreelistCmd.Flags().StringVar(&surgeryTargetDBFilePath, "output", "", "path to the target db file")
+
+	return abandonFreelistCmd
+}
+
+func surgeryFreelistAbandonFunc(cmd *cobra.Command, args []string) error {
+	srcDBPath := args[0]
+
+	if err := copyFile(srcDBPath, surgeryTargetDBFilePath); err != nil {
+		return fmt.Errorf("[abandon-freelist] copy file failed: %w", err)
+	}
+
+	if err := surgeon.ClearFreelist(surgeryTargetDBFilePath); err != nil {
+		return fmt.Errorf("abandom-freelist command failed: %w", err)
+	}
+
+	fmt.Fprintf(os.Stdout, "The freelist was abandoned in both meta pages.\nIt may cause some delay on next startup because bbolt needs to scan the whole db to reconstruct the free list.\n")
 	return nil
 }

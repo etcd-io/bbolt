@@ -11,6 +11,7 @@ import (
 	bolt "go.etcd.io/bbolt"
 	main "go.etcd.io/bbolt/cmd/bbolt"
 	"go.etcd.io/bbolt/internal/btesting"
+	"go.etcd.io/bbolt/internal/common"
 	"go.etcd.io/bbolt/internal/guts_cli"
 )
 
@@ -427,4 +428,32 @@ func testSurgeryClearPageElementsWithOverflow(t *testing.T, startIdx, endIdx int
 	assert.Equal(t, expectedOverflow, int(p.Overflow()))
 
 	compareDataAfterClearingElement(t, srcPath, output, pageId, false, startIdx, endIdx)
+}
+
+func TestSurgery_Freelist_Abandon(t *testing.T) {
+	pageSize := 4096
+	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: pageSize})
+	srcPath := db.Path()
+
+	defer requireDBNoChange(t, dbData(t, srcPath), srcPath)
+
+	rootCmd := main.NewRootCommand()
+	output := filepath.Join(t.TempDir(), "db")
+	rootCmd.SetArgs([]string{
+		"surgery", "freelist", "abandon", srcPath,
+		"--output", output,
+	})
+	err := rootCmd.Execute()
+	require.NoError(t, err)
+
+	meta0 := loadMetaPage(t, output, 0)
+	assert.Equal(t, common.PgidNoFreelist, meta0.Freelist())
+	meta1 := loadMetaPage(t, output, 1)
+	assert.Equal(t, common.PgidNoFreelist, meta1.Freelist())
+}
+
+func loadMetaPage(t *testing.T, dbPath string, pageID uint64) *common.Meta {
+	_, buf, err := guts_cli.ReadPage(dbPath, 0)
+	require.NoError(t, err)
+	return common.LoadPageMeta(buf)
 }
