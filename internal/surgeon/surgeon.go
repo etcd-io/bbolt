@@ -104,7 +104,7 @@ func ClearPageElements(path string, pgId common.Pgid, start, end int, abandonFre
 
 	if preOverflow != p.Overflow() || p.IsBranchPage() {
 		if abandonFreelist {
-			return false, clearFreelist(path)
+			return false, ClearFreelist(path)
 		}
 		return true, nil
 	}
@@ -112,7 +112,7 @@ func ClearPageElements(path string, pgId common.Pgid, start, end int, abandonFre
 	return false, nil
 }
 
-func clearFreelist(path string) error {
+func ClearFreelist(path string) error {
 	if err := clearFreelistInMetaPage(path, 0); err != nil {
 		return fmt.Errorf("clearFreelist on meta page 0 failed: %w", err)
 	}
