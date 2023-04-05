@@ -1299,6 +1299,24 @@ func TestBucket_Stats(t *testing.T) {
 			BucketN:           1,
 			InlineBucketN:     0,
 			InlineBucketInuse: 0},
+		65536: {
+			BranchPageN:     1,
+			BranchOverflowN: 0,
+			LeafPageN:       2,
+			LeafOverflowN:   10,
+			KeyN:            501,
+			Depth:           2,
+			BranchAlloc:     65536,
+			BranchInuse:     54,
+			LeafAlloc:       786432,
+			LeafInuse: 0 +
+				2*16 + // leaf page header (x LeafPageN)
+				501*16 + // leaf elements
+				500*3 + len(bigKey) + // leaf keys
+				1*10 + 2*90 + 3*400 + longKeyLength, // leaf values: 10 * 1digit, 90*2digits, ...
+			BucketN:           1,
+			InlineBucketN:     0,
+			InlineBucketInuse: 0},
 	}
 
 	if err := db.View(func(tx *bolt.Tx) error {
@@ -1661,6 +1679,20 @@ func TestBucket_Stats_Large(t *testing.T) {
 			BranchInuse:       6094,
 			LeafAlloc:         4784128,
 			LeafInuse:         2582452,
+			BucketN:           1,
+			InlineBucketN:     0,
+			InlineBucketInuse: 0},
+		65536: {
+			BranchPageN:       1,
+			BranchOverflowN:   0,
+			LeafPageN:         73,
+			LeafOverflowN:     0,
+			KeyN:              100000,
+			Depth:             2,
+			BranchAlloc:       65536,
+			BranchInuse:       1534,
+			LeafAlloc:         4784128,
+			LeafInuse:         2578948,
 			BucketN:           1,
 			InlineBucketN:     0,
 			InlineBucketInuse: 0},
