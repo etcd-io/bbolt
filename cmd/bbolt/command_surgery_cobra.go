@@ -57,7 +57,7 @@ func newSurgeryClearPageElementsCommand() *cobra.Command {
 func surgeryClearPageElementFunc(cmd *cobra.Command, args []string) error {
 	srcDBPath := args[0]
 
-	if err := copyFile(srcDBPath, surgeryTargetDBFilePath); err != nil {
+	if err := common.CopyFile(srcDBPath, surgeryTargetDBFilePath); err != nil {
 		return fmt.Errorf("[clear-page-element] copy file failed: %w", err)
 	}
 
@@ -117,7 +117,7 @@ func newSurgeryFreelistAbandonCommand() *cobra.Command {
 func surgeryFreelistAbandonFunc(cmd *cobra.Command, args []string) error {
 	srcDBPath := args[0]
 
-	if err := copyFile(srcDBPath, surgeryTargetDBFilePath); err != nil {
+	if err := common.CopyFile(srcDBPath, surgeryTargetDBFilePath); err != nil {
 		return fmt.Errorf("[abandon-freelist] copy file failed: %w", err)
 	}
 

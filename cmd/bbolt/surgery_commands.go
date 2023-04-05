@@ -64,7 +64,7 @@ func (cmd *surgeryCommand) parsePathsAndCopyFile(fs *flag.FlagSet) error {
 	}
 
 	// Copy database from SrcPath to DstPath
-	if err := copyFile(cmd.srcPath, cmd.dstPath); err != nil {
+	if err := common.CopyFile(cmd.srcPath, cmd.dstPath); err != nil {
 		return fmt.Errorf("failed to copy file: %w", err)
 	}
 
