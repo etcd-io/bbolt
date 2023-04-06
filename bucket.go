@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"unsafe"
 
+	"go.etcd.io/bbolt/errors"
 	"go.etcd.io/bbolt/internal/common"
 )
 
@@ -146,11 +147,11 @@ func (b *Bucket) openBucket(value []byte) *Bucket {
 // The bucket instance is only valid for the lifetime of the transaction.
 func (b *Bucket) CreateBucket(key []byte) (*Bucket, error) {
 	if b.tx.db == nil {
-		return nil, common.ErrTxClosed
+		return nil, errors.ErrTxClosed
 	} else if !b.tx.writable {
-		return nil, common.ErrTxNotWritable
+		return nil, errors.ErrTxNotWritable
 	} else if len(key) == 0 {
-		return nil, common.ErrBucketNameRequired
+		return nil, errors.ErrBucketNameRequired
 	}
 
 	// Move cursor to correct position.
@@ -160,9 +161,9 @@ func (b *Bucket) CreateBucket(key []byte) (*Bucket, error) {
 	// Return an error if there is an existing key.
 	if bytes.Equal(key, k) {
 		if (flags & common.BucketLeafFlag) != 0 {
-			return nil, common.ErrBucketExists
+			return nil, errors.ErrBucketExists
 		}
-		return nil, common.ErrIncompatibleValue
+		return nil, errors.ErrIncompatibleValue
 	}
 
 	// Create empty, inline bucket.
@@ -190,7 +191,7 @@ func (b *Bucket) CreateBucket(key []byte) (*Bucket, error) {
 // The bucket instance is only valid for the lifetime of the transaction.
 func (b *Bucket) CreateBucketIfNotExists(key []byte) (*Bucket, error) {
 	child, err := b.CreateBucket(key)
-	if err == common.ErrBucketExists {
+	if err == errors.ErrBucketExists {
 		return b.Bucket(key), nil
 	} else if err != nil {
 		return nil, err
@@ -202,9 +203,9 @@ func (b *Bucket) CreateBucketIfNotExists(key []byte) (*Bucket, error) {
 // Returns an error if the bucket does not exist, or if the key represents a non-bucket value.
 func (b *Bucket) DeleteBucket(key []byte) error {
 	if b.tx.db == nil {
-		return common.ErrTxClosed
+		return errors.ErrTxClosed
 	} else if !b.Writable() {
-		return common.ErrTxNotWritable
+		return errors.ErrTxNotWritable
 	}
 
 	// Move cursor to correct position.
@@ -213,9 +214,9 @@ func (b *Bucket) DeleteBucket(key []byte) error {
 
 	// Return an error if bucket doesn't exist or is not a bucket.
 	if !bytes.Equal(key, k) {
-		return common.ErrBucketNotFound
+		return errors.ErrBucketNotFound
 	} else if (flags & common.BucketLeafFlag) == 0 {
-		return common.ErrIncompatibleValue
+		return errors.ErrIncompatibleValue
 	}
 
 	// Recursively delete all child buckets.
@@ -268,15 +269,15 @@ func (b *Bucket) Get(key []byte) []byte {
 // Returns an error if the bucket was created from a read-only transaction, if the key is blank, if the key is too large, or if the value is too large.
 func (b *Bucket) Put(key []byte, value []byte) error {
 	if b.tx.db == nil {
-		return common.ErrTxClosed
+		return errors.ErrTxClosed
 	} else if !b.Writable() {
-		return common.ErrTxNotWritable
+		return errors.ErrTxNotWritable
 	} else if len(key) == 0 {
-		return common.ErrKeyRequired
+		return errors.ErrKeyRequired
 	} else if len(key) > MaxKeySize {
-		return common.ErrKeyTooLarge
+		return errors.ErrKeyTooLarge
 	} else if int64(len(value)) > MaxValueSize {
-		return common.ErrValueTooLarge
+		return errors.ErrValueTooLarge
 	}
 
 	// Move cursor to correct position.
@@ -285,7 +286,7 @@ func (b *Bucket) Put(key []byte, value []byte) error {
 
 	// Return an error if there is an existing key with a bucket value.
 	if bytes.Equal(key, k) && (flags&common.BucketLeafFlag) != 0 {
-		return common.ErrIncompatibleValue
+		return errors.ErrIncompatibleValue
 	}
 
 	// Insert into node.
@@ -300,9 +301,9 @@ func (b *Bucket) Put(key []byte, value []byte) error {
 // Returns an error if the bucket was created from a read-only transaction.
 func (b *Bucket) Delete(key []byte) error {
 	if b.tx.db == nil {
-		return common.ErrTxClosed
+		return errors.ErrTxClosed
 	} else if !b.Writable() {
-		return common.ErrTxNotWritable
+		return errors.ErrTxNotWritable
 	}
 
 	// Move cursor to correct position.
@@ -316,7 +317,7 @@ func (b *Bucket) Delete(key []byte) error {
 
 	// Return an error if there is already existing bucket value.
 	if (flags & common.BucketLeafFlag) != 0 {
-		return common.ErrIncompatibleValue
+		return errors.ErrIncompatibleValue
 	}
 
 	// Delete the node if we have a matching key.
@@ -333,9 +334,9 @@ func (b *Bucket) Sequence() uint64 {
 // SetSequence updates the sequence number for the bucket.
 func (b *Bucket) SetSequence(v uint64) error {
 	if b.tx.db == nil {
-		return common.ErrTxClosed
+		return errors.ErrTxClosed
 	} else if !b.Writable() {
-		return common.ErrTxNotWritable
+		return errors.ErrTxNotWritable
 	}
 
 	// Materialize the root node if it hasn't been already so that the
@@ -352,9 +353,9 @@ func (b *Bucket) SetSequence(v uint64) error {
 // NextSequence returns an autoincrementing integer for the bucket.
 func (b *Bucket) NextSequence() (uint64, error) {
 	if b.tx.db == nil {
-		return 0, common.ErrTxClosed
+		return 0, errors.ErrTxClosed
 	} else if !b.Writable() {
-		return 0, common.ErrTxNotWritable
+		return 0, errors.ErrTxNotWritable
 	}
 
 	// Materialize the root node if it hasn't been already so that the
@@ -375,7 +376,7 @@ func (b *Bucket) NextSequence() (uint64, error) {
 // the bucket; this will result in undefined behavior.
 func (b *Bucket) ForEach(fn func(k, v []byte) error) error {
 	if b.tx.db == nil {
-		return common.ErrTxClosed
+		return errors.ErrTxClosed
 	}
 	c := b.Cursor()
 	for k, v := c.First(); k != nil; k, v = c.Next() {
@@ -388,7 +389,7 @@ func (b *Bucket) ForEach(fn func(k, v []byte) error) error {
 
 func (b *Bucket) ForEachBucket(fn func(k []byte) error) error {
 	if b.tx.db == nil {
-		return common.ErrTxClosed
+		return errors.ErrTxClosed
 	}
 	c := b.Cursor()
 	for k, _, flags := c.first(); k != nil; k, _, flags = c.next() {

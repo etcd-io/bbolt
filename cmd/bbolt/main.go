@@ -21,6 +21,7 @@ import (
 	"unicode/utf8"
 
 	bolt "go.etcd.io/bbolt"
+	berrors "go.etcd.io/bbolt/errors"
 	"go.etcd.io/bbolt/internal/common"
 	"go.etcd.io/bbolt/internal/guts_cli"
 )
@@ -941,12 +942,12 @@ func (cmd *keysCommand) Run(args ...string) error {
 		// Find bucket.
 		var lastbucket *bolt.Bucket = tx.Bucket([]byte(buckets[0]))
 		if lastbucket == nil {
-			return common.ErrBucketNotFound
+			return berrors.ErrBucketNotFound
 		}
 		for _, bucket := range buckets[1:] {
 			lastbucket = lastbucket.Bucket([]byte(bucket))
 			if lastbucket == nil {
-				return common.ErrBucketNotFound
+				return berrors.ErrBucketNotFound
 			}
 		}
 
@@ -1017,7 +1018,7 @@ func (cmd *getCommand) Run(args ...string) error {
 	} else if len(buckets) == 0 {
 		return ErrBucketRequired
 	} else if len(key) == 0 {
-		return common.ErrKeyRequired
+		return berrors.ErrKeyRequired
 	}
 
 	// Open database.
@@ -1032,12 +1033,12 @@ func (cmd *getCommand) Run(args ...string) error {
 		// Find bucket.
 		var lastbucket *bolt.Bucket = tx.Bucket([]byte(buckets[0]))
 		if lastbucket == nil {
-			return common.ErrBucketNotFound
+			return berrors.ErrBucketNotFound
 		}
 		for _, bucket := range buckets[1:] {
 			lastbucket = lastbucket.Bucket([]byte(bucket))
 			if lastbucket == nil {
-				return common.ErrBucketNotFound
+				return berrors.ErrBucketNotFound
 			}
 		}
 

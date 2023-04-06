@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 
+	"go.etcd.io/bbolt/errors"
 	"go.etcd.io/bbolt/internal/common"
 )
 
@@ -138,15 +139,15 @@ func (c *Cursor) Seek(seek []byte) (key []byte, value []byte) {
 // Delete fails if current key/value is a bucket or if the transaction is not writable.
 func (c *Cursor) Delete() error {
 	if c.bucket.tx.db == nil {
-		return common.ErrTxClosed
+		return errors.ErrTxClosed
 	} else if !c.bucket.Writable() {
-		return common.ErrTxNotWritable
+		return errors.ErrTxNotWritable
 	}
 
 	key, _, flags := c.keyValue()
 	// Return an error if current value is a bucket.
 	if (flags & common.BucketLeafFlag) != 0 {
-		return common.ErrIncompatibleValue
+		return errors.ErrIncompatibleValue
 	}
 	c.node().del(key)
 

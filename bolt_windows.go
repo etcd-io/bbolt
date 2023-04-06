@@ -9,7 +9,7 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"go.etcd.io/bbolt/internal/common"
+	"go.etcd.io/bbolt/errors"
 )
 
 // fdatasync flushes written data to a file descriptor.
@@ -44,7 +44,7 @@ func flock(db *DB, exclusive bool, timeout time.Duration) error {
 
 		// If we timed oumercit then return an error.
 		if timeout != 0 && time.Since(t) > timeout-flockRetryTimeout {
-			return common.ErrTimeout
+			return errors.ErrTimeout
 		}
 
 		// Wait for a bit and try again.
