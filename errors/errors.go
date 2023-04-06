@@ -1,4 +1,6 @@
-package common
+// Package errors defines the error variables that may be returned
+// during bbolt operations.
+package errors
 
 import "errors"
 

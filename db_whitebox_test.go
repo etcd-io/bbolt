@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"go.etcd.io/bbolt/internal/common"
+	"go.etcd.io/bbolt/errors"
 )
 
 func TestOpenWithPreLoadFreelist(t *testing.T) {
@@ -78,7 +78,7 @@ func TestMethodPage(t *testing.T) {
 			name:            "readonly mode without preloading free pages",
 			readonly:        true,
 			preLoadFreePage: false,
-			expectedError:   common.ErrFreePagesNotLoaded,
+			expectedError:   errors.ErrFreePagesNotLoaded,
 		},
 	}
 
