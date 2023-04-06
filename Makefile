@@ -1,6 +1,7 @@
 BRANCH=`git rev-parse --abbrev-ref HEAD`
 COMMIT=`git rev-parse --short HEAD`
 GOLDFLAGS="-X main.branch $(BRANCH) -X main.commit $(COMMIT)"
+GOFILES = $(shell find . -name \*.go)
 
 TESTFLAGS_RACE=-race=false
 ifdef ENABLE_RACE
@@ -28,7 +29,11 @@ TEST_ENABLE_STRICT_MODE=${TESTFLAGS_ENABLE_STRICT_MODE}
 
 .PHONY: fmt
 fmt:
-	!(gofmt -l -s -d $(shell find . -name \*.go) | grep '[a-z]')
+	@echo "Verifying gofmt, failures can be fixed with ./scripts/fix.sh"
+	@!(gofmt -l -s -d ${GOFILES} | grep '[a-z]')
+
+	@echo "Verifying goimports, failures can be fixed with ./scripts/fix.sh"
+	@!(go run golang.org/x/tools/cmd/goimports@latest -l -d ${GOFILES} | grep '[a-z]')
 
 .PHONY: lint
 lint:
