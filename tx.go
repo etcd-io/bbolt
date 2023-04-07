@@ -10,6 +10,7 @@ import (
 	"time"
 	"unsafe"
 
+	"go.etcd.io/bbolt/errors"
 	"go.etcd.io/bbolt/internal/common"
 )
 
@@ -141,9 +142,9 @@ func (tx *Tx) OnCommit(fn func()) {
 func (tx *Tx) Commit() error {
 	common.Assert(!tx.managed, "managed tx commit not allowed")
 	if tx.db == nil {
-		return common.ErrTxClosed
+		return errors.ErrTxClosed
 	} else if !tx.writable {
-		return common.ErrTxNotWritable
+		return errors.ErrTxNotWritable
 	}
 
 	// TODO(benbjohnson): Use vectorized I/O to write out dirty pages.
@@ -253,7 +254,7 @@ func (tx *Tx) commitFreelist() error {
 func (tx *Tx) Rollback() error {
 	common.Assert(!tx.managed, "managed tx rollback not allowed")
 	if tx.db == nil {
-		return common.ErrTxClosed
+		return errors.ErrTxClosed
 	}
 	tx.nonPhysicalRollback()
 	return nil
@@ -560,13 +561,13 @@ func (tx *Tx) forEachPageInternal(pgidstack []common.Pgid, fn func(*common.Page,
 // This is only safe for concurrent use when used by a writable transaction.
 func (tx *Tx) Page(id int) (*common.PageInfo, error) {
 	if tx.db == nil {
-		return nil, common.ErrTxClosed
+		return nil, errors.ErrTxClosed
 	} else if common.Pgid(id) >= tx.meta.Pgid() {
 		return nil, nil
 	}
 
 	if tx.db.freelist == nil {
-		return nil, common.ErrFreePagesNotLoaded
+		return nil, errors.ErrFreePagesNotLoaded
 	}
 
 	// Build the page info.

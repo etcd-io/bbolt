@@ -11,6 +11,7 @@ import (
 	"time"
 	"unsafe"
 
+	berrors "go.etcd.io/bbolt/errors"
 	"go.etcd.io/bbolt/internal/common"
 )
 
@@ -233,7 +234,7 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 			db.pageSize = pgSize
 		} else {
 			_ = db.close()
-			return nil, common.ErrInvalid
+			return nil, berrors.ErrInvalid
 		}
 	}
 
@@ -311,7 +312,7 @@ func (db *DB) getPageSize() (int, error) {
 		return db.pageSize, nil
 	}
 
-	return 0, common.ErrInvalid
+	return 0, berrors.ErrInvalid
 }
 
 // getPageSizeFromFirstMeta reads the pageSize from the first meta page
@@ -324,7 +325,7 @@ func (db *DB) getPageSizeFromFirstMeta() (int, bool, error) {
 			return int(m.PageSize()), metaCanRead, nil
 		}
 	}
-	return 0, metaCanRead, common.ErrInvalid
+	return 0, metaCanRead, berrors.ErrInvalid
 }
 
 // getPageSizeFromSecondMeta reads the pageSize from the second meta page
@@ -362,7 +363,7 @@ func (db *DB) getPageSizeFromSecondMeta() (int, bool, error) {
 		}
 	}
 
-	return 0, metaCanRead, common.ErrInvalid
+	return 0, metaCanRead, berrors.ErrInvalid
 }
 
 // loadFreelist reads the freelist if it is synced, or reconstructs it
@@ -697,14 +698,14 @@ func (db *DB) beginTx() (*Tx, error) {
 	if !db.opened {
 		db.mmaplock.RUnlock()
 		db.metalock.Unlock()
-		return nil, common.ErrDatabaseNotOpen
+		return nil, berrors.ErrDatabaseNotOpen
 	}
 
 	// Exit if the database is not correctly mapped.
 	if db.data == nil {
 		db.mmaplock.RUnlock()
 		db.metalock.Unlock()
-		return nil, common.ErrInvalidMapping
+		return nil, berrors.ErrInvalidMapping
 	}
 
 	// Create a transaction associated with the database.
@@ -730,7 +731,7 @@ func (db *DB) beginTx() (*Tx, error) {
 func (db *DB) beginRWTx() (*Tx, error) {
 	// If the database was opened with Options.ReadOnly, return an error.
 	if db.readOnly {
-		return nil, common.ErrDatabaseReadOnly
+		return nil, berrors.ErrDatabaseReadOnly
 	}
 
 	// Obtain writer lock. This is released by the transaction when it closes.
@@ -745,13 +746,13 @@ func (db *DB) beginRWTx() (*Tx, error) {
 	// Exit if the database is not open yet.
 	if !db.opened {
 		db.rwlock.Unlock()
-		return nil, common.ErrDatabaseNotOpen
+		return nil, berrors.ErrDatabaseNotOpen
 	}
 
 	// Exit if the database is not correctly mapped.
 	if db.data == nil {
 		db.rwlock.Unlock()
-		return nil, common.ErrInvalidMapping
+		return nil, berrors.ErrInvalidMapping
 	}
 
 	// Create a transaction associated with the database.

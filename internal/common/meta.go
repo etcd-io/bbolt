@@ -5,6 +5,8 @@ import (
 	"hash/fnv"
 	"io"
 	"unsafe"
+
+	"go.etcd.io/bbolt/errors"
 )
 
 type Meta struct {
@@ -22,11 +24,11 @@ type Meta struct {
 // Validate checks the marker bytes and version of the meta page to ensure it matches this binary.
 func (m *Meta) Validate() error {
 	if m.magic != Magic {
-		return ErrInvalid
+		return errors.ErrInvalid
 	} else if m.version != Version {
-		return ErrVersionMismatch
+		return errors.ErrVersionMismatch
 	} else if m.checksum != m.Sum64() {
-		return ErrChecksum
+		return errors.ErrChecksum
 	}
 	return nil
 }

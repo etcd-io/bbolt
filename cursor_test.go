@@ -12,8 +12,8 @@ import (
 	"testing/quick"
 
 	bolt "go.etcd.io/bbolt"
+	"go.etcd.io/bbolt/errors"
 	"go.etcd.io/bbolt/internal/btesting"
-	"go.etcd.io/bbolt/internal/common"
 )
 
 // Ensure that a cursor can return a reference to the bucket that created it.
@@ -140,7 +140,7 @@ func TestCursor_Delete(t *testing.T) {
 		}
 
 		c.Seek([]byte("sub"))
-		if err := c.Delete(); err != common.ErrIncompatibleValue {
+		if err := c.Delete(); err != errors.ErrIncompatibleValue {
 			t.Fatalf("unexpected error: %s", err)
 		}
 
