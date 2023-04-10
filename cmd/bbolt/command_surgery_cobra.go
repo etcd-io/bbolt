@@ -7,8 +7,14 @@ import (
 
 	"github.com/spf13/cobra"
 
+	bolt "go.etcd.io/bbolt"
 	"go.etcd.io/bbolt/internal/common"
+	"go.etcd.io/bbolt/internal/guts_cli"
 	"go.etcd.io/bbolt/internal/surgeon"
+)
+
+var (
+	ErrSurgeryFreelistAlreadyExist = errors.New("the file already has freelist, please consider to abandon the freelist to forcibly rebuild it")
 )
 
 var (
@@ -89,6 +95,7 @@ func newSurgeryFreelistCommand() *cobra.Command {
 	}
 
 	cmd.AddCommand(newSurgeryFreelistAbandonCommand())
+	cmd.AddCommand(newSurgeryFreelistRebuildCommand())
 
 	return cmd
 }
@@ -118,7 +125,7 @@ func surgeryFreelistAbandonFunc(cmd *cobra.Command, args []string) error {
 	srcDBPath := args[0]
 
 	if err := common.CopyFile(srcDBPath, surgeryTargetDBFilePath); err != nil {
-		return fmt.Errorf("[abandon-freelist] copy file failed: %w", err)
+		return fmt.Errorf("[freelist abandon] copy file failed: %w", err)
 	}
 
 	if err := surgeon.ClearFreelist(surgeryTargetDBFilePath); err != nil {
@@ -127,4 +134,79 @@ func surgeryFreelistAbandonFunc(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintf(os.Stdout, "The freelist was abandoned in both meta pages.\nIt may cause some delay on next startup because bbolt needs to scan the whole db to reconstruct the free list.\n")
 	return nil
+}
+
+func newSurgeryFreelistRebuildCommand() *cobra.Command {
+	rebuildFreelistCmd := &cobra.Command{
+		Use:   "rebuild <bbolt-file> [options]",
+		Short: "Rebuild the freelist",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return errors.New("db file path not provided")
+			}
+			if len(args) > 1 {
+				return errors.New("too many arguments")
+			}
+			return nil
+		},
+		RunE: surgeryFreelistRebuildFunc,
+	}
+
+	rebuildFreelistCmd.Flags().StringVar(&surgeryTargetDBFilePath, "output", "", "path to the target db file")
+
+	return rebuildFreelistCmd
+}
+
+func surgeryFreelistRebuildFunc(cmd *cobra.Command, args []string) error {
+	srcDBPath := args[0]
+
+	// Ensure source file exists.
+	fi, err := os.Stat(srcDBPath)
+	if os.IsNotExist(err) {
+		return fmt.Errorf("source database file %q doesn't exist", srcDBPath)
+	} else if err != nil {
+		return fmt.Errorf("failed to open source database file %q: %v", srcDBPath, err)
+	}
+
+	if surgeryTargetDBFilePath == "" {
+		return fmt.Errorf("output database path wasn't given, specify output database file path with --output option")
+	}
+
+	// make sure the freelist isn't present in the file.
+	meta, err := readMetaPage(srcDBPath)
+	if err != nil {
+		return err
+	}
+	if meta.Freelist() != common.PgidNoFreelist {
+		return ErrSurgeryFreelistAlreadyExist
+	}
+
+	if err := common.CopyFile(srcDBPath, surgeryTargetDBFilePath); err != nil {
+		return fmt.Errorf("[freelist rebuild] copy file failed: %w", err)
+	}
+
+	// bboltDB automatically reconstruct & sync freelist in write mode.
+	db, err := bolt.Open(surgeryTargetDBFilePath, fi.Mode(), &bolt.Options{NoFreelistSync: false})
+	if err != nil {
+		return fmt.Errorf("[freelist rebuild] open db file failed: %w", err)
+	}
+	err = db.Close()
+	if err != nil {
+		return fmt.Errorf("[freelist rebuild] close db file failed: %w", err)
+	}
+
+	fmt.Fprintf(os.Stdout, "The freelist was successfully rebuilt.\n")
+	return nil
+}
+
+func readMetaPage(path string) (*common.Meta, error) {
+	_, activeMetaPageId, err := guts_cli.GetRootPage(path)
+	if err != nil {
+		return nil, fmt.Errorf("read root page failed: %w", err)
+	}
+	_, buf, err := guts_cli.ReadPage(path, uint64(activeMetaPageId))
+	if err != nil {
+		return nil, fmt.Errorf("read active mage page failed: %w", err)
+	}
+	return common.LoadPageMeta(buf), nil
 }
