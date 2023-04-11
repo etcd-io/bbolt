@@ -18,6 +18,15 @@ import (
 // The time elapsed between consecutive file locking attempts.
 const flockRetryTimeout = 50 * time.Millisecond
 
+// Export both FreelistArrayType and FreelistMapType so as to keep API compatibility.
+// TODO(ahrtr): eventually we should (step by step)
+//  1. default to FreelistMapType;
+//  2. remove the FreelistArrayType and do not export FreelistMapType;
+const (
+	FreelistArrayType = common.FreelistArrayType
+	FreelistMapType   = common.FreelistMapType
+)
+
 // DB represents a collection of buckets persisted to a file on disk.
 // All data access is performed through transactions which can be obtained through the DB.
 // All the functions on DB will return a ErrDatabaseNotOpen if accessed before Open() is called.
