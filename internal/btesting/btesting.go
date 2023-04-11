@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	bolt "go.etcd.io/bbolt"
-	"go.etcd.io/bbolt/internal/common"
 )
 
 var statsFlag = flag.Bool("stats", false, "show performance stats")
@@ -50,9 +49,9 @@ func MustOpenDBWithOption(t testing.TB, f string, o *bolt.Options) *DB {
 		o = bolt.DefaultOptions
 	}
 
-	freelistType := common.FreelistArrayType
-	if env := os.Getenv(TestFreelistType); env == string(common.FreelistMapType) {
-		freelistType = common.FreelistMapType
+	freelistType := bolt.FreelistArrayType
+	if env := os.Getenv(TestFreelistType); env == string(bolt.FreelistMapType) {
+		freelistType = bolt.FreelistMapType
 	}
 
 	o.FreelistType = freelistType

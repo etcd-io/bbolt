@@ -181,7 +181,7 @@ func TestFreelist_releaseRange(t *testing.T) {
 
 func TestFreelistHashmap_allocate(t *testing.T) {
 	f := newTestFreelist()
-	if f.freelistType != common.FreelistMapType {
+	if f.freelistType != FreelistMapType {
 		t.Skip()
 	}
 
@@ -211,7 +211,7 @@ func TestFreelistHashmap_allocate(t *testing.T) {
 // Ensure that a freelist can find contiguous blocks of pages.
 func TestFreelistArray_allocate(t *testing.T) {
 	f := newTestFreelist()
-	if f.freelistType != common.FreelistArrayType {
+	if f.freelistType != FreelistArrayType {
 		t.Skip()
 	}
 	ids := []common.Pgid{3, 4, 5, 6, 7, 9, 12, 13, 18}
@@ -403,7 +403,7 @@ func Test_freelist_mergeWithExist(t *testing.T) {
 	}
 	for _, tt := range tests {
 		f := newTestFreelist()
-		if f.freelistType == common.FreelistArrayType {
+		if f.freelistType == FreelistArrayType {
 			t.Skip()
 		}
 		f.readIDs(tt.ids)
@@ -427,9 +427,9 @@ func Test_freelist_mergeWithExist(t *testing.T) {
 
 // newTestFreelist get the freelist type from env and initial the freelist
 func newTestFreelist() *freelist {
-	freelistType := common.FreelistArrayType
-	if env := os.Getenv(TestFreelistType); env == string(common.FreelistMapType) {
-		freelistType = common.FreelistMapType
+	freelistType := FreelistArrayType
+	if env := os.Getenv(TestFreelistType); env == string(FreelistMapType) {
+		freelistType = FreelistMapType
 	}
 
 	return newFreelist(freelistType)
@@ -437,7 +437,7 @@ func newTestFreelist() *freelist {
 
 func Test_freelist_hashmapGetFreePageIDs(t *testing.T) {
 	f := newTestFreelist()
-	if f.freelistType == common.FreelistArrayType {
+	if f.freelistType == FreelistArrayType {
 		t.Skip()
 	}
 
@@ -461,7 +461,7 @@ func Test_freelist_hashmapGetFreePageIDs(t *testing.T) {
 
 func Benchmark_freelist_hashmapGetFreePageIDs(b *testing.B) {
 	f := newTestFreelist()
-	if f.freelistType == common.FreelistArrayType {
+	if f.freelistType == FreelistArrayType {
 		b.Skip()
 	}
 

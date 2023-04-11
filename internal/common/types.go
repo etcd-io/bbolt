@@ -36,15 +36,5 @@ const (
 // DefaultPageSize is the default page size for db which is set to the OS page size.
 var DefaultPageSize = os.Getpagesize()
 
-// FreelistType is the type of the freelist backend
-type FreelistType string
-
-const (
-	// FreelistArrayType indicates backend freelist type is array
-	FreelistArrayType = FreelistType("array")
-	// FreelistMapType indicates backend freelist type is hashmap
-	FreelistMapType = FreelistType("hashmap")
-)
-
 // Txid represents the internal transaction identifier.
 type Txid uint64
