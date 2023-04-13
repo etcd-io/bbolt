@@ -18,13 +18,18 @@ import (
 // The time elapsed between consecutive file locking attempts.
 const flockRetryTimeout = 50 * time.Millisecond
 
-// Export both FreelistArrayType and FreelistMapType so as to keep API compatibility.
+// FreelistType is the type of the freelist backend
+type FreelistType string
+
 // TODO(ahrtr): eventually we should (step by step)
-//  1. default to FreelistMapType;
-//  2. remove the FreelistArrayType and do not export FreelistMapType;
+//  1. default to `FreelistMapType`;
+//  2. remove the `FreelistArrayType`, do not export `FreelistMapType`
+//     and remove field `FreelistType' from both `DB` and `Options`;
 const (
-	FreelistArrayType = common.FreelistArrayType
-	FreelistMapType   = common.FreelistMapType
+	// FreelistArrayType indicates backend freelist type is array
+	FreelistArrayType = FreelistType("array")
+	// FreelistMapType indicates backend freelist type is hashmap
+	FreelistMapType = FreelistType("hashmap")
 )
 
 // DB represents a collection of buckets persisted to a file on disk.
@@ -59,7 +64,7 @@ type DB struct {
 	// The alternative one is using hashmap, it is faster in almost all circumstances
 	// but it doesn't guarantee that it offers the smallest page id available. In normal case it is safe.
 	// The default type is array
-	FreelistType common.FreelistType
+	FreelistType FreelistType
 
 	// When true, skips the truncate call when growing the database.
 	// Setting this to true is only safe on non-ext3/ext4 systems.
@@ -1211,7 +1216,7 @@ type Options struct {
 	// The alternative one is using hashmap, it is faster in almost all circumstances
 	// but it doesn't guarantee that it offers the smallest page id available. In normal case it is safe.
 	// The default type is array
-	FreelistType common.FreelistType
+	FreelistType FreelistType
 
 	// Open database in read-only mode. Uses flock(..., LOCK_SH |LOCK_NB) to
 	// grab a shared lock (UNIX).
@@ -1253,7 +1258,7 @@ type Options struct {
 var DefaultOptions = &Options{
 	Timeout:      0,
 	NoGrowSync:   false,
-	FreelistType: common.FreelistArrayType,
+	FreelistType: FreelistArrayType,
 }
 
 // Stats represents statistics about the database.
