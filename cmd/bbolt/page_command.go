@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"unsafe"
 
 	"go.etcd.io/bbolt/internal/common"
 	"go.etcd.io/bbolt/internal/guts_cli"
@@ -116,6 +117,9 @@ func (cmd *pageCommand) printPage(path string, pageID uint64, formatValue string
 	fmt.Fprintf(cmd.Stdout, "Page ID:    %d\n", p.Id())
 	fmt.Fprintf(cmd.Stdout, "Page Type:  %s\n", p.Typ())
 	fmt.Fprintf(cmd.Stdout, "Total Size: %d bytes\n", len(buf))
+	if p.Typ() == "leaf" {
+		fmt.Fprintf(cmd.Stdout, "Consumed Size: %d\n", consumedSizeOfLeaf(buf))
+	}
 	fmt.Fprintf(cmd.Stdout, "Overflow pages: %d\n", p.Overflow())
 
 	// Print type-specific data.
@@ -140,6 +144,26 @@ func (cmd *pageCommand) PrintMeta(w io.Writer, buf []byte) error {
 	m := common.LoadPageMeta(buf)
 	m.Print(w)
 	return nil
+}
+
+func consumedSizeOfLeaf(buf []byte) int {
+	p := common.LoadPage(buf)
+	consumedSize := 0
+
+	for i := uint16(0); i < p.Count(); i++ {
+		e := p.LeafPageElement(i)
+
+		consumedSize += int(unsafe.Sizeof(*e))
+		consumedSize += len(e.Key())
+
+		if e.IsBucketEntry() {
+			b := e.Bucket()
+			consumedSize += len(b.String())
+		} else {
+			consumedSize += len(e.Value())
+		}
+	}
+	return consumedSize
 }
 
 // PrintLeaf prints the data for a leaf page.
