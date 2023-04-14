@@ -24,6 +24,22 @@ import (
 	"go.etcd.io/bbolt/internal/common"
 )
 
+type duration struct {
+	min time.Duration
+	max time.Duration
+}
+
+type bytesRange struct {
+	min int
+	max int
+}
+
+type concurrentConfig struct {
+	readTime   duration
+	writeTime  duration
+	writeBytes bytesRange
+}
+
 /*
 TestConcurrentReadAndWrite verifies:
  1. Repeatable read: a read transaction should always see the same data
@@ -36,59 +52,88 @@ func TestConcurrentReadAndWrite(t *testing.T) {
 	keys := []string{"key0", "key1", "key2", "key3", "key4", "key5", "key6", "key7", "key8", "key9"}
 
 	testCases := []struct {
-		name             string
-		readerCount      int
-		minReadInterval  time.Duration
-		maxReadInterval  time.Duration
-		minWriteInterval time.Duration
-		maxWriteInterval time.Duration
-		minWriteBytes    int
-		maxWriteBytes    int
-		testDuration     time.Duration
+		name         string
+		readerCount  int
+		conf         concurrentConfig
+		testDuration time.Duration
 	}{
 		{
-			name:             "1 reader",
-			readerCount:      1,
-			minReadInterval:  50 * time.Millisecond,
-			maxReadInterval:  100 * time.Millisecond,
-			minWriteInterval: 10 * time.Millisecond,
-			maxWriteInterval: 20 * time.Millisecond,
-			minWriteBytes:    200,
-			maxWriteBytes:    8000,
-			testDuration:     30 * time.Second,
+			name:        "1 reader",
+			readerCount: 1,
+			conf: concurrentConfig{
+				readTime: duration{
+					min: 50 * time.Millisecond,
+					max: 100 * time.Millisecond,
+				},
+				writeTime: duration{
+					min: 10 * time.Millisecond,
+					max: 20 * time.Millisecond,
+				},
+				writeBytes: bytesRange{
+					min: 200,
+					max: 8000,
+				},
+			},
+			testDuration: 30 * time.Second,
 		},
 		{
-			name:             "10 readers",
-			readerCount:      10,
-			minReadInterval:  50 * time.Millisecond,
-			maxReadInterval:  100 * time.Millisecond,
-			minWriteInterval: 10 * time.Millisecond,
-			maxWriteInterval: 20 * time.Millisecond,
-			minWriteBytes:    200,
-			maxWriteBytes:    8000,
-			testDuration:     30 * time.Second,
+			name:        "10 readers",
+			readerCount: 10,
+			conf: concurrentConfig{
+				readTime: duration{
+					min: 50 * time.Millisecond,
+					max: 100 * time.Millisecond,
+				},
+				writeTime: duration{
+					min: 10 * time.Millisecond,
+					max: 20 * time.Millisecond,
+				},
+				writeBytes: bytesRange{
+					min: 200,
+					max: 8000,
+				},
+			},
+			testDuration: 30 * time.Second,
 		},
 		{
-			name:             "50 readers",
-			readerCount:      50,
-			minReadInterval:  50 * time.Millisecond,
-			maxReadInterval:  100 * time.Millisecond,
-			minWriteInterval: 10 * time.Millisecond,
-			maxWriteInterval: 20 * time.Millisecond,
-			minWriteBytes:    500,
-			maxWriteBytes:    8000,
-			testDuration:     30 * time.Second,
+			name:        "50 readers",
+			readerCount: 50,
+			conf: concurrentConfig{
+				readTime: duration{
+					min: 50 * time.Millisecond,
+					max: 100 * time.Millisecond,
+				},
+				writeTime: duration{
+					min: 10 * time.Millisecond,
+					max: 20 * time.Millisecond,
+				},
+				writeBytes: bytesRange{
+					min: 500,
+					max: 8000,
+				},
+			},
+
+			testDuration: 30 * time.Second,
 		},
 		{
-			name:             "100 readers",
-			readerCount:      100,
-			minReadInterval:  50 * time.Millisecond,
-			maxReadInterval:  100 * time.Millisecond,
-			minWriteInterval: 10 * time.Millisecond,
-			maxWriteInterval: 20 * time.Millisecond,
-			minWriteBytes:    500,
-			maxWriteBytes:    8000,
-			testDuration:     30 * time.Second,
+			name:        "100 readers",
+			readerCount: 100,
+			conf: concurrentConfig{
+				readTime: duration{
+					min: 50 * time.Millisecond,
+					max: 100 * time.Millisecond,
+				},
+				writeTime: duration{
+					min: 10 * time.Millisecond,
+					max: 20 * time.Millisecond,
+				},
+				writeBytes: bytesRange{
+					min: 500,
+					max: 8000,
+				},
+			},
+
+			testDuration: 30 * time.Second,
 		},
 	}
 
@@ -99,9 +144,7 @@ func TestConcurrentReadAndWrite(t *testing.T) {
 				bucket,
 				keys,
 				tc.readerCount,
-				tc.minReadInterval, tc.maxReadInterval,
-				tc.minWriteInterval, tc.maxWriteInterval,
-				tc.minWriteBytes, tc.maxWriteBytes,
+				tc.conf,
 				tc.testDuration)
 		})
 	}
@@ -111,9 +154,7 @@ func concurrentReadAndWrite(t *testing.T,
 	bucket []byte,
 	keys []string,
 	readerCount int,
-	minReadInterval, maxReadInterval time.Duration,
-	minWriteInterval, maxWriteInterval time.Duration,
-	minWriteBytes, maxWriteBytes int,
+	conf concurrentConfig,
 	testDuration time.Duration) {
 
 	t.Log("Preparing db.")
@@ -127,8 +168,8 @@ func concurrentReadAndWrite(t *testing.T,
 	t.Log("Starting workers.")
 	records := runWorkers(t,
 		db, bucket, keys,
-		readerCount, minReadInterval, maxReadInterval,
-		minWriteInterval, maxWriteInterval, minWriteBytes, maxWriteBytes,
+		readerCount,
+		conf,
 		testDuration)
 
 	t.Log("Analyzing the history records.")
@@ -154,9 +195,7 @@ func runWorkers(t *testing.T,
 	bucket []byte,
 	keys []string,
 	readerCount int,
-	minReadInterval, maxReadInterval time.Duration,
-	minWriteInterval, maxWriteInterval time.Duration,
-	minWriteBytes, maxWriteBytes int,
+	conf concurrentConfig,
 	testDuration time.Duration) historyRecords {
 	stopCh := make(chan struct{}, 1)
 	errCh := make(chan error, readerCount+1)
@@ -167,13 +206,12 @@ func runWorkers(t *testing.T,
 	// start write transaction
 	g := new(errgroup.Group)
 	writer := writeWorker{
-		db:               db,
-		bucket:           bucket,
-		keys:             keys,
-		minWriteBytes:    minWriteBytes,
-		maxWriteBytes:    maxWriteBytes,
-		minWriteInterval: minWriteInterval,
-		maxWriteInterval: maxWriteInterval,
+		db:     db,
+		bucket: bucket,
+		keys:   keys,
+
+		writeBytes: conf.writeBytes,
+		writeTime:  conf.writeTime,
 
 		errCh:  errCh,
 		stopCh: stopCh,
@@ -190,11 +228,11 @@ func runWorkers(t *testing.T,
 	// start readonly transactions
 	for i := 0; i < readerCount; i++ {
 		reader := &readWorker{
-			db:              db,
-			bucket:          bucket,
-			keys:            keys,
-			minReadInterval: minReadInterval,
-			maxReadInterval: maxReadInterval,
+			db:     db,
+			bucket: bucket,
+			keys:   keys,
+
+			readTime: conf.readTime,
 
 			errCh:  errCh,
 			stopCh: stopCh,
@@ -230,8 +268,7 @@ type readWorker struct {
 	bucket []byte
 	keys   []string
 
-	minReadInterval time.Duration
-	maxReadInterval time.Duration
+	readTime duration
 
 	errCh  chan error
 	stopCh chan struct{}
@@ -254,7 +291,7 @@ func (r *readWorker) run() (historyRecords, error) {
 
 			selectedKey := r.keys[mrand.Intn(len(r.keys))]
 			initialVal := b.Get([]byte(selectedKey))
-			time.Sleep(randomDurationInRange(r.minReadInterval, r.maxReadInterval))
+			time.Sleep(randomDurationInRange(r.readTime.min, r.readTime.max))
 			val := b.Get([]byte(selectedKey))
 
 			if !reflect.DeepEqual(initialVal, val) {
@@ -290,10 +327,8 @@ type writeWorker struct {
 	bucket []byte
 	keys   []string
 
-	minWriteBytes    int
-	maxWriteBytes    int
-	minWriteInterval time.Duration
-	maxWriteInterval time.Duration
+	writeBytes bytesRange
+	writeTime  duration
 
 	errCh  chan error
 	stopCh chan struct{}
@@ -316,7 +351,7 @@ func (w *writeWorker) run() (historyRecords, error) {
 
 			selectedKey := w.keys[mrand.Intn(len(w.keys))]
 
-			valueBytes := randomIntInRange(w.minWriteBytes, w.maxWriteBytes)
+			valueBytes := randomIntInRange(w.writeBytes.min, w.writeBytes.max)
 			v := make([]byte, valueBytes)
 			if _, cErr := crand.Read(v); cErr != nil {
 				return cErr
@@ -342,7 +377,7 @@ func (w *writeWorker) run() (historyRecords, error) {
 			return rs, writeErr
 		}
 
-		time.Sleep(randomDurationInRange(w.minWriteInterval, w.maxWriteInterval))
+		time.Sleep(randomDurationInRange(w.writeTime.min, w.writeTime.max))
 	}
 }
 
