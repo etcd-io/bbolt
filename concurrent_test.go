@@ -132,8 +132,8 @@ func concurrentReadAndWrite(t *testing.T,
 		testDuration)
 
 	t.Log("Analyzing the history records.")
-	if err := analyzeHistoryRecords(records); err != nil {
-		t.Errorf("The history records are not linearizable:\n %v", err)
+	if err := validateSerializable(records); err != nil {
+		t.Errorf("The history records are not serializable:\n %v", err)
 	}
 
 	saveDataIfFailed(t, db, records)
@@ -221,7 +221,6 @@ func runWorkers(t *testing.T,
 		t.Errorf("Received error: %v", err)
 	}
 
-	sort.Sort(rs)
 	return rs
 }
 
@@ -474,7 +473,9 @@ func (rs historyRecords) Swap(i, j int) {
 	rs[i], rs[j] = rs[j], rs[i]
 }
 
-func analyzeHistoryRecords(rs historyRecords) error {
+func validateSerializable(rs historyRecords) error {
+	sort.Sort(rs)
+
 	lastWriteKeyValueMap := make(map[string]*historyRecord)
 
 	for _, rec := range rs {
