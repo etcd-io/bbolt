@@ -116,7 +116,7 @@ func concurrentReadAndWrite(t *testing.T,
 	minWriteBytes, maxWriteBytes int,
 	testDuration time.Duration) {
 
-	// prepare the db
+	t.Log("Preparing db.")
 	db := btesting.MustCreateDB(t)
 	err := db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucket(bucket)
@@ -124,69 +124,13 @@ func concurrentReadAndWrite(t *testing.T,
 	})
 	require.NoError(t, err)
 
-	stopCh := make(chan struct{}, 1)
-	errCh := make(chan error, readerCount+1)
-	recordingCh := make(chan historyRecord, readerCount+1)
+	t.Log("Starting workers.")
+	records := runWorkers(t,
+		db, bucket, keys,
+		readerCount, minReadInterval, maxReadInterval,
+		minWriteInterval, maxWriteInterval, minWriteBytes, maxWriteBytes,
+		testDuration)
 
-	// collect history records
-	var records historyRecords
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		records = collectHistoryRecords(recordingCh)
-	}()
-
-	// start write transaction
-	g := new(errgroup.Group)
-	writer := writeWorker{
-		db:               db,
-		bucket:           bucket,
-		keys:             keys,
-		minWriteBytes:    minWriteBytes,
-		maxWriteBytes:    maxWriteBytes,
-		minWriteInterval: minWriteInterval,
-		maxWriteInterval: maxWriteInterval,
-
-		recordingCh: recordingCh,
-		errCh:       errCh,
-		stopCh:      stopCh,
-		t:           t,
-	}
-	g.Go(writer.run)
-
-	// start readonly transactions
-	for i := 0; i < readerCount; i++ {
-		reader := &readWorker{
-			db:              db,
-			bucket:          bucket,
-			keys:            keys,
-			minReadInterval: minReadInterval,
-			maxReadInterval: maxReadInterval,
-
-			recordingCh: recordingCh,
-			errCh:       errCh,
-			stopCh:      stopCh,
-			t:           t,
-		}
-		g.Go(reader.run)
-	}
-
-	t.Logf("Keep reading and writing transactions running for about %s.", testDuration)
-	select {
-	case <-time.After(testDuration):
-	case <-errCh:
-	}
-
-	close(stopCh)
-	t.Log("Wait for all transactions to finish.")
-	if err := g.Wait(); err != nil {
-		t.Errorf("Received error: %v", err)
-	}
-
-	t.Log("Waiting for the history collector to finish.")
-	close(recordingCh)
-	wg.Wait()
 	t.Log("Analyzing the history records.")
 	if err := analyzeHistoryRecords(records); err != nil {
 		t.Errorf("The history records are not linearizable:\n %v", err)
@@ -199,6 +143,88 @@ func concurrentReadAndWrite(t *testing.T,
 	//   2. check db consistency at the end.
 }
 
+/*
+*********************************************************
+Data structures and functions/methods for running
+concurrent workers, including reading and writing workers
+*********************************************************
+*/
+func runWorkers(t *testing.T,
+	db *btesting.DB,
+	bucket []byte,
+	keys []string,
+	readerCount int,
+	minReadInterval, maxReadInterval time.Duration,
+	minWriteInterval, maxWriteInterval time.Duration,
+	minWriteBytes, maxWriteBytes int,
+	testDuration time.Duration) historyRecords {
+	stopCh := make(chan struct{}, 1)
+	errCh := make(chan error, readerCount+1)
+
+	var mu sync.Mutex
+	var rs historyRecords
+
+	// start write transaction
+	g := new(errgroup.Group)
+	writer := writeWorker{
+		db:               db,
+		bucket:           bucket,
+		keys:             keys,
+		minWriteBytes:    minWriteBytes,
+		maxWriteBytes:    maxWriteBytes,
+		minWriteInterval: minWriteInterval,
+		maxWriteInterval: maxWriteInterval,
+
+		errCh:  errCh,
+		stopCh: stopCh,
+		t:      t,
+	}
+	g.Go(func() error {
+		wrs, err := writer.run()
+		mu.Lock()
+		rs = append(rs, wrs...)
+		mu.Unlock()
+		return err
+	})
+
+	// start readonly transactions
+	for i := 0; i < readerCount; i++ {
+		reader := &readWorker{
+			db:              db,
+			bucket:          bucket,
+			keys:            keys,
+			minReadInterval: minReadInterval,
+			maxReadInterval: maxReadInterval,
+
+			errCh:  errCh,
+			stopCh: stopCh,
+			t:      t,
+		}
+		g.Go(func() error {
+			rrs, err := reader.run()
+			mu.Lock()
+			rs = append(rs, rrs...)
+			mu.Unlock()
+			return err
+		})
+	}
+
+	t.Logf("Keep reading and writing transactions running for about %s.", testDuration)
+	select {
+	case <-time.After(testDuration):
+	case <-errCh:
+	}
+
+	close(stopCh)
+	t.Log("Waiting for all transactions to finish.")
+	if err := g.Wait(); err != nil {
+		t.Errorf("Received error: %v", err)
+	}
+
+	sort.Sort(rs)
+	return rs
+}
+
 type readWorker struct {
 	db *btesting.DB
 
@@ -208,19 +234,19 @@ type readWorker struct {
 	minReadInterval time.Duration
 	maxReadInterval time.Duration
 
-	recordingCh chan historyRecord
-	errCh       chan error
-	stopCh      chan struct{}
+	errCh  chan error
+	stopCh chan struct{}
 
 	t *testing.T
 }
 
-func (r *readWorker) run() error {
+func (r *readWorker) run() (historyRecords, error) {
+	var rs historyRecords
 	for {
 		select {
 		case <-r.stopCh:
 			r.t.Log("Reading transaction finished.")
-			return nil
+			return rs, nil
 		default:
 		}
 
@@ -240,12 +266,12 @@ func (r *readWorker) run() error {
 			clonedVal := make([]byte, len(val))
 			copy(clonedVal, val)
 
-			r.recordingCh <- historyRecord{
+			rs = append(rs, historyRecord{
 				OperationType: Read,
 				Key:           selectedKey,
 				Value:         clonedVal,
 				Txid:          tx.ID(),
-			}
+			})
 
 			return nil
 		})
@@ -254,7 +280,7 @@ func (r *readWorker) run() error {
 			readErr := fmt.Errorf("[reader error]: %w", err)
 			r.t.Log(readErr)
 			r.errCh <- readErr
-			return readErr
+			return rs, readErr
 		}
 	}
 }
@@ -270,19 +296,19 @@ type writeWorker struct {
 	minWriteInterval time.Duration
 	maxWriteInterval time.Duration
 
-	recordingCh chan historyRecord
-	errCh       chan error
-	stopCh      chan struct{}
+	errCh  chan error
+	stopCh chan struct{}
 
 	t *testing.T
 }
 
-func (w *writeWorker) run() error {
+func (w *writeWorker) run() (historyRecords, error) {
+	var rs historyRecords
 	for {
 		select {
 		case <-w.stopCh:
 			w.t.Log("Writing transaction finished.")
-			return nil
+			return rs, nil
 		default:
 		}
 
@@ -299,12 +325,12 @@ func (w *writeWorker) run() error {
 
 			putErr := b.Put([]byte(selectedKey), v)
 			if putErr == nil {
-				w.recordingCh <- historyRecord{
+				rs = append(rs, historyRecord{
 					OperationType: Write,
 					Key:           selectedKey,
 					Value:         v,
 					Txid:          tx.ID(),
-				}
+				})
 			}
 
 			return putErr
@@ -314,7 +340,7 @@ func (w *writeWorker) run() error {
 			writeErr := fmt.Errorf("[writer error]: %w", err)
 			w.t.Log(writeErr)
 			w.errCh <- writeErr
-			return writeErr
+			return rs, writeErr
 		}
 
 		time.Sleep(randomDurationInRange(w.minWriteInterval, w.maxWriteInterval))
@@ -339,6 +365,12 @@ func formatBytes(val []byte) string {
 	return hex.EncodeToString(val)
 }
 
+/*
+*********************************************************
+Functions for persisting test data, including db file
+and operation history
+*********************************************************
+*/
 func saveDataIfFailed(t *testing.T, db *btesting.DB, rs historyRecords) {
 	if t.Failed() {
 		if err := db.Close(); err != nil {
@@ -395,7 +427,7 @@ func testResultsDirectory(t *testing.T) string {
 
 /*
 *********************************************************
-Data structure and functions for analyzing history records
+Data structures and functions for analyzing history records
 *********************************************************
 */
 type OperationType string
@@ -440,15 +472,6 @@ func (rs historyRecords) Less(i, j int) bool {
 
 func (rs historyRecords) Swap(i, j int) {
 	rs[i], rs[j] = rs[j], rs[i]
-}
-
-func collectHistoryRecords(recordingCh chan historyRecord) historyRecords {
-	var rs historyRecords
-	for record := range recordingCh {
-		rs = append(rs, record)
-	}
-	sort.Sort(rs)
-	return rs
 }
 
 func analyzeHistoryRecords(rs historyRecords) error {
