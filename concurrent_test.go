@@ -43,9 +43,10 @@ type concurrentConfig struct {
 /*
 TestConcurrentReadAndWrite verifies:
  1. Repeatable read: a read transaction should always see the same data
-    view during its lifecycle;
+    view during its lifecycle.
  2. Any data written by a writing transaction should be visible to any
     following reading transactions (with txid >= previous writing txid).
+ 3. The txid should never decrease.
 */
 func TestConcurrentReadAndWrite(t *testing.T) {
 	if testing.Short() {
@@ -57,12 +58,14 @@ func TestConcurrentReadAndWrite(t *testing.T) {
 	testCases := []struct {
 		name         string
 		readerCount  int
+		writerCount  int
 		conf         concurrentConfig
 		testDuration time.Duration
 	}{
 		{
 			name:        "1 reader",
 			readerCount: 1,
+			writerCount: 1,
 			conf: concurrentConfig{
 				readTime: duration{
 					min: 50 * time.Millisecond,
@@ -82,6 +85,7 @@ func TestConcurrentReadAndWrite(t *testing.T) {
 		{
 			name:        "10 readers",
 			readerCount: 10,
+			writerCount: 2,
 			conf: concurrentConfig{
 				readTime: duration{
 					min: 50 * time.Millisecond,
@@ -101,6 +105,7 @@ func TestConcurrentReadAndWrite(t *testing.T) {
 		{
 			name:        "50 readers",
 			readerCount: 50,
+			writerCount: 10,
 			conf: concurrentConfig{
 				readTime: duration{
 					min: 50 * time.Millisecond,
@@ -121,6 +126,7 @@ func TestConcurrentReadAndWrite(t *testing.T) {
 		{
 			name:        "100 readers",
 			readerCount: 100,
+			writerCount: 20,
 			conf: concurrentConfig{
 				readTime: duration{
 					min: 50 * time.Millisecond,
@@ -147,6 +153,7 @@ func TestConcurrentReadAndWrite(t *testing.T) {
 				bucket,
 				keys,
 				tc.readerCount,
+				tc.writerCount,
 				tc.conf,
 				tc.testDuration)
 		})
@@ -157,6 +164,7 @@ func concurrentReadAndWrite(t *testing.T,
 	bucket []byte,
 	keys []string,
 	readerCount int,
+	writerCount int,
 	conf concurrentConfig,
 	testDuration time.Duration) {
 
@@ -172,6 +180,7 @@ func concurrentReadAndWrite(t *testing.T,
 	records := runWorkers(t,
 		db, bucket, keys,
 		readerCount,
+		writerCount,
 		conf,
 		testDuration)
 
@@ -198,6 +207,7 @@ func runWorkers(t *testing.T,
 	bucket []byte,
 	keys []string,
 	readerCount int,
+	writerCount int,
 	conf concurrentConfig,
 	testDuration time.Duration) historyRecords {
 	stopCh := make(chan struct{}, 1)
@@ -206,28 +216,34 @@ func runWorkers(t *testing.T,
 	var mu sync.Mutex
 	var rs historyRecords
 
-	// start write transaction
-	g := new(errgroup.Group)
-	writer := &writeWorker{
-		id:     0,
-		db:     db,
-		bucket: bucket,
-		keys:   keys,
-
-		writeBytes: conf.writeBytes,
-		writeTime:  conf.writeTime,
-
-		errCh:  errCh,
-		stopCh: stopCh,
-		t:      t,
-	}
-	g.Go(func() error {
-		wrs, err := runWorker(t, writer, errCh)
+	runFunc := func(w worker) error {
+		wrs, err := runWorker(t, w, errCh)
 		mu.Lock()
 		rs = append(rs, wrs...)
 		mu.Unlock()
 		return err
-	})
+	}
+
+	// start write transactions
+	g := new(errgroup.Group)
+	for i := 0; i < writerCount; i++ {
+		writer := &writeWorker{
+			id:     i,
+			db:     db,
+			bucket: bucket,
+			keys:   keys,
+
+			writeBytes: conf.writeBytes,
+			writeTime:  conf.writeTime,
+
+			errCh:  errCh,
+			stopCh: stopCh,
+			t:      t,
+		}
+		g.Go(func() error {
+			return runFunc(writer)
+		})
+	}
 
 	// start readonly transactions
 	for i := 0; i < readerCount; i++ {
@@ -244,11 +260,7 @@ func runWorkers(t *testing.T,
 			t:      t,
 		}
 		g.Go(func() error {
-			rrs, err := runWorker(t, reader, errCh)
-			mu.Lock()
-			rs = append(rs, rrs...)
-			mu.Unlock()
-			return err
+			return runFunc(reader)
 		})
 	}
 
@@ -300,8 +312,8 @@ type readWorker struct {
 	t *testing.T
 }
 
-func (w *readWorker) name() string {
-	return fmt.Sprintf("readWorker-%d", w.id)
+func (r *readWorker) name() string {
+	return fmt.Sprintf("readWorker-%d", r.id)
 }
 
 func (r *readWorker) run() (historyRecords, error) {
