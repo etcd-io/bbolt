@@ -266,7 +266,7 @@ func (w *worker) run() (historyRecords, error) {
 		}
 
 		op := w.pickOperation()
-		rec, err := runOperation(op, w.db, w.bucket, w.keys, w.conf)
+		rec, err := executeOperation(op, w.db, w.bucket, w.keys, w.conf)
 		if err != nil {
 			readErr := fmt.Errorf("[%s: %s]: %w", w.name(), op, err)
 			w.t.Error(readErr)
@@ -294,7 +294,7 @@ func (w *worker) pickOperation() OperationType {
 	panic("unexpected")
 }
 
-func runOperation(op OperationType, db *btesting.DB, bucket []byte, keys []string, conf concurrentConfig) (historyRecord, error) {
+func executeOperation(op OperationType, db *btesting.DB, bucket []byte, keys []string, conf concurrentConfig) (historyRecord, error) {
 	switch op {
 	case Read:
 		return executeRead(db, bucket, keys, conf.readInterval)
