@@ -19,6 +19,7 @@ import (
 
 	bolt "go.etcd.io/bbolt"
 	main "go.etcd.io/bbolt/cmd/bbolt"
+	"go.etcd.io/bbolt/internal/guts_cli"
 )
 
 // Ensure the "info" command can print information about a database.
@@ -73,6 +74,96 @@ func TestStatsCommand_Run_EmptyDatabase(t *testing.T) {
 		t.Fatal(err)
 	} else if m.Stdout.String() != exp {
 		t.Fatalf("unexpected stdout:\n\n%s", m.Stdout.String())
+	}
+}
+
+func TestCheckCommand_Run(t *testing.T) {
+	db := btesting.MustCreateDB(t)
+	db.Close()
+
+	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
+
+	m := NewMain()
+	err := m.Run("check", db.Path())
+	require.NoError(t, err)
+	if m.Stdout.String() != "OK\n" {
+		t.Fatalf("unexpected stdout:\n\n%s", m.Stdout.String())
+	}
+}
+
+func TestDumpCommand_Run(t *testing.T) {
+	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
+	db.Close()
+
+	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
+
+	exp := `0000010 edda 0ced 0200 0000 0010 0000 0000 0000`
+
+	m := NewMain()
+	err := m.Run("dump", db.Path(), "0")
+	require.NoError(t, err)
+	if !strings.Contains(m.Stdout.String(), exp) {
+		t.Fatalf("unexpected stdout:\n%s\n", m.Stdout.String())
+	}
+}
+
+func TestPageCommand_Run(t *testing.T) {
+	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
+	db.Close()
+
+	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
+
+	exp := "Page ID:    0\n" +
+		"Page Type:  meta\n" +
+		"Total Size: 4096 bytes\n" +
+		"Overflow pages: 0\n" +
+		"Version:    2\n" +
+		"Page Size:  4096 bytes\n" +
+		"Flags:      00000000\n" +
+		"Root:       <pgid=3>\n" +
+		"Freelist:   <pgid=2>\n" +
+		"HWM:        <pgid=4>\n" +
+		"Txn ID:     0\n" +
+		"Checksum:   07516e114689fdee\n\n"
+
+	m := NewMain()
+	err := m.Run("page", db.Path(), "0")
+	require.NoError(t, err)
+	if m.Stdout.String() != exp {
+		t.Fatalf("unexpected stdout:\n%s\n%s", m.Stdout.String(), exp)
+	}
+}
+
+func TestPageItemCommand_Run(t *testing.T) {
+	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
+	srcPath := db.Path()
+
+	// Insert some sample data
+	t.Log("Insert some sample data")
+	err := db.Fill([]byte("data"), 1, 100,
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("key_%d", k)) },
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("value_%d", k)) },
+	)
+	require.NoError(t, err)
+
+	defer requireDBNoChange(t, dbData(t, srcPath), srcPath)
+
+	meta := readMetaPage(t, srcPath)
+	leafPageId := 0
+	for i := 2; i < int(meta.Pgid()); i++ {
+		p, _, err := guts_cli.ReadPage(srcPath, uint64(i))
+		require.NoError(t, err)
+		if p.IsLeafPage() && p.Count() > 1 {
+			leafPageId = int(p.Id())
+		}
+	}
+	require.NotEqual(t, 0, leafPageId)
+
+	m := NewMain()
+	err = m.Run("page-item", db.Path(), fmt.Sprintf("%d", leafPageId), "0")
+	require.NoError(t, err)
+	if !strings.Contains(m.Stdout.String(), "key_0") || !strings.Contains(m.Stdout.String(), "value_0") {
+		t.Fatalf("Unexpected output:\n%s\n", m.Stdout.String())
 	}
 }
 
