@@ -30,10 +30,52 @@ func newSurgeryCobraCommand() *cobra.Command {
 		Short: "surgery related commands",
 	}
 
+	surgeryCmd.AddCommand(newSurgeryRevertMetaPageCommand())
 	surgeryCmd.AddCommand(newSurgeryClearPageElementsCommand())
 	surgeryCmd.AddCommand(newSurgeryFreelistCommand())
 
 	return surgeryCmd
+}
+
+func newSurgeryRevertMetaPageCommand() *cobra.Command {
+	revertMetaPageCmd := &cobra.Command{
+		Use:   "revert-meta-page <bbolt-file> [options]",
+		Short: "Revert the meta page to revert the changes performed by the latest transaction",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return errors.New("db file path not provided")
+			}
+			if len(args) > 1 {
+				return errors.New("too many arguments")
+			}
+			return nil
+		},
+		RunE: surgeryRevertMetaPageFunc,
+	}
+
+	revertMetaPageCmd.Flags().StringVar(&surgeryTargetDBFilePath, "output", "", "path to the target db file")
+
+	return revertMetaPageCmd
+}
+
+func surgeryRevertMetaPageFunc(cmd *cobra.Command, args []string) error {
+	srcDBPath := args[0]
+
+	if err := checkDBPaths(srcDBPath, surgeryTargetDBFilePath); err != nil {
+		return err
+	}
+
+	if err := common.CopyFile(srcDBPath, surgeryTargetDBFilePath); err != nil {
+		return fmt.Errorf("[revert-meta-page] copy file failed: %w", err)
+	}
+
+	if err := surgeon.RevertMetaPage(surgeryTargetDBFilePath); err != nil {
+		return fmt.Errorf("revert-meta-page command failed: %w", err)
+	}
+
+	fmt.Fprintln(os.Stdout, "The meta page is reverted.")
+
+	return nil
 }
 
 func newSurgeryClearPageElementsCommand() *cobra.Command {
@@ -209,4 +251,19 @@ func readMetaPage(path string) (*common.Meta, error) {
 		return nil, fmt.Errorf("read active mage page failed: %w", err)
 	}
 	return common.LoadPageMeta(buf), nil
+}
+
+func checkDBPaths(srcPath, dstPath string) error {
+	_, err := os.Stat(srcPath)
+	if os.IsNotExist(err) {
+		return fmt.Errorf("source database file %q doesn't exist", srcPath)
+	} else if err != nil {
+		return fmt.Errorf("failed to open source database file %q: %v", srcPath, err)
+	}
+
+	if dstPath == "" {
+		return fmt.Errorf("output database path wasn't given, specify output database file path with --output option")
+	}
+
+	return nil
 }
