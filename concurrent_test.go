@@ -146,8 +146,17 @@ func concurrentReadAndWrite(t *testing.T,
 	})
 	require.NoError(t, err)
 
+	var records historyRecords
+	// t.Failed() returns false during panicking. We need to forcibly
+	// save data on panicking.
+	// Refer to: https://github.com/golang/go/issues/49929
+	panicked := true
+	defer func() {
+		saveDataIfFailed(t, db, records, panicked)
+	}()
+
 	t.Log("Starting workers.")
-	records := runWorkers(t,
+	records = runWorkers(t,
 		db, bucket, keys,
 		workerCount,
 		conf,
@@ -158,8 +167,7 @@ func concurrentReadAndWrite(t *testing.T,
 		t.Errorf("The history records are not serializable:\n %v", err)
 	}
 
-	saveDataIfFailed(t, db, records)
-
+	panicked = false
 	// TODO (ahrtr):
 	//   1. intentionally inject a random failpoint.
 	//   2. check db consistency at the end.
@@ -415,8 +423,8 @@ Functions for persisting test data, including db file
 and operation history
 *********************************************************
 */
-func saveDataIfFailed(t *testing.T, db *btesting.DB, rs historyRecords) {
-	if t.Failed() {
+func saveDataIfFailed(t *testing.T, db *btesting.DB, rs historyRecords, force bool) {
+	if t.Failed() || force {
 		if err := db.Close(); err != nil {
 			t.Errorf("Failed to close db: %v", err)
 		}
