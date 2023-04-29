@@ -101,7 +101,7 @@ To use bbolt as an embedded key-value store, import as:
 ```go
 import bolt "go.etcd.io/bbolt"
 
-db, err := bolt.Open(path, 0666, nil)
+db, err := bolt.Open(path, 0o600, nil)
 if err != nil {
   return err
 }
@@ -128,7 +128,7 @@ import (
 func main() {
 	// Open the my.db data file in your current directory.
 	// It will be created if it doesn't exist.
-	db, err := bolt.Open("my.db", 0600, nil)
+	db, err := bolt.Open("my.db", 0o600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -144,7 +144,7 @@ database will cause it to hang until the other process closes it. To prevent
 an indefinite wait you can pass a timeout option to the `Open()` function:
 
 ```go
-db, err := bolt.Open("my.db", 0600, &bolt.Options{Timeout: 1 * time.Second})
+db, err := bolt.Open("my.db", 0o600, &bolt.Options{Timeout: 1 * time.Second})
 ```
 
 
@@ -653,7 +653,7 @@ uses a shared lock to allow multiple processes to read from the database but
 it will block any processes from opening the database in read-write mode.
 
 ```go
-db, err := bolt.Open("my.db", 0666, &bolt.Options{ReadOnly: true})
+db, err := bolt.Open("my.db", 0o600, &bolt.Options{ReadOnly: true})
 if err != nil {
 	log.Fatal(err)
 }
@@ -669,7 +669,7 @@ Neither Android nor iOS require extra permissions or cleanup from using this met
 
 ```go
 func NewBoltDB(filepath string) *BoltDB {
-	db, err := bolt.Open(filepath+"/demo.db", 0600, nil)
+	db, err := bolt.Open(filepath+"/demo.db", 0o600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
