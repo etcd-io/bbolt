@@ -167,6 +167,7 @@ func (db *DB) String() string {
 
 // Open creates and opens a database at the given path.
 // If the file does not exist then it will be created automatically.
+// A mode of 0o600 "user read/write" is conventional.
 // Passing in nil options will cause Bolt to open the database with the default options.
 func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 	db := &DB{
