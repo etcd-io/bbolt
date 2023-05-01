@@ -63,7 +63,7 @@ func TestConcurrentReadAndWrite(t *testing.T) {
 	conf := concurrentConfig{
 		workInterval: duration{
 			min: 5 * time.Millisecond,
-			max: 100 * time.Millisecond,
+			max: 10 * time.Millisecond,
 		},
 		operationRatio: []operationChance{
 			{operation: Read, chance: 60},
@@ -163,14 +163,32 @@ func concurrentReadAndWrite(t *testing.T,
 		testDuration)
 
 	t.Log("Analyzing the history records.")
-	if err := validateSerializable(records); err != nil {
-		t.Errorf("The history records are not serializable:\n %v", err)
+	if err := validateSequential(records); err != nil {
+		t.Errorf("The history records are not sequential:\n %v", err)
+	}
+
+	t.Log("Checking database consistency.")
+	if err := checkConsistency(t, db); err != nil {
+		t.Errorf("The data isn't consistency: %v", err)
 	}
 
 	panicked = false
 	// TODO (ahrtr):
 	//   1. intentionally inject a random failpoint.
-	//   2. check db consistency at the end.
+}
+
+func checkConsistency(t *testing.T, db *btesting.DB) error {
+	return db.View(func(tx *bolt.Tx) error {
+		cnt := 0
+		for err := range tx.Check() {
+			t.Errorf("Consistency error: %v", err)
+			cnt++
+		}
+		if cnt > 0 {
+			return fmt.Errorf("%d consistency errors found", cnt)
+		}
+		return nil
+	})
 }
 
 /*
@@ -541,7 +559,7 @@ func validateIncrementalTxid(rs historyRecords) error {
 	return nil
 }
 
-func validateSerializable(rs historyRecords) error {
+func validateSequential(rs historyRecords) error {
 	sort.Sort(rs)
 
 	lastWriteKeyValueMap := make(map[string]*historyRecord)
