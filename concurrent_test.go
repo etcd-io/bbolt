@@ -23,6 +23,8 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
+const noopTxKey string = "%magic-no-op-key%"
+
 type duration struct {
 	min time.Duration
 	max time.Duration
@@ -42,6 +44,7 @@ type concurrentConfig struct {
 	workInterval   duration
 	operationRatio []operationChance
 	readInterval   duration   // only used by readOpeartion
+	noopWriteRatio int        // only used by writeOperation
 	writeBytes     bytesRange // only used by writeOperation
 }
 
@@ -73,6 +76,7 @@ func TestConcurrentReadAndWrite(t *testing.T) {
 			min: 50 * time.Millisecond,
 			max: 100 * time.Millisecond,
 		},
+		noopWriteRatio: 20,
 		writeBytes: bytesRange{
 			min: 200,
 			max: 16000,
@@ -350,7 +354,7 @@ func executeOperation(op OperationType, db *bolt.DB, bucket []byte, keys []strin
 	case Read:
 		return executeRead(db, bucket, keys, conf.readInterval)
 	case Write:
-		return executeWrite(db, bucket, keys, conf.writeBytes)
+		return executeWrite(db, bucket, keys, conf.writeBytes, conf.noopWriteRatio)
 	case Delete:
 		return executeDelete(db, bucket, keys)
 	default:
@@ -389,10 +393,23 @@ func executeRead(db *bolt.DB, bucket []byte, keys []string, readInterval duratio
 	return rec, err
 }
 
-func executeWrite(db *bolt.DB, bucket []byte, keys []string, writeBytes bytesRange) (historyRecord, error) {
+func executeWrite(db *bolt.DB, bucket []byte, keys []string, writeBytes bytesRange, noopWriteRatio int) (historyRecord, error) {
 	var rec historyRecord
 
 	err := db.Update(func(tx *bolt.Tx) error {
+		if mrand.Intn(100) < noopWriteRatio {
+			// A no-op write transaction has two consequences:
+			//    1. The txid increases by 1;
+			//    2. Two meta pages point to the same root page.
+			rec = historyRecord{
+				OperationType: Write,
+				Key:           noopTxKey,
+				Value:         nil,
+				Txid:          tx.ID(),
+			}
+			return nil
+		}
+
 		b := tx.Bucket(bucket)
 
 		selectedKey := keys[mrand.Intn(len(keys))]
@@ -636,8 +653,10 @@ func validateSequential(rs historyRecords) error {
 	for _, rec := range rs {
 		if v, ok := lastWriteKeyValueMap[rec.Key]; ok {
 			if rec.OperationType == Write {
-				v.Value = rec.Value
 				v.Txid = rec.Txid
+				if rec.Key != noopTxKey {
+					v.Value = rec.Value
+				}
 			} else if rec.OperationType == Delete {
 				delete(lastWriteKeyValueMap, rec.Key)
 			} else {
@@ -648,7 +667,7 @@ func validateSequential(rs historyRecords) error {
 				}
 			}
 		} else {
-			if rec.OperationType == Write {
+			if rec.OperationType == Write && rec.Key != noopTxKey {
 				lastWriteKeyValueMap[rec.Key] = &historyRecord{
 					OperationType: Write,
 					Key:           rec.Key,
