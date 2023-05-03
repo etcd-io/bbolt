@@ -2,6 +2,7 @@ package main_test
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -14,6 +15,51 @@ import (
 	"go.etcd.io/bbolt/internal/common"
 	"go.etcd.io/bbolt/internal/guts_cli"
 )
+
+func TestSurgery_RevertMetaPage(t *testing.T) {
+	pageSize := 4096
+	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: pageSize})
+	srcPath := db.Path()
+
+	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
+
+	srcFile, err := os.Open(srcPath)
+	require.NoError(t, err)
+	defer srcFile.Close()
+
+	// Read both meta0 and meta1 from srcFile
+	srcBuf0 := readPage(t, srcPath, 0, pageSize)
+	srcBuf1 := readPage(t, srcPath, 1, pageSize)
+	meta0Page := common.LoadPageMeta(srcBuf0)
+	meta1Page := common.LoadPageMeta(srcBuf1)
+
+	// Get the non-active meta page
+	nonActiveSrcBuf := srcBuf0
+	nonActiveMetaPageId := 0
+	if meta0Page.Txid() > meta1Page.Txid() {
+		nonActiveSrcBuf = srcBuf1
+		nonActiveMetaPageId = 1
+	}
+	t.Logf("non active meta page id: %d", nonActiveMetaPageId)
+
+	// revert the meta page
+	rootCmd := main.NewRootCommand()
+	output := filepath.Join(t.TempDir(), "db")
+	rootCmd.SetArgs([]string{
+		"surgery", "revert-meta-page", srcPath,
+		"--output", output,
+	})
+	err = rootCmd.Execute()
+	require.NoError(t, err)
+
+	// read both meta0 and meta1 from dst file
+	dstBuf0 := readPage(t, output, 0, pageSize)
+	dstBuf1 := readPage(t, output, 1, pageSize)
+
+	// check result. Note we should skip the page ID
+	assert.Equal(t, pageDataWithoutPageId(nonActiveSrcBuf), pageDataWithoutPageId(dstBuf0))
+	assert.Equal(t, pageDataWithoutPageId(nonActiveSrcBuf), pageDataWithoutPageId(dstBuf1))
+}
 
 func TestSurgery_ClearPageElements_Without_Overflow(t *testing.T) {
 	testCases := []struct {
