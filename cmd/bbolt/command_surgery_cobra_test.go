@@ -61,6 +61,44 @@ func TestSurgery_RevertMetaPage(t *testing.T) {
 	assert.Equal(t, pageDataWithoutPageId(nonActiveSrcBuf), pageDataWithoutPageId(dstBuf1))
 }
 
+func TestSurgery_CopyPage(t *testing.T) {
+	pageSize := 4096
+	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: pageSize})
+	srcPath := db.Path()
+
+	// Insert some sample data
+	t.Log("Insert some sample data")
+	err := db.Fill([]byte("data"), 1, 20,
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
+		func(tx int, k int) []byte { return make([]byte, 10) },
+	)
+	require.NoError(t, err)
+
+	defer requireDBNoChange(t, dbData(t, srcPath), srcPath)
+
+	// copy page 3 to page 2
+	t.Log("copy page 3 to page 2")
+	rootCmd := main.NewRootCommand()
+	output := filepath.Join(t.TempDir(), "dstdb")
+	rootCmd.SetArgs([]string{
+		"surgery", "copy-page", srcPath,
+		"--output", output,
+		"--from-page", "3",
+		"--to-page", "2",
+	})
+	err = rootCmd.Execute()
+	require.NoError(t, err)
+
+	// The page 2 should have exactly the same data as page 3.
+	t.Log("Verify result")
+	srcPageId3Data := readPage(t, srcPath, 3, pageSize)
+	dstPageId3Data := readPage(t, output, 3, pageSize)
+	dstPageId2Data := readPage(t, output, 2, pageSize)
+
+	assert.Equal(t, srcPageId3Data, dstPageId3Data)
+	assert.Equal(t, pageDataWithoutPageId(srcPageId3Data), pageDataWithoutPageId(dstPageId2Data))
+}
+
 func TestSurgery_ClearPageElements_Without_Overflow(t *testing.T) {
 	testCases := []struct {
 		name                 string
@@ -577,4 +615,25 @@ func readMetaPage(t *testing.T, path string) *common.Meta {
 	_, buf, err := guts_cli.ReadPage(path, uint64(activeMetaPageId))
 	require.NoError(t, err)
 	return common.LoadPageMeta(buf)
+}
+
+func readPage(t *testing.T, path string, pageId int, pageSize int) []byte {
+	dbFile, err := os.Open(path)
+	require.NoError(t, err)
+	defer dbFile.Close()
+
+	fi, err := dbFile.Stat()
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, fi.Size(), int64((pageId+1)*pageSize))
+
+	buf := make([]byte, pageSize)
+	byteRead, err := dbFile.ReadAt(buf, int64(pageId*pageSize))
+	require.NoError(t, err)
+	require.Equal(t, pageSize, byteRead)
+
+	return buf
+}
+
+func pageDataWithoutPageId(buf []byte) []byte {
+	return buf[8:]
 }

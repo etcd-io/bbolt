@@ -18,10 +18,12 @@ var (
 )
 
 var (
-	surgeryTargetDBFilePath string
-	surgeryPageId           uint64
-	surgeryStartElementIdx  int
-	surgeryEndElementIdx    int
+	surgeryTargetDBFilePath  string
+	surgeryPageId            uint64
+	surgeryStartElementIdx   int
+	surgeryEndElementIdx     int
+	surgerySourcePageId      uint64
+	surgeryDestinationPageId uint64
 )
 
 func newSurgeryCobraCommand() *cobra.Command {
@@ -31,6 +33,7 @@ func newSurgeryCobraCommand() *cobra.Command {
 	}
 
 	surgeryCmd.AddCommand(newSurgeryRevertMetaPageCommand())
+	surgeryCmd.AddCommand(newSurgeryCopyPageCommand())
 	surgeryCmd.AddCommand(newSurgeryClearPageElementsCommand())
 	surgeryCmd.AddCommand(newSurgeryFreelistCommand())
 
@@ -75,6 +78,51 @@ func surgeryRevertMetaPageFunc(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintln(os.Stdout, "The meta page is reverted.")
 
+	return nil
+}
+
+func newSurgeryCopyPageCommand() *cobra.Command {
+	copyPageCmd := &cobra.Command{
+		Use:   "copy-page <bbolt-file> [options]",
+		Short: "Copy page from the source page Id to the destination page Id",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return errors.New("db file path not provided")
+			}
+			if len(args) > 1 {
+				return errors.New("too many arguments")
+			}
+			return nil
+		},
+		RunE: surgeryCopyPageFunc,
+	}
+
+	copyPageCmd.Flags().StringVar(&surgeryTargetDBFilePath, "output", "", "path to the target db file")
+	copyPageCmd.Flags().Uint64VarP(&surgerySourcePageId, "from-page", "", 0, "source page Id")
+	copyPageCmd.Flags().Uint64VarP(&surgeryDestinationPageId, "to-page", "", 0, "destination page Id")
+
+	return copyPageCmd
+}
+
+func surgeryCopyPageFunc(cmd *cobra.Command, args []string) error {
+	srcDBPath := args[0]
+
+	if surgerySourcePageId == surgeryDestinationPageId {
+		return fmt.Errorf("'--from-page' and '--to-page' have the same value: %d", surgerySourcePageId)
+	}
+
+	if err := common.CopyFile(srcDBPath, surgeryTargetDBFilePath); err != nil {
+		return fmt.Errorf("[copy-page] copy file failed: %w", err)
+	}
+
+	if err := surgeon.CopyPage(surgeryTargetDBFilePath, common.Pgid(surgerySourcePageId), common.Pgid(surgeryDestinationPageId)); err != nil {
+		return fmt.Errorf("copy-page command failed: %w", err)
+	}
+
+	fmt.Fprintf(os.Stdout, "WARNING: the free list might have changed.\n")
+	fmt.Fprintf(os.Stdout, "Please consider executing `./bbolt surgery abandon-freelist ...`\n")
+
+	fmt.Fprintf(os.Stdout, "The page %d was successfully copied to page %d\n", surgerySourcePageId, surgeryDestinationPageId)
 	return nil
 }
 
