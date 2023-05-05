@@ -108,6 +108,10 @@ func (m *Meta) SetFreelist(v Pgid) {
 	m.freelist = v
 }
 
+func (m *Meta) IsFreelistPersisted() bool {
+	return m.freelist != PgidNoFreelist
+}
+
 func (m *Meta) Pgid() Pgid {
 	return m.pgid
 }
