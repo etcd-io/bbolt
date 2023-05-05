@@ -1135,6 +1135,8 @@ func (db *DB) grow(sz int) error {
 	// https://github.com/boltdb/bolt/issues/284
 	if !db.NoGrowSync && !db.readOnly {
 		if runtime.GOOS != "windows" {
+			// gofail: var resizeFileError string
+			// return errors.New(resizeFileError)
 			if err := db.file.Truncate(int64(sz)); err != nil {
 				return fmt.Errorf("file resize error: %s", err)
 			}
