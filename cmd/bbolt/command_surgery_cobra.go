@@ -119,8 +119,14 @@ func surgeryCopyPageFunc(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("copy-page command failed: %w", err)
 	}
 
-	fmt.Fprintf(os.Stdout, "WARNING: the free list might have changed.\n")
-	fmt.Fprintf(os.Stdout, "Please consider executing `./bbolt surgery abandon-freelist ...`\n")
+	meta, err := readMetaPage(srcDBPath)
+	if err != nil {
+		return err
+	}
+	if meta.IsFreelistPersisted() {
+		fmt.Fprintf(os.Stdout, "WARNING: the free list might have changed.\n")
+		fmt.Fprintf(os.Stdout, "Please consider executing `./bbolt surgery abandon-freelist ...`\n")
+	}
 
 	fmt.Fprintf(os.Stdout, "The page %d was successfully copied to page %d\n", surgerySourcePageId, surgeryDestinationPageId)
 	return nil
@@ -267,7 +273,7 @@ func surgeryFreelistRebuildFunc(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if meta.Freelist() != common.PgidNoFreelist {
+	if meta.IsFreelistPersisted() {
 		return ErrSurgeryFreelistAlreadyExist
 	}
 
