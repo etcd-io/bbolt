@@ -94,3 +94,31 @@ func TestFailpoint_mLockFail_When_remap(t *testing.T) {
 
 	require.NoError(t, err)
 }
+
+func TestFailpoint_ResizeFileFail(t *testing.T) {
+	db := btesting.MustCreateDB(t)
+
+	err := gofail.Enable("resizeFileError", `return("resizeFile somehow failed")`)
+	require.NoError(t, err)
+
+	err = db.Fill([]byte("data"), 1, 10000,
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
+		func(tx int, k int) []byte { return make([]byte, 100) },
+	)
+
+	require.Error(t, err)
+	require.ErrorContains(t, err, "resizeFile somehow failed")
+
+	// It should work after disabling the failpoint.
+	err = gofail.Disable("resizeFileError")
+	require.NoError(t, err)
+	db.MustClose()
+	db.MustReopen()
+
+	err = db.Fill([]byte("data"), 1, 10000,
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
+		func(tx int, k int) []byte { return make([]byte, 100) },
+	)
+
+	require.NoError(t, err)
+}
