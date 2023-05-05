@@ -40,8 +40,6 @@ func (cmd *surgeryCommand) Run(args ...string) error {
 	case "help":
 		fmt.Fprintln(cmd.Stderr, cmd.Usage())
 		return ErrUsage
-	case "copy-page":
-		return newCopyPageCommand(cmd).Run(args[1:]...)
 	case "clear-page":
 		return newClearPageCommand(cmd).Run(args[1:]...)
 	default:
@@ -81,70 +79,8 @@ Usage:
 The commands are:
     help                   print this screen
     clear-page             clear all elements at the given pageId
-    copy-page              copy page from source pageId to target pageId
-    revert-meta-page       revert the meta page change made by the last transaction
 
 Use "bbolt surgery [command] -h" for more information about a command.
-`, "\n")
-}
-
-// copyPageCommand represents the "surgery copy-page" command execution.
-type copyPageCommand struct {
-	*surgeryCommand
-}
-
-// newCopyPageCommand returns a copyPageCommand.
-func newCopyPageCommand(m *surgeryCommand) *copyPageCommand {
-	c := &copyPageCommand{}
-	c.surgeryCommand = m
-	return c
-}
-
-// Run executes the command.
-func (cmd *copyPageCommand) Run(args ...string) error {
-	// Parse flags.
-	fs := flag.NewFlagSet("", flag.ContinueOnError)
-	help := fs.Bool("h", false, "")
-	if err := fs.Parse(args); err != nil {
-		return err
-	} else if *help {
-		fmt.Fprintln(cmd.Stderr, cmd.Usage())
-		return ErrUsage
-	}
-
-	if err := cmd.parsePathsAndCopyFile(fs); err != nil {
-		return fmt.Errorf("copyPageCommand failed to parse paths and copy file: %w", err)
-	}
-
-	// Read page id.
-	srcPageId, err := strconv.ParseUint(fs.Arg(2), 10, 64)
-	if err != nil {
-		return err
-	}
-	dstPageId, err := strconv.ParseUint(fs.Arg(3), 10, 64)
-	if err != nil {
-		return err
-	}
-
-	// copy the page
-	if err := surgeon.CopyPage(cmd.dstPath, common.Pgid(srcPageId), common.Pgid(dstPageId)); err != nil {
-		return fmt.Errorf("copyPageCommand failed: %w", err)
-	}
-
-	fmt.Fprintf(cmd.Stdout, "The page %d was copied to page %d\n", srcPageId, dstPageId)
-	return nil
-}
-
-// Usage returns the help message.
-func (cmd *copyPageCommand) Usage() string {
-	return strings.TrimLeft(`
-usage: bolt surgery copy-page SRC DST srcPageId dstPageid
-
-CopyPage copies the database file at SRC to a newly created database
-file at DST. Afterwards, it copies the page at srcPageId to the page
-at dstPageId in DST.
-
-The original database is left untouched.
 `, "\n")
 }
 
