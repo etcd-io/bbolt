@@ -99,6 +99,43 @@ func TestSurgery_CopyPage(t *testing.T) {
 	assert.Equal(t, pageDataWithoutPageId(srcPageId3Data), pageDataWithoutPageId(dstPageId2Data))
 }
 
+// TODO(ahrtr): add test case below for `surgery clear-page` command:
+//  1. The page is a branch page. All its children should become free pages.
+func TestSurgery_ClearPage(t *testing.T) {
+	pageSize := 4096
+	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: pageSize})
+	srcPath := db.Path()
+
+	// Insert some sample data
+	t.Log("Insert some sample data")
+	err := db.Fill([]byte("data"), 1, 20,
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
+		func(tx int, k int) []byte { return make([]byte, 10) },
+	)
+	require.NoError(t, err)
+
+	defer requireDBNoChange(t, dbData(t, srcPath), srcPath)
+
+	// clear page 3
+	t.Log("clear page 3")
+	rootCmd := main.NewRootCommand()
+	output := filepath.Join(t.TempDir(), "dstdb")
+	rootCmd.SetArgs([]string{
+		"surgery", "clear-page", srcPath,
+		"--output", output,
+		"--pageId", "3",
+	})
+	err = rootCmd.Execute()
+	require.NoError(t, err)
+
+	t.Log("Verify result")
+	dstPageId3Data := readPage(t, output, 3, pageSize)
+
+	p := common.LoadPage(dstPageId3Data)
+	assert.Equal(t, uint16(0), p.Count())
+	assert.Equal(t, uint32(0), p.Overflow())
+}
+
 func TestSurgery_ClearPageElements_Without_Overflow(t *testing.T) {
 	testCases := []struct {
 		name                 string

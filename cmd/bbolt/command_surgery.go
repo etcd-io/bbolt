@@ -26,6 +26,7 @@ func newSurgeryCobraCommand() *cobra.Command {
 
 	surgeryCmd.AddCommand(newSurgeryRevertMetaPageCommand())
 	surgeryCmd.AddCommand(newSurgeryCopyPageCommand())
+	surgeryCmd.AddCommand(newSurgeryClearPageCommand())
 	surgeryCmd.AddCommand(newSurgeryClearPageElementsCommand())
 	surgeryCmd.AddCommand(newSurgeryFreelistCommand())
 
@@ -183,6 +184,54 @@ func (o *surgeryClearPageElementsOptions) Validate() error {
 	return nil
 }
 
+func newSurgeryClearPageCommand() *cobra.Command {
+	cfg := defaultSurgeryOptions()
+	clearPageCmd := &cobra.Command{
+		Use:   "clear-page <bbolt-file> [options]",
+		Short: "Clears all elements from the given page, which can be a branch or leaf page",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return errors.New("db file path not provided")
+			}
+			if len(args) > 1 {
+				return errors.New("too many arguments")
+			}
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return surgeryClearPageFunc(args[0], cfg)
+		},
+	}
+
+	clearPageCmd.Flags().StringVar(&cfg.surgeryTargetDBFilePath, "output", "", "path to the target db file")
+	clearPageCmd.Flags().Uint64VarP(&cfg.surgeryPageId, "pageId", "", 0, "page id")
+
+	return clearPageCmd
+}
+
+func surgeryClearPageFunc(srcDBPath string, cfg surgeryOptions) error {
+	if err := common.CopyFile(srcDBPath, cfg.surgeryTargetDBFilePath); err != nil {
+		return fmt.Errorf("[clear-page] copy file failed: %w", err)
+	}
+
+	if cfg.surgeryPageId < 2 {
+		return fmt.Errorf("the pageId must be at least 2, but got %d", cfg.surgeryPageId)
+	}
+
+	needAbandonFreelist, err := surgeon.ClearPage(cfg.surgeryTargetDBFilePath, common.Pgid(cfg.surgeryPageId))
+	if err != nil {
+		return fmt.Errorf("clear-page command failed: %w", err)
+	}
+
+	if needAbandonFreelist {
+		fmt.Fprintf(os.Stdout, "WARNING: The clearing has abandoned some pages that are not yet referenced from free list.\n")
+		fmt.Fprintf(os.Stdout, "Please consider executing `./bbolt surgery abandon-freelist ...`\n")
+	}
+
+	fmt.Fprintf(os.Stdout, "The page (%d) was cleared\n", cfg.surgeryPageId)
+	return nil
+}
+
 func newSurgeryClearPageElementsCommand() *cobra.Command {
 	var o surgeryClearPageElementsOptions
 	clearElementCmd := &cobra.Command{
@@ -227,9 +276,6 @@ func surgeryClearPageElementFunc(srcDBPath string, cfg surgeryClearPageElementsO
 	return nil
 }
 
-// TODO(ahrtr): add `bbolt surgery freelist rebuild/check ...` commands,
-// and move all `surgery freelist` commands into a separate file,
-// e.g command_surgery_freelist.go.
 func newSurgeryFreelistCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "freelist <subcommand>",
