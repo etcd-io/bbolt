@@ -23,7 +23,16 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-const noopTxKey string = "%magic-no-op-key%"
+const (
+	bucketPrefix = "bucket"
+	keyPrefix    = "key"
+	noopTxKey    = "%magic-no-op-key%"
+
+	// TestConcurrentCaseDuration is used as a env variable to specify the
+	// concurrent test duration.
+	testConcurrentCaseDuration    = "TEST_CONCURRENT_CASE_DURATION"
+	defaultConcurrentTestDuration = 30 * time.Second
+)
 
 type duration struct {
 	min time.Duration
@@ -41,9 +50,11 @@ type operationChance struct {
 }
 
 type concurrentConfig struct {
+	bucketCount    int
+	keyCount       int
 	workInterval   duration
 	operationRatio []operationChance
-	readInterval   duration   // only used by readOpeartion
+	readInterval   duration   // only used by readOperation
 	noopWriteRatio int        // only used by writeOperation
 	writeBytes     bytesRange // only used by writeOperation
 }
@@ -60,13 +71,12 @@ func TestConcurrentReadAndWrite(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
-	bucket := []byte("data")
-	keys := []string{"key0", "key1", "key2", "key3", "key4", "key5", "key6", "key7", "key8", "key9"}
+
+	testDuration := concurrentTestDuration(t)
 	conf := concurrentConfig{
-		workInterval: duration{
-			min: 5 * time.Millisecond,
-			max: 10 * time.Millisecond,
-		},
+		bucketCount:  5,
+		keyCount:     10000,
+		workInterval: duration{},
 		operationRatio: []operationChance{
 			{operation: Read, chance: 60},
 			{operation: Write, chance: 20},
@@ -93,31 +103,31 @@ func TestConcurrentReadAndWrite(t *testing.T) {
 			name:         "1 worker",
 			workerCount:  1,
 			conf:         conf,
-			testDuration: 30 * time.Second,
+			testDuration: testDuration,
 		},
 		{
 			name:         "10 workers",
 			workerCount:  10,
 			conf:         conf,
-			testDuration: 30 * time.Second,
+			testDuration: testDuration,
 		},
 		{
 			name:         "50 workers",
 			workerCount:  50,
 			conf:         conf,
-			testDuration: 30 * time.Second,
+			testDuration: testDuration,
 		},
 		{
 			name:         "100 workers",
 			workerCount:  100,
 			conf:         conf,
-			testDuration: 30 * time.Second,
+			testDuration: testDuration,
 		},
 		{
 			name:         "200 workers",
 			workerCount:  200,
 			conf:         conf,
-			testDuration: 30 * time.Second,
+			testDuration: testDuration,
 		},
 	}
 
@@ -125,8 +135,6 @@ func TestConcurrentReadAndWrite(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			concurrentReadAndWrite(t,
-				bucket,
-				keys,
 				tc.workerCount,
 				tc.conf,
 				tc.testDuration)
@@ -134,9 +142,24 @@ func TestConcurrentReadAndWrite(t *testing.T) {
 	}
 }
 
+func concurrentTestDuration(t *testing.T) time.Duration {
+	durationInEnv := strings.ToLower(os.Getenv(testConcurrentCaseDuration))
+	if durationInEnv == "" {
+		t.Logf("%q not set, defaults to %s", testConcurrentCaseDuration, defaultConcurrentTestDuration)
+		return defaultConcurrentTestDuration
+	}
+
+	d, err := time.ParseDuration(durationInEnv)
+	if err != nil {
+		t.Logf("Failed to parse %s=%s, error: %v, defaults to %s", testConcurrentCaseDuration, durationInEnv, err, defaultConcurrentTestDuration)
+		return defaultConcurrentTestDuration
+	}
+
+	t.Logf("Concurrent test duration set by %s=%s", testConcurrentCaseDuration, d)
+	return d
+}
+
 func concurrentReadAndWrite(t *testing.T,
-	bucket []byte,
-	keys []string,
 	workerCount int,
 	conf concurrentConfig,
 	testDuration time.Duration) {
@@ -145,8 +168,12 @@ func concurrentReadAndWrite(t *testing.T,
 	db := mustCreateDB(t, nil)
 	defer db.Close()
 	err := db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucket(bucket)
-		return err
+		for i := 0; i < conf.bucketCount; i++ {
+			if _, err := tx.CreateBucketIfNotExists(bucketName(i)); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	require.NoError(t, err)
 
@@ -156,12 +183,13 @@ func concurrentReadAndWrite(t *testing.T,
 	// Refer to: https://github.com/golang/go/issues/49929
 	panicked := true
 	defer func() {
+		t.Log("Save data if failed.")
 		saveDataIfFailed(t, db, records, panicked)
 	}()
 
 	t.Log("Starting workers.")
 	records = runWorkers(t,
-		db, bucket, keys,
+		db,
 		workerCount,
 		conf,
 		testDuration)
@@ -229,8 +257,6 @@ workers, which execute different operations, including `Read`,
 */
 func runWorkers(t *testing.T,
 	db *bolt.DB,
-	bucket []byte,
-	keys []string,
 	workerCount int,
 	conf concurrentConfig,
 	testDuration time.Duration) historyRecords {
@@ -243,10 +269,8 @@ func runWorkers(t *testing.T,
 	g := new(errgroup.Group)
 	for i := 0; i < workerCount; i++ {
 		w := &worker{
-			id:     i,
-			db:     db,
-			bucket: bucket,
-			keys:   keys,
+			id: i,
+			db: db,
 
 			conf: conf,
 
@@ -295,9 +319,6 @@ type worker struct {
 	id int
 	db *bolt.DB
 
-	bucket []byte
-	keys   []string
-
 	conf concurrentConfig
 
 	errCh  chan error
@@ -321,7 +342,8 @@ func (w *worker) run() (historyRecords, error) {
 		}
 
 		op := w.pickOperation()
-		rec, err := executeOperation(op, w.db, w.bucket, w.keys, w.conf)
+		bucket, key := w.pickBucket(), w.pickKey()
+		rec, err := executeOperation(op, w.db, bucket, key, w.conf)
 		if err != nil {
 			readErr := fmt.Errorf("[%s: %s]: %w", w.name(), op, err)
 			w.t.Error(readErr)
@@ -330,8 +352,24 @@ func (w *worker) run() (historyRecords, error) {
 		}
 
 		rs = append(rs, rec)
-		time.Sleep(randomDurationInRange(w.conf.workInterval.min, w.conf.workInterval.max))
+		if w.conf.workInterval != (duration{}) {
+			time.Sleep(randomDurationInRange(w.conf.workInterval.min, w.conf.workInterval.max))
+		}
 	}
+}
+
+func (w *worker) pickBucket() []byte {
+	return bucketName(mrand.Intn(w.conf.bucketCount))
+}
+
+func bucketName(index int) []byte {
+	bucket := fmt.Sprintf("%s_%d", bucketPrefix, index)
+	return []byte(bucket)
+}
+
+func (w *worker) pickKey() []byte {
+	key := fmt.Sprintf("%s_%d", keyPrefix, mrand.Intn(w.conf.keyCount))
+	return []byte(key)
 }
 
 func (w *worker) pickOperation() OperationType {
@@ -349,32 +387,31 @@ func (w *worker) pickOperation() OperationType {
 	panic("unexpected")
 }
 
-func executeOperation(op OperationType, db *bolt.DB, bucket []byte, keys []string, conf concurrentConfig) (historyRecord, error) {
+func executeOperation(op OperationType, db *bolt.DB, bucket []byte, key []byte, conf concurrentConfig) (historyRecord, error) {
 	switch op {
 	case Read:
-		return executeRead(db, bucket, keys, conf.readInterval)
+		return executeRead(db, bucket, key, conf.readInterval)
 	case Write:
-		return executeWrite(db, bucket, keys, conf.writeBytes, conf.noopWriteRatio)
+		return executeWrite(db, bucket, key, conf.writeBytes, conf.noopWriteRatio)
 	case Delete:
-		return executeDelete(db, bucket, keys)
+		return executeDelete(db, bucket, key)
 	default:
 		panic(fmt.Sprintf("unexpected operation type: %s", op))
 	}
 }
 
-func executeRead(db *bolt.DB, bucket []byte, keys []string, readInterval duration) (historyRecord, error) {
+func executeRead(db *bolt.DB, bucket []byte, key []byte, readInterval duration) (historyRecord, error) {
 	var rec historyRecord
 	err := db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucket)
 
-		selectedKey := keys[mrand.Intn(len(keys))]
-		initialVal := b.Get([]byte(selectedKey))
+		initialVal := b.Get(key)
 		time.Sleep(randomDurationInRange(readInterval.min, readInterval.max))
-		val := b.Get([]byte(selectedKey))
+		val := b.Get(key)
 
 		if !reflect.DeepEqual(initialVal, val) {
 			return fmt.Errorf("read different values for the same key (%q), value1: %q, value2: %q",
-				selectedKey, formatBytes(initialVal), formatBytes(val))
+				string(key), formatBytes(initialVal), formatBytes(val))
 		}
 
 		clonedVal := make([]byte, len(val))
@@ -382,7 +419,8 @@ func executeRead(db *bolt.DB, bucket []byte, keys []string, readInterval duratio
 
 		rec = historyRecord{
 			OperationType: Read,
-			Key:           selectedKey,
+			Bucket:        string(bucket),
+			Key:           string(key),
 			Value:         clonedVal,
 			Txid:          tx.ID(),
 		}
@@ -393,7 +431,7 @@ func executeRead(db *bolt.DB, bucket []byte, keys []string, readInterval duratio
 	return rec, err
 }
 
-func executeWrite(db *bolt.DB, bucket []byte, keys []string, writeBytes bytesRange, noopWriteRatio int) (historyRecord, error) {
+func executeWrite(db *bolt.DB, bucket []byte, key []byte, writeBytes bytesRange, noopWriteRatio int) (historyRecord, error) {
 	var rec historyRecord
 
 	err := db.Update(func(tx *bolt.Tx) error {
@@ -403,6 +441,7 @@ func executeWrite(db *bolt.DB, bucket []byte, keys []string, writeBytes bytesRan
 			//    2. Two meta pages point to the same root page.
 			rec = historyRecord{
 				OperationType: Write,
+				Bucket:        string(bucket),
 				Key:           noopTxKey,
 				Value:         nil,
 				Txid:          tx.ID(),
@@ -412,19 +451,18 @@ func executeWrite(db *bolt.DB, bucket []byte, keys []string, writeBytes bytesRan
 
 		b := tx.Bucket(bucket)
 
-		selectedKey := keys[mrand.Intn(len(keys))]
-
 		valueBytes := randomIntInRange(writeBytes.min, writeBytes.max)
 		v := make([]byte, valueBytes)
 		if _, cErr := crand.Read(v); cErr != nil {
 			return cErr
 		}
 
-		putErr := b.Put([]byte(selectedKey), v)
+		putErr := b.Put(key, v)
 		if putErr == nil {
 			rec = historyRecord{
 				OperationType: Write,
-				Key:           selectedKey,
+				Bucket:        string(bucket),
+				Key:           string(key),
 				Value:         v,
 				Txid:          tx.ID(),
 			}
@@ -436,19 +474,18 @@ func executeWrite(db *bolt.DB, bucket []byte, keys []string, writeBytes bytesRan
 	return rec, err
 }
 
-func executeDelete(db *bolt.DB, bucket []byte, keys []string) (historyRecord, error) {
+func executeDelete(db *bolt.DB, bucket []byte, key []byte) (historyRecord, error) {
 	var rec historyRecord
 
 	err := db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucket)
 
-		selectedKey := keys[mrand.Intn(len(keys))]
-
-		deleteErr := b.Delete([]byte(selectedKey))
+		deleteErr := b.Delete(key)
 		if deleteErr == nil {
 			rec = historyRecord{
 				OperationType: Delete,
-				Key:           selectedKey,
+				Bucket:        string(bucket),
+				Key:           string(key),
 				Txid:          tx.ID(),
 			}
 		}
@@ -485,19 +522,21 @@ and operation history
 */
 func saveDataIfFailed(t *testing.T, db *bolt.DB, rs historyRecords, force bool) {
 	if t.Failed() || force {
+		t.Log("Saving data...")
+		dbPath := db.Path()
 		if err := db.Close(); err != nil {
 			t.Errorf("Failed to close db: %v", err)
 		}
 		backupPath := testResultsDirectory(t)
-		backupDB(t, db, backupPath)
+		backupDB(t, dbPath, backupPath)
 		persistHistoryRecords(t, rs, backupPath)
 	}
 }
 
-func backupDB(t *testing.T, db *bolt.DB, path string) {
-	targetFile := filepath.Join(path, "db.bak")
+func backupDB(t *testing.T, srcPath string, dstPath string) {
+	targetFile := filepath.Join(dstPath, "db.bak")
 	t.Logf("Saving the DB file to %s", targetFile)
-	err := copyFile(db.Path(), targetFile)
+	err := copyFile(srcPath, targetFile)
 	require.NoError(t, err)
 	t.Logf("DB file saved to %s", targetFile)
 }
@@ -597,6 +636,7 @@ const (
 type historyRecord struct {
 	OperationType OperationType `json:"operationType,omitempty"`
 	Txid          int           `json:"txid,omitempty"`
+	Bucket        string        `json:"bucket,omitempty"`
 	Key           string        `json:"key,omitempty"`
 	Value         []byte        `json:"value,omitempty"`
 }
@@ -608,7 +648,12 @@ func (rs historyRecords) Len() int {
 }
 
 func (rs historyRecords) Less(i, j int) bool {
-	// Sorted by key firstly: all records with the same key are grouped together.
+	// Sorted by (bucket, key) firstly: all records in the same
+	// (bucket, key) are grouped together.
+	bucketCmp := strings.Compare(rs[i].Bucket, rs[j].Bucket)
+	if bucketCmp != 0 {
+		return bucketCmp < 0
+	}
 	keyCmp := strings.Compare(rs[i].Key, rs[j].Key)
 	if keyCmp != 0 {
 		return keyCmp < 0
@@ -620,7 +665,7 @@ func (rs historyRecords) Less(i, j int) bool {
 	}
 
 	// Sorted by operation type: put `Read` after other operation types
-	// if they operate on the same key and have the same txid.
+	// if they operate on the same (bucket, key) and have the same txid.
 	if rs[i].OperationType == Read {
 		return false
 	}
@@ -648,36 +693,44 @@ func validateIncrementalTxid(rs historyRecords) error {
 func validateSequential(rs historyRecords) error {
 	sort.Sort(rs)
 
-	lastWriteKeyValueMap := make(map[string]*historyRecord)
+	type bucketAndKey struct {
+		bucket string
+		key    string
+	}
+	lastWriteKeyValueMap := make(map[bucketAndKey]*historyRecord)
 
 	for _, rec := range rs {
-		if v, ok := lastWriteKeyValueMap[rec.Key]; ok {
+		bk := bucketAndKey{
+			bucket: rec.Bucket,
+			key:    rec.Key,
+		}
+		if v, ok := lastWriteKeyValueMap[bk]; ok {
 			if rec.OperationType == Write {
 				v.Txid = rec.Txid
 				if rec.Key != noopTxKey {
 					v.Value = rec.Value
 				}
 			} else if rec.OperationType == Delete {
-				delete(lastWriteKeyValueMap, rec.Key)
+				delete(lastWriteKeyValueMap, bk)
 			} else {
 				if !reflect.DeepEqual(v.Value, rec.Value) {
-					return fmt.Errorf("readOperation[txid: %d, key: %s] read %x, \nbut writer[txid: %d, key: %s] wrote %x",
-						rec.Txid, rec.Key, rec.Value,
-						v.Txid, v.Key, v.Value)
+					return fmt.Errorf("readOperation[txid: %d, bucket: %s, key: %s] read %x, \nbut writer[txid: %d] wrote %x",
+						rec.Txid, rec.Bucket, rec.Key, rec.Value, v.Txid, v.Value)
 				}
 			}
 		} else {
 			if rec.OperationType == Write && rec.Key != noopTxKey {
-				lastWriteKeyValueMap[rec.Key] = &historyRecord{
+				lastWriteKeyValueMap[bk] = &historyRecord{
 					OperationType: Write,
+					Bucket:        rec.Bucket,
 					Key:           rec.Key,
 					Value:         rec.Value,
 					Txid:          rec.Txid,
 				}
 			} else if rec.OperationType == Read {
 				if len(rec.Value) != 0 {
-					return fmt.Errorf("expected the first readOperation[txid: %d, key: %s] read nil, \nbut got %x",
-						rec.Txid, rec.Key, rec.Value)
+					return fmt.Errorf("expected the first readOperation[txid: %d, bucket: %s, key: %s] read nil, \nbut got %x",
+						rec.Txid, rec.Bucket, rec.Key, rec.Value)
 				}
 			}
 		}
