@@ -17,14 +17,18 @@ var (
 	ErrSurgeryFreelistAlreadyExist = errors.New("the file already has freelist, please consider to abandon the freelist to forcibly rebuild it")
 )
 
-var (
+type surgeryOptions struct {
 	surgeryTargetDBFilePath  string
 	surgeryPageId            uint64
 	surgeryStartElementIdx   int
 	surgeryEndElementIdx     int
 	surgerySourcePageId      uint64
 	surgeryDestinationPageId uint64
-)
+}
+
+func defaultSurgeryOptions() surgeryOptions {
+	return surgeryOptions{}
+}
 
 func newSurgeryCobraCommand() *cobra.Command {
 	surgeryCmd := &cobra.Command{
@@ -41,6 +45,7 @@ func newSurgeryCobraCommand() *cobra.Command {
 }
 
 func newSurgeryRevertMetaPageCommand() *cobra.Command {
+	cfg := defaultSurgeryOptions()
 	revertMetaPageCmd := &cobra.Command{
 		Use:   "revert-meta-page <bbolt-file> [options]",
 		Short: "Revert the meta page to revert the changes performed by the latest transaction",
@@ -53,26 +58,26 @@ func newSurgeryRevertMetaPageCommand() *cobra.Command {
 			}
 			return nil
 		},
-		RunE: surgeryRevertMetaPageFunc,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return surgeryRevertMetaPageFunc(args[0], cfg)
+		},
 	}
 
-	revertMetaPageCmd.Flags().StringVar(&surgeryTargetDBFilePath, "output", "", "path to the target db file")
+	revertMetaPageCmd.Flags().StringVar(&cfg.surgeryTargetDBFilePath, "output", "", "path to the target db file")
 
 	return revertMetaPageCmd
 }
 
-func surgeryRevertMetaPageFunc(cmd *cobra.Command, args []string) error {
-	srcDBPath := args[0]
-
-	if err := checkDBPaths(srcDBPath, surgeryTargetDBFilePath); err != nil {
+func surgeryRevertMetaPageFunc(srcDBPath string, cfg surgeryOptions) error {
+	if err := checkDBPaths(srcDBPath, cfg.surgeryTargetDBFilePath); err != nil {
 		return err
 	}
 
-	if err := common.CopyFile(srcDBPath, surgeryTargetDBFilePath); err != nil {
+	if err := common.CopyFile(srcDBPath, cfg.surgeryTargetDBFilePath); err != nil {
 		return fmt.Errorf("[revert-meta-page] copy file failed: %w", err)
 	}
 
-	if err := surgeon.RevertMetaPage(surgeryTargetDBFilePath); err != nil {
+	if err := surgeon.RevertMetaPage(cfg.surgeryTargetDBFilePath); err != nil {
 		return fmt.Errorf("revert-meta-page command failed: %w", err)
 	}
 
@@ -82,6 +87,7 @@ func surgeryRevertMetaPageFunc(cmd *cobra.Command, args []string) error {
 }
 
 func newSurgeryCopyPageCommand() *cobra.Command {
+	cfg := defaultSurgeryOptions()
 	copyPageCmd := &cobra.Command{
 		Use:   "copy-page <bbolt-file> [options]",
 		Short: "Copy page from the source page Id to the destination page Id",
@@ -94,39 +100,46 @@ func newSurgeryCopyPageCommand() *cobra.Command {
 			}
 			return nil
 		},
-		RunE: surgeryCopyPageFunc,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return surgeryCopyPageFunc(args[0], cfg)
+		},
 	}
 
-	copyPageCmd.Flags().StringVar(&surgeryTargetDBFilePath, "output", "", "path to the target db file")
-	copyPageCmd.Flags().Uint64VarP(&surgerySourcePageId, "from-page", "", 0, "source page Id")
-	copyPageCmd.Flags().Uint64VarP(&surgeryDestinationPageId, "to-page", "", 0, "destination page Id")
+	copyPageCmd.Flags().StringVar(&cfg.surgeryTargetDBFilePath, "output", "", "path to the target db file")
+	copyPageCmd.Flags().Uint64VarP(&cfg.surgerySourcePageId, "from-page", "", 0, "source page Id")
+	copyPageCmd.Flags().Uint64VarP(&cfg.surgeryDestinationPageId, "to-page", "", 0, "destination page Id")
 
 	return copyPageCmd
 }
 
-func surgeryCopyPageFunc(cmd *cobra.Command, args []string) error {
-	srcDBPath := args[0]
-
-	if surgerySourcePageId == surgeryDestinationPageId {
-		return fmt.Errorf("'--from-page' and '--to-page' have the same value: %d", surgerySourcePageId)
+func surgeryCopyPageFunc(srcDBPath string, cfg surgeryOptions) error {
+	if cfg.surgerySourcePageId == cfg.surgeryDestinationPageId {
+		return fmt.Errorf("'--from-page' and '--to-page' have the same value: %d", cfg.surgerySourcePageId)
 	}
 
-	if err := common.CopyFile(srcDBPath, surgeryTargetDBFilePath); err != nil {
+	if err := common.CopyFile(srcDBPath, cfg.surgeryTargetDBFilePath); err != nil {
 		return fmt.Errorf("[copy-page] copy file failed: %w", err)
 	}
 
-	if err := surgeon.CopyPage(surgeryTargetDBFilePath, common.Pgid(surgerySourcePageId), common.Pgid(surgeryDestinationPageId)); err != nil {
+	if err := surgeon.CopyPage(cfg.surgeryTargetDBFilePath, common.Pgid(cfg.surgerySourcePageId), common.Pgid(cfg.surgeryDestinationPageId)); err != nil {
 		return fmt.Errorf("copy-page command failed: %w", err)
 	}
 
-	fmt.Fprintf(os.Stdout, "WARNING: the free list might have changed.\n")
-	fmt.Fprintf(os.Stdout, "Please consider executing `./bbolt surgery abandon-freelist ...`\n")
+	meta, err := readMetaPage(srcDBPath)
+	if err != nil {
+		return err
+	}
+	if meta.IsFreelistPersisted() {
+		fmt.Fprintf(os.Stdout, "WARNING: the free list might have changed.\n")
+		fmt.Fprintf(os.Stdout, "Please consider executing `./bbolt surgery abandon-freelist ...`\n")
+	}
 
-	fmt.Fprintf(os.Stdout, "The page %d was successfully copied to page %d\n", surgerySourcePageId, surgeryDestinationPageId)
+	fmt.Fprintf(os.Stdout, "The page %d was successfully copied to page %d\n", cfg.surgerySourcePageId, cfg.surgeryDestinationPageId)
 	return nil
 }
 
 func newSurgeryClearPageElementsCommand() *cobra.Command {
+	cfg := defaultSurgeryOptions()
 	clearElementCmd := &cobra.Command{
 		Use:   "clear-page-elements <bbolt-file> [options]",
 		Short: "Clears elements from the given page, which can be a branch or leaf page",
@@ -139,29 +152,29 @@ func newSurgeryClearPageElementsCommand() *cobra.Command {
 			}
 			return nil
 		},
-		RunE: surgeryClearPageElementFunc,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return surgeryClearPageElementFunc(args[0], cfg)
+		},
 	}
 
-	clearElementCmd.Flags().StringVar(&surgeryTargetDBFilePath, "output", "", "path to the target db file")
-	clearElementCmd.Flags().Uint64VarP(&surgeryPageId, "pageId", "", 0, "page id")
-	clearElementCmd.Flags().IntVarP(&surgeryStartElementIdx, "from-index", "", 0, "start element index (included) to clear, starting from 0")
-	clearElementCmd.Flags().IntVarP(&surgeryEndElementIdx, "to-index", "", 0, "end element index (excluded) to clear, starting from 0, -1 means to the end of page")
+	clearElementCmd.Flags().StringVar(&cfg.surgeryTargetDBFilePath, "output", "", "path to the target db file")
+	clearElementCmd.Flags().Uint64VarP(&cfg.surgeryPageId, "pageId", "", 0, "page id")
+	clearElementCmd.Flags().IntVarP(&cfg.surgeryStartElementIdx, "from-index", "", 0, "start element index (included) to clear, starting from 0")
+	clearElementCmd.Flags().IntVarP(&cfg.surgeryEndElementIdx, "to-index", "", 0, "end element index (excluded) to clear, starting from 0, -1 means to the end of page")
 
 	return clearElementCmd
 }
 
-func surgeryClearPageElementFunc(cmd *cobra.Command, args []string) error {
-	srcDBPath := args[0]
-
-	if err := common.CopyFile(srcDBPath, surgeryTargetDBFilePath); err != nil {
+func surgeryClearPageElementFunc(srcDBPath string, cfg surgeryOptions) error {
+	if err := common.CopyFile(srcDBPath, cfg.surgeryTargetDBFilePath); err != nil {
 		return fmt.Errorf("[clear-page-element] copy file failed: %w", err)
 	}
 
-	if surgeryPageId < 2 {
-		return fmt.Errorf("the pageId must be at least 2, but got %d", surgeryPageId)
+	if cfg.surgeryPageId < 2 {
+		return fmt.Errorf("the pageId must be at least 2, but got %d", cfg.surgeryPageId)
 	}
 
-	needAbandonFreelist, err := surgeon.ClearPageElements(surgeryTargetDBFilePath, common.Pgid(surgeryPageId), surgeryStartElementIdx, surgeryEndElementIdx, false)
+	needAbandonFreelist, err := surgeon.ClearPageElements(cfg.surgeryTargetDBFilePath, common.Pgid(cfg.surgeryPageId), cfg.surgeryStartElementIdx, cfg.surgeryEndElementIdx, false)
 	if err != nil {
 		return fmt.Errorf("clear-page-element command failed: %w", err)
 	}
@@ -171,7 +184,7 @@ func surgeryClearPageElementFunc(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stdout, "Please consider executing `./bbolt surgery abandon-freelist ...`\n")
 	}
 
-	fmt.Fprintf(os.Stdout, "All elements in [%d, %d) in page %d were cleared\n", surgeryStartElementIdx, surgeryEndElementIdx, surgeryPageId)
+	fmt.Fprintf(os.Stdout, "All elements in [%d, %d) in page %d were cleared\n", cfg.surgeryStartElementIdx, cfg.surgeryEndElementIdx, cfg.surgeryPageId)
 	return nil
 }
 
@@ -191,6 +204,7 @@ func newSurgeryFreelistCommand() *cobra.Command {
 }
 
 func newSurgeryFreelistAbandonCommand() *cobra.Command {
+	cfg := defaultSurgeryOptions()
 	abandonFreelistCmd := &cobra.Command{
 		Use:   "abandon <bbolt-file> [options]",
 		Short: "Abandon the freelist from both meta pages",
@@ -203,22 +217,22 @@ func newSurgeryFreelistAbandonCommand() *cobra.Command {
 			}
 			return nil
 		},
-		RunE: surgeryFreelistAbandonFunc,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return surgeryFreelistAbandonFunc(args[0], cfg)
+		},
 	}
 
-	abandonFreelistCmd.Flags().StringVar(&surgeryTargetDBFilePath, "output", "", "path to the target db file")
+	abandonFreelistCmd.Flags().StringVar(&cfg.surgeryTargetDBFilePath, "output", "", "path to the target db file")
 
 	return abandonFreelistCmd
 }
 
-func surgeryFreelistAbandonFunc(cmd *cobra.Command, args []string) error {
-	srcDBPath := args[0]
-
-	if err := common.CopyFile(srcDBPath, surgeryTargetDBFilePath); err != nil {
+func surgeryFreelistAbandonFunc(srcDBPath string, cfg surgeryOptions) error {
+	if err := common.CopyFile(srcDBPath, cfg.surgeryTargetDBFilePath); err != nil {
 		return fmt.Errorf("[freelist abandon] copy file failed: %w", err)
 	}
 
-	if err := surgeon.ClearFreelist(surgeryTargetDBFilePath); err != nil {
+	if err := surgeon.ClearFreelist(cfg.surgeryTargetDBFilePath); err != nil {
 		return fmt.Errorf("abandom-freelist command failed: %w", err)
 	}
 
@@ -227,6 +241,7 @@ func surgeryFreelistAbandonFunc(cmd *cobra.Command, args []string) error {
 }
 
 func newSurgeryFreelistRebuildCommand() *cobra.Command {
+	cfg := defaultSurgeryOptions()
 	rebuildFreelistCmd := &cobra.Command{
 		Use:   "rebuild <bbolt-file> [options]",
 		Short: "Rebuild the freelist",
@@ -239,17 +254,17 @@ func newSurgeryFreelistRebuildCommand() *cobra.Command {
 			}
 			return nil
 		},
-		RunE: surgeryFreelistRebuildFunc,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return surgeryFreelistRebuildFunc(args[0], cfg)
+		},
 	}
 
-	rebuildFreelistCmd.Flags().StringVar(&surgeryTargetDBFilePath, "output", "", "path to the target db file")
+	rebuildFreelistCmd.Flags().StringVar(&cfg.surgeryTargetDBFilePath, "output", "", "path to the target db file")
 
 	return rebuildFreelistCmd
 }
 
-func surgeryFreelistRebuildFunc(cmd *cobra.Command, args []string) error {
-	srcDBPath := args[0]
-
+func surgeryFreelistRebuildFunc(srcDBPath string, cfg surgeryOptions) error {
 	// Ensure source file exists.
 	fi, err := os.Stat(srcDBPath)
 	if os.IsNotExist(err) {
@@ -258,7 +273,7 @@ func surgeryFreelistRebuildFunc(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to open source database file %q: %v", srcDBPath, err)
 	}
 
-	if surgeryTargetDBFilePath == "" {
+	if cfg.surgeryTargetDBFilePath == "" {
 		return fmt.Errorf("output database path wasn't given, specify output database file path with --output option")
 	}
 
@@ -267,16 +282,16 @@ func surgeryFreelistRebuildFunc(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if meta.Freelist() != common.PgidNoFreelist {
+	if meta.IsFreelistPersisted() {
 		return ErrSurgeryFreelistAlreadyExist
 	}
 
-	if err := common.CopyFile(srcDBPath, surgeryTargetDBFilePath); err != nil {
+	if err := common.CopyFile(srcDBPath, cfg.surgeryTargetDBFilePath); err != nil {
 		return fmt.Errorf("[freelist rebuild] copy file failed: %w", err)
 	}
 
 	// bboltDB automatically reconstruct & sync freelist in write mode.
-	db, err := bolt.Open(surgeryTargetDBFilePath, fi.Mode(), &bolt.Options{NoFreelistSync: false})
+	db, err := bolt.Open(cfg.surgeryTargetDBFilePath, fi.Mode(), &bolt.Options{NoFreelistSync: false})
 	if err != nil {
 		return fmt.Errorf("[freelist rebuild] open db file failed: %w", err)
 	}
