@@ -139,6 +139,10 @@ func newSurgeryCopyPageCommand() *cobra.Command {
 }
 
 func surgeryCopyPageFunc(srcDBPath string, cfg surgeryCopyPageOptions) error {
+	if _, err := checkSourceDBPath(srcDBPath); err != nil {
+		return err
+	}
+
 	if err := common.CopyFile(srcDBPath, cfg.outputDBFilePath); err != nil {
 		return fmt.Errorf("[copy-page] copy file failed: %w", err)
 	}
@@ -206,6 +210,10 @@ func newSurgeryClearPageCommand() *cobra.Command {
 }
 
 func surgeryClearPageFunc(srcDBPath string, cfg surgeryClearPageOptions) error {
+	if _, err := checkSourceDBPath(srcDBPath); err != nil {
+		return err
+	}
+
 	if err := common.CopyFile(srcDBPath, cfg.outputDBFilePath); err != nil {
 		return fmt.Errorf("[clear-page] copy file failed: %w", err)
 	}
@@ -274,6 +282,10 @@ func newSurgeryClearPageElementsCommand() *cobra.Command {
 }
 
 func surgeryClearPageElementFunc(srcDBPath string, cfg surgeryClearPageElementsOptions) error {
+	if _, err := checkSourceDBPath(srcDBPath); err != nil {
+		return err
+	}
+
 	if err := common.CopyFile(srcDBPath, cfg.outputDBFilePath); err != nil {
 		return fmt.Errorf("[clear-page-element] copy file failed: %w", err)
 	}
@@ -331,6 +343,10 @@ func newSurgeryFreelistAbandonCommand() *cobra.Command {
 }
 
 func surgeryFreelistAbandonFunc(srcDBPath string, cfg surgeryBaseOptions) error {
+	if _, err := checkSourceDBPath(srcDBPath); err != nil {
+		return err
+	}
+
 	if err := common.CopyFile(srcDBPath, cfg.outputDBFilePath); err != nil {
 		return fmt.Errorf("[freelist abandon] copy file failed: %w", err)
 	}
