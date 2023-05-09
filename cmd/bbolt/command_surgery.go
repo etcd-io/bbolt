@@ -160,6 +160,70 @@ func surgeryCopyPageFunc(srcDBPath string, cfg surgeryCopyPageOptions) error {
 	return nil
 }
 
+type surgeryClearPageOptions struct {
+	surgeryBaseOptions
+	pageId uint64
+}
+
+func (o *surgeryClearPageOptions) AddFlags(fs *pflag.FlagSet) {
+	o.surgeryBaseOptions.AddFlags(fs)
+	fs.Uint64VarP(&o.pageId, "pageId", "", o.pageId, "page Id")
+}
+
+func (o *surgeryClearPageOptions) Validate() error {
+	if err := o.surgeryBaseOptions.Validate(); err != nil {
+		return err
+	}
+	if o.pageId < 2 {
+		return fmt.Errorf("the pageId must be at least 2, but got %d", o.pageId)
+	}
+	return nil
+}
+
+func newSurgeryClearPageCommand() *cobra.Command {
+	var o surgeryClearPageOptions
+	clearPageCmd := &cobra.Command{
+		Use:   "clear-page <bbolt-file> [options]",
+		Short: "Clears all elements from the given page, which can be a branch or leaf page",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return errors.New("db file path not provided")
+			}
+			if len(args) > 1 {
+				return errors.New("too many arguments")
+			}
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := o.Validate(); err != nil {
+				return err
+			}
+			return surgeryClearPageFunc(args[0], o)
+		},
+	}
+	o.AddFlags(clearPageCmd.Flags())
+	return clearPageCmd
+}
+
+func surgeryClearPageFunc(srcDBPath string, cfg surgeryClearPageOptions) error {
+	if err := common.CopyFile(srcDBPath, cfg.outputDBFilePath); err != nil {
+		return fmt.Errorf("[clear-page] copy file failed: %w", err)
+	}
+
+	needAbandonFreelist, err := surgeon.ClearPage(cfg.outputDBFilePath, common.Pgid(cfg.pageId))
+	if err != nil {
+		return fmt.Errorf("clear-page command failed: %w", err)
+	}
+
+	if needAbandonFreelist {
+		fmt.Fprintf(os.Stdout, "WARNING: The clearing has abandoned some pages that are not yet referenced from free list.\n")
+		fmt.Fprintf(os.Stdout, "Please consider executing `./bbolt surgery abandon-freelist ...`\n")
+	}
+
+	fmt.Fprintf(os.Stdout, "The page (%d) was cleared\n", cfg.pageId)
+	return nil
+}
+
 type surgeryClearPageElementsOptions struct {
 	surgeryBaseOptions
 	pageId          uint64
@@ -181,54 +245,6 @@ func (o *surgeryClearPageElementsOptions) Validate() error {
 	if o.pageId < 2 {
 		return fmt.Errorf("the pageId must be at least 2, but got %d", o.pageId)
 	}
-	return nil
-}
-
-func newSurgeryClearPageCommand() *cobra.Command {
-	cfg := defaultSurgeryOptions()
-	clearPageCmd := &cobra.Command{
-		Use:   "clear-page <bbolt-file> [options]",
-		Short: "Clears all elements from the given page, which can be a branch or leaf page",
-		Args: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
-				return errors.New("db file path not provided")
-			}
-			if len(args) > 1 {
-				return errors.New("too many arguments")
-			}
-			return nil
-		},
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return surgeryClearPageFunc(args[0], cfg)
-		},
-	}
-
-	clearPageCmd.Flags().StringVar(&cfg.surgeryTargetDBFilePath, "output", "", "path to the target db file")
-	clearPageCmd.Flags().Uint64VarP(&cfg.surgeryPageId, "pageId", "", 0, "page id")
-
-	return clearPageCmd
-}
-
-func surgeryClearPageFunc(srcDBPath string, cfg surgeryOptions) error {
-	if err := common.CopyFile(srcDBPath, cfg.surgeryTargetDBFilePath); err != nil {
-		return fmt.Errorf("[clear-page] copy file failed: %w", err)
-	}
-
-	if cfg.surgeryPageId < 2 {
-		return fmt.Errorf("the pageId must be at least 2, but got %d", cfg.surgeryPageId)
-	}
-
-	needAbandonFreelist, err := surgeon.ClearPage(cfg.surgeryTargetDBFilePath, common.Pgid(cfg.surgeryPageId))
-	if err != nil {
-		return fmt.Errorf("clear-page command failed: %w", err)
-	}
-
-	if needAbandonFreelist {
-		fmt.Fprintf(os.Stdout, "WARNING: The clearing has abandoned some pages that are not yet referenced from free list.\n")
-		fmt.Fprintf(os.Stdout, "Please consider executing `./bbolt surgery abandon-freelist ...`\n")
-	}
-
-	fmt.Fprintf(os.Stdout, "The page (%d) was cleared\n", cfg.surgeryPageId)
 	return nil
 }
 
