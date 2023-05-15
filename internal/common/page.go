@@ -14,6 +14,7 @@ const MinKeysPerPage = 2
 const BranchPageElementSize = unsafe.Sizeof(branchPageElement{})
 const LeafPageElementSize = unsafe.Sizeof(leafPageElement{})
 
+// page flags
 const (
 	BranchPageFlag   = 0x01
 	LeafPageFlag     = 0x02
@@ -21,6 +22,7 @@ const (
 	FreelistPageFlag = 0x10
 )
 
+// inode flags
 const (
 	BucketLeafFlag = 0x01
 )

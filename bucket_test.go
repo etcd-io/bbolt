@@ -1032,8 +1032,10 @@ func TestBucket_ForEachBucket(t *testing.T) {
 
 	verifyReads := func(b *bolt.Bucket) {
 		var items [][]byte
-		err := b.ForEachBucket(func(k []byte) error {
-			items = append(items, k)
+		err := b.ForEach(func(k, v []byte) error {
+			if v == nil {
+				items = append(items, k)
+			}
 			return nil
 		})
 		assert.NoErrorf(t, err, "b.ForEach failed")
@@ -1071,8 +1073,10 @@ func TestBucket_ForEachBucket_NoBuckets(t *testing.T) {
 
 	verifyReads := func(b *bolt.Bucket) {
 		var items [][]byte
-		err := b.ForEachBucket(func(k []byte) error {
-			items = append(items, k)
+		err := b.ForEach(func(k, v []byte) error {
+			if v == nil {
+				items = append(items, k)
+			}
 			return nil
 		})
 		assert.NoErrorf(t, err, "b.ForEach failed")

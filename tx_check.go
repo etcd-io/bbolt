@@ -104,7 +104,10 @@ func (tx *Tx) checkBucket(b *Bucket, reachable map[common.Pgid]*common.Page, fre
 	tx.recursivelyCheckPages(b.RootPage(), kvStringer.KeyToString, ch)
 
 	// Check each bucket within this bucket.
-	_ = b.ForEachBucket(func(k []byte) error {
+	_ = b.ForEach(func(k, v []byte) error {
+		if v != nil {
+			return nil
+		}
 		if child := b.Bucket(k); child != nil {
 			tx.checkBucket(child, reachable, freed, kvStringer, ch)
 		}
