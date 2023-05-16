@@ -39,6 +39,7 @@ type surgeryBaseOptions struct {
 
 func (o *surgeryBaseOptions) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&o.outputDBFilePath, "output", o.outputDBFilePath, "path to the filePath db file")
+	_ = cobra.MarkFlagRequired(fs, "output")
 }
 
 func (o *surgeryBaseOptions) Validate() error {
@@ -101,6 +102,8 @@ func (o *surgeryCopyPageOptions) AddFlags(fs *pflag.FlagSet) {
 	o.surgeryBaseOptions.AddFlags(fs)
 	fs.Uint64VarP(&o.sourcePageId, "from-page", "", o.sourcePageId, "source page Id")
 	fs.Uint64VarP(&o.destinationPageId, "to-page", "", o.destinationPageId, "destination page Id")
+	_ = cobra.MarkFlagRequired(fs, "from-page")
+	_ = cobra.MarkFlagRequired(fs, "to-page")
 }
 
 func (o *surgeryCopyPageOptions) Validate() error {
@@ -172,6 +175,7 @@ type surgeryClearPageOptions struct {
 func (o *surgeryClearPageOptions) AddFlags(fs *pflag.FlagSet) {
 	o.surgeryBaseOptions.AddFlags(fs)
 	fs.Uint64VarP(&o.pageId, "pageId", "", o.pageId, "page Id")
+	_ = cobra.MarkFlagRequired(fs, "pageId")
 }
 
 func (o *surgeryClearPageOptions) Validate() error {
@@ -244,6 +248,9 @@ func (o *surgeryClearPageElementsOptions) AddFlags(fs *pflag.FlagSet) {
 	fs.Uint64VarP(&o.pageId, "pageId", "", o.pageId, "page id")
 	fs.IntVarP(&o.startElementIdx, "from-index", "", o.startElementIdx, "start element index (included) to clear, starting from 0")
 	fs.IntVarP(&o.endElementIdx, "to-index", "", o.endElementIdx, "end element index (excluded) to clear, starting from 0, -1 means to the end of page")
+	_ = cobra.MarkFlagRequired(fs, "pageId")
+	_ = cobra.MarkFlagRequired(fs, "from-index")
+	_ = cobra.MarkFlagRequired(fs, "to-index")
 }
 
 func (o *surgeryClearPageElementsOptions) Validate() error {
