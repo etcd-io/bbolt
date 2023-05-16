@@ -140,8 +140,6 @@ func (m *Main) Run(args ...string) error {
 		return newPagesCommand(m).Run(args[1:]...)
 	case "stats":
 		return newStatsCommand(m).Run(args[1:]...)
-	case "surgery":
-		return newSurgeryCommand(m).Run(args[1:]...)
 	default:
 		return ErrUnknownCommand
 	}

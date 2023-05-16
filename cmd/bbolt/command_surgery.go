@@ -26,6 +26,7 @@ func newSurgeryCobraCommand() *cobra.Command {
 
 	surgeryCmd.AddCommand(newSurgeryRevertMetaPageCommand())
 	surgeryCmd.AddCommand(newSurgeryCopyPageCommand())
+	surgeryCmd.AddCommand(newSurgeryClearPageCommand())
 	surgeryCmd.AddCommand(newSurgeryClearPageElementsCommand())
 	surgeryCmd.AddCommand(newSurgeryFreelistCommand())
 
@@ -138,6 +139,10 @@ func newSurgeryCopyPageCommand() *cobra.Command {
 }
 
 func surgeryCopyPageFunc(srcDBPath string, cfg surgeryCopyPageOptions) error {
+	if _, err := checkSourceDBPath(srcDBPath); err != nil {
+		return err
+	}
+
 	if err := common.CopyFile(srcDBPath, cfg.outputDBFilePath); err != nil {
 		return fmt.Errorf("[copy-page] copy file failed: %w", err)
 	}
@@ -156,6 +161,74 @@ func surgeryCopyPageFunc(srcDBPath string, cfg surgeryCopyPageOptions) error {
 	}
 
 	fmt.Fprintf(os.Stdout, "The page %d was successfully copied to page %d\n", cfg.sourcePageId, cfg.destinationPageId)
+	return nil
+}
+
+type surgeryClearPageOptions struct {
+	surgeryBaseOptions
+	pageId uint64
+}
+
+func (o *surgeryClearPageOptions) AddFlags(fs *pflag.FlagSet) {
+	o.surgeryBaseOptions.AddFlags(fs)
+	fs.Uint64VarP(&o.pageId, "pageId", "", o.pageId, "page Id")
+}
+
+func (o *surgeryClearPageOptions) Validate() error {
+	if err := o.surgeryBaseOptions.Validate(); err != nil {
+		return err
+	}
+	if o.pageId < 2 {
+		return fmt.Errorf("the pageId must be at least 2, but got %d", o.pageId)
+	}
+	return nil
+}
+
+func newSurgeryClearPageCommand() *cobra.Command {
+	var o surgeryClearPageOptions
+	clearPageCmd := &cobra.Command{
+		Use:   "clear-page <bbolt-file> [options]",
+		Short: "Clears all elements from the given page, which can be a branch or leaf page",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return errors.New("db file path not provided")
+			}
+			if len(args) > 1 {
+				return errors.New("too many arguments")
+			}
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := o.Validate(); err != nil {
+				return err
+			}
+			return surgeryClearPageFunc(args[0], o)
+		},
+	}
+	o.AddFlags(clearPageCmd.Flags())
+	return clearPageCmd
+}
+
+func surgeryClearPageFunc(srcDBPath string, cfg surgeryClearPageOptions) error {
+	if _, err := checkSourceDBPath(srcDBPath); err != nil {
+		return err
+	}
+
+	if err := common.CopyFile(srcDBPath, cfg.outputDBFilePath); err != nil {
+		return fmt.Errorf("[clear-page] copy file failed: %w", err)
+	}
+
+	needAbandonFreelist, err := surgeon.ClearPage(cfg.outputDBFilePath, common.Pgid(cfg.pageId))
+	if err != nil {
+		return fmt.Errorf("clear-page command failed: %w", err)
+	}
+
+	if needAbandonFreelist {
+		fmt.Fprintf(os.Stdout, "WARNING: The clearing has abandoned some pages that are not yet referenced from free list.\n")
+		fmt.Fprintf(os.Stdout, "Please consider executing `./bbolt surgery abandon-freelist ...`\n")
+	}
+
+	fmt.Fprintf(os.Stdout, "The page (%d) was cleared\n", cfg.pageId)
 	return nil
 }
 
@@ -209,6 +282,10 @@ func newSurgeryClearPageElementsCommand() *cobra.Command {
 }
 
 func surgeryClearPageElementFunc(srcDBPath string, cfg surgeryClearPageElementsOptions) error {
+	if _, err := checkSourceDBPath(srcDBPath); err != nil {
+		return err
+	}
+
 	if err := common.CopyFile(srcDBPath, cfg.outputDBFilePath); err != nil {
 		return fmt.Errorf("[clear-page-element] copy file failed: %w", err)
 	}
@@ -227,9 +304,6 @@ func surgeryClearPageElementFunc(srcDBPath string, cfg surgeryClearPageElementsO
 	return nil
 }
 
-// TODO(ahrtr): add `bbolt surgery freelist rebuild/check ...` commands,
-// and move all `surgery freelist` commands into a separate file,
-// e.g command_surgery_freelist.go.
 func newSurgeryFreelistCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "freelist <subcommand>",
@@ -269,6 +343,10 @@ func newSurgeryFreelistAbandonCommand() *cobra.Command {
 }
 
 func surgeryFreelistAbandonFunc(srcDBPath string, cfg surgeryBaseOptions) error {
+	if _, err := checkSourceDBPath(srcDBPath); err != nil {
+		return err
+	}
+
 	if err := common.CopyFile(srcDBPath, cfg.outputDBFilePath); err != nil {
 		return fmt.Errorf("[freelist abandon] copy file failed: %w", err)
 	}
