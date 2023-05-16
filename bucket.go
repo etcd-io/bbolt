@@ -370,10 +370,11 @@ func (b *Bucket) NextSequence() (uint64, error) {
 }
 
 // ForEach executes a function for each key/value pair in a bucket.
+// If the value is nil, then it's a nested bucket, and the key is the bucket name.
+//
 // Because ForEach uses a Cursor, the iteration over keys is in lexicographical order.
-// If the provided function returns an error then the iteration is stopped and
-// the error is returned to the caller. The provided function must not modify
-// the bucket; this will result in undefined behavior.
+// If the provided function returns an error then the iteration is stopped and the error is returned to the caller.
+// The provided function must not modify the bucket; this will result in undefined behavior.
 func (b *Bucket) ForEach(fn func(k, v []byte) error) error {
 	if b.tx.db == nil {
 		return errors.ErrTxClosed
