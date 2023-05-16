@@ -674,3 +674,87 @@ func readPage(t *testing.T, path string, pageId int, pageSize int) []byte {
 func pageDataWithoutPageId(buf []byte) []byte {
 	return buf[8:]
 }
+
+func TestSurgeryRequiredFlags(t *testing.T) {
+	errMsgFmt := `required flag(s) "%s" not set`
+	testCases := []struct {
+		name           string
+		args           []string
+		expectedErrMsg string
+	}{
+		// --output is required for all surgery commands
+		{
+			name:           "no output flag for revert-meta-page",
+			args:           []string{"surgery", "revert-meta-page", "db"},
+			expectedErrMsg: fmt.Sprintf(errMsgFmt, "output"),
+		},
+		{
+			name:           "no output flag for copy-page",
+			args:           []string{"surgery", "copy-page", "db", "--from-page", "3", "--to-page", "2"},
+			expectedErrMsg: fmt.Sprintf(errMsgFmt, "output"),
+		},
+		{
+			name:           "no output flag for clear-page",
+			args:           []string{"surgery", "clear-page", "db", "--pageId", "3"},
+			expectedErrMsg: fmt.Sprintf(errMsgFmt, "output"),
+		},
+		{
+			name:           "no output flag for clear-page-element",
+			args:           []string{"surgery", "clear-page-elements", "db", "--pageId", "4", "--from-index", "3", "--to-index", "5"},
+			expectedErrMsg: fmt.Sprintf(errMsgFmt, "output"),
+		},
+		{
+			name:           "no output flag for freelist abandon",
+			args:           []string{"surgery", "freelist", "abandon", "db"},
+			expectedErrMsg: fmt.Sprintf(errMsgFmt, "output"),
+		},
+		{
+			name:           "no output flag for freelist rebuild",
+			args:           []string{"surgery", "freelist", "rebuild", "db"},
+			expectedErrMsg: fmt.Sprintf(errMsgFmt, "output"),
+		},
+		// --from-page and --to-page are required for 'surgery copy-page' command
+		{
+			name:           "no from-page flag for copy-page",
+			args:           []string{"surgery", "copy-page", "db", "--output", "db", "--to-page", "2"},
+			expectedErrMsg: fmt.Sprintf(errMsgFmt, "from-page"),
+		},
+		{
+			name:           "no to-page flag for copy-page",
+			args:           []string{"surgery", "copy-page", "db", "--output", "db", "--from-page", "2"},
+			expectedErrMsg: fmt.Sprintf(errMsgFmt, "to-page"),
+		},
+		// --pageId is required for 'surgery clear-page' command
+		{
+			name:           "no pageId flag for clear-page",
+			args:           []string{"surgery", "clear-page", "db", "--output", "db"},
+			expectedErrMsg: fmt.Sprintf(errMsgFmt, "pageId"),
+		},
+		// --pageId, --from-index and --to-index are required for 'surgery clear-page-element' command
+		{
+			name:           "no pageId flag for clear-page-element",
+			args:           []string{"surgery", "clear-page-elements", "db", "--output", "newdb", "--from-index", "3", "--to-index", "5"},
+			expectedErrMsg: fmt.Sprintf(errMsgFmt, "pageId"),
+		},
+		{
+			name:           "no from-index flag for clear-page-element",
+			args:           []string{"surgery", "clear-page-elements", "db", "--output", "newdb", "--pageId", "2", "--to-index", "5"},
+			expectedErrMsg: fmt.Sprintf(errMsgFmt, "from-index"),
+		},
+		{
+			name:           "no to-index flag for clear-page-element",
+			args:           []string{"surgery", "clear-page-elements", "db", "--output", "newdb", "--pageId", "2", "--from-index", "3"},
+			expectedErrMsg: fmt.Sprintf(errMsgFmt, "to-index"),
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			rootCmd := main.NewRootCommand()
+			rootCmd.SetArgs(tc.args)
+			err := rootCmd.Execute()
+			require.ErrorContains(t, err, tc.expectedErrMsg)
+		})
+	}
+}
