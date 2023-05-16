@@ -296,6 +296,17 @@ db.Update(func(tx *bolt.Tx) error {
 })
 ```
 
+You can retrieve an existing bucket using the `Tx.Bucket()` function:
+```go
+db.Update(func(tx *bolt.Tx) error {
+	b := tx.Bucket([]byte("MyBucket"))
+	if b == nil {
+		return fmt.Errorf("bucket does not exist")
+	}
+	return nil
+})
+```
+
 You can also create a bucket only if it doesn't exist by using the
 `Tx.CreateBucketIfNotExists()` function. It's a common pattern to call this
 function for all your top-level buckets after you open your database so you can
