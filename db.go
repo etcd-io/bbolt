@@ -196,6 +196,7 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 	} else {
 		// always load free pages in write mode
 		db.PreLoadFreelist = true
+		flag |= os.O_CREATE
 	}
 
 	db.openFile = options.OpenFile
@@ -205,7 +206,7 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 
 	// Open data file and separate sync handler for metadata writes.
 	var err error
-	if db.file, err = db.openFile(path, flag|os.O_CREATE, mode); err != nil {
+	if db.file, err = db.openFile(path, flag, mode); err != nil {
 		_ = db.close()
 		return nil, err
 	}
