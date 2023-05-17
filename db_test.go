@@ -562,6 +562,12 @@ func TestDB_Open_ReadOnly(t *testing.T) {
 	}
 }
 
+func TestDB_Open_ReadOnly_NoCreate(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "db")
+	_, err := bolt.Open(f, 0666, &bolt.Options{ReadOnly: true})
+	require.ErrorIs(t, err, os.ErrNotExist)
+}
+
 // TestOpen_BigPage checks the database uses bigger pages when
 // changing PageSize.
 func TestOpen_BigPage(t *testing.T) {
