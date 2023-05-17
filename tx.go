@@ -136,7 +136,7 @@ func (tx *Tx) OnCommit(fn func()) {
 	tx.commitHandlers = append(tx.commitHandlers, fn)
 }
 
-// Commit writes all changes to disk and updates the meta page.
+// Commit writes all changes to disk, updates the meta page and closes the transaction.
 // Returns an error if a disk write error occurs, or if Commit is
 // called on a read-only transaction.
 func (tx *Tx) Commit() error {
