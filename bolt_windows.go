@@ -72,7 +72,7 @@ func mmap(db *DB, sz int) error {
 			return fmt.Errorf("truncate: %s", err)
 		}
 		sizehi = uint32(sz >> 32)
-		sizelo = uint32(sz) & 0xffffffff
+		sizelo = uint32(sz)
 	}
 
 	// Open a file mapping handle.
