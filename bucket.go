@@ -190,13 +190,19 @@ func (b *Bucket) CreateBucket(key []byte) (*Bucket, error) {
 // Returns an error if the bucket name is blank, or if the bucket name is too long.
 // The bucket instance is only valid for the lifetime of the transaction.
 func (b *Bucket) CreateBucketIfNotExists(key []byte) (*Bucket, error) {
-	child, err := b.CreateBucket(key)
-	if err == errors.ErrBucketExists {
-		return b.Bucket(key), nil
-	} else if err != nil {
-		return nil, err
+	if b.tx.db == nil {
+		return nil, errors.ErrTxClosed
+	} else if !b.tx.writable {
+		return nil, errors.ErrTxNotWritable
+	} else if len(key) == 0 {
+		return nil, errors.ErrBucketNameRequired
 	}
-	return child, nil
+
+	child := b.Bucket(key)
+	if child != nil {
+		return child, nil
+	}
+	return b.CreateBucket(key)
 }
 
 // DeleteBucket deletes a bucket at the given key.
