@@ -302,7 +302,7 @@ func (f *freelist) write(p *common.Page) error {
 	// Combine the old free pgids and pgids waiting on an open transaction.
 
 	// Update the header flag.
-	p.FlagsXOR(common.FreelistPageFlag)
+	p.SetFlags(common.FreelistPageFlag)
 
 	// The page.count can only hold up to 64k elements so if we overflow that
 	// number then we handle it by putting the size in the first element.
