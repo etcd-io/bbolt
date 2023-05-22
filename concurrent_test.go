@@ -4,6 +4,7 @@ import (
 	crand "crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	mrand "math/rand"
@@ -34,6 +35,10 @@ const (
 	defaultConcurrentTestDuration = 30 * time.Second
 )
 
+var (
+	intentionalRollbackError = errors.New("intentional rollback in concurrent test")
+)
+
 type duration struct {
 	min time.Duration
 	max time.Duration
@@ -56,6 +61,7 @@ type concurrentConfig struct {
 	operationRatio []operationChance
 	readInterval   duration   // only used by readOperation
 	noopWriteRatio int        // only used by writeOperation
+	rollbackRatio  int        // only used by write & delete operations
 	writeBytes     bytesRange // only used by writeOperation
 }
 
@@ -87,6 +93,7 @@ func TestConcurrentReadAndWrite(t *testing.T) {
 			max: 100 * time.Millisecond,
 		},
 		noopWriteRatio: 20,
+		rollbackRatio:  10,
 		writeBytes: bytesRange{
 			min: 200,
 			max: 16000,
@@ -345,6 +352,9 @@ func (w *worker) run() (historyRecords, error) {
 		bucket, key := w.pickBucket(), w.pickKey()
 		rec, err := executeOperation(op, w.db, bucket, key, w.conf)
 		if err != nil {
+			if err == intentionalRollbackError {
+				continue
+			}
 			readErr := fmt.Errorf("[%s: %s]: %w", w.name(), op, err)
 			w.t.Error(readErr)
 			w.errCh <- readErr
@@ -392,9 +402,9 @@ func executeOperation(op OperationType, db *bolt.DB, bucket []byte, key []byte, 
 	case Read:
 		return executeRead(db, bucket, key, conf.readInterval)
 	case Write:
-		return executeWrite(db, bucket, key, conf.writeBytes, conf.noopWriteRatio)
+		return executeWrite(db, bucket, key, conf.writeBytes, conf.noopWriteRatio, conf.rollbackRatio)
 	case Delete:
-		return executeDelete(db, bucket, key)
+		return executeDelete(db, bucket, key, conf.rollbackRatio)
 	default:
 		panic(fmt.Sprintf("unexpected operation type: %s", op))
 	}
@@ -431,7 +441,7 @@ func executeRead(db *bolt.DB, bucket []byte, key []byte, readInterval duration) 
 	return rec, err
 }
 
-func executeWrite(db *bolt.DB, bucket []byte, key []byte, writeBytes bytesRange, noopWriteRatio int) (historyRecord, error) {
+func executeWrite(db *bolt.DB, bucket []byte, key []byte, writeBytes bytesRange, noopWriteRatio int, rollbackRatio int) (historyRecord, error) {
 	var rec historyRecord
 
 	err := db.Update(func(tx *bolt.Tx) error {
@@ -468,13 +478,17 @@ func executeWrite(db *bolt.DB, bucket []byte, key []byte, writeBytes bytesRange,
 			}
 		}
 
+		if mrand.Intn(100) < rollbackRatio {
+			return intentionalRollbackError
+		}
+
 		return putErr
 	})
 
 	return rec, err
 }
 
-func executeDelete(db *bolt.DB, bucket []byte, key []byte) (historyRecord, error) {
+func executeDelete(db *bolt.DB, bucket []byte, key []byte, rollbackRatio int) (historyRecord, error) {
 	var rec historyRecord
 
 	err := db.Update(func(tx *bolt.Tx) error {
@@ -488,6 +502,10 @@ func executeDelete(db *bolt.DB, bucket []byte, key []byte) (historyRecord, error
 				Key:           string(key),
 				Txid:          tx.ID(),
 			}
+		}
+
+		if mrand.Intn(100) < rollbackRatio {
+			return intentionalRollbackError
 		}
 
 		return deleteErr
