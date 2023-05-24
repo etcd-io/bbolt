@@ -31,6 +31,7 @@ type Tx struct {
 	pages          map[common.Pgid]*common.Page
 	stats          TxStats
 	commitHandlers []func()
+	Logger         Logger
 
 	// WriteFlag specifies the flag for write-related methods like WriteTo().
 	// Tx opens the database file with the specified flag to copy the data.
@@ -54,6 +55,8 @@ func (tx *Tx) init(db *DB) {
 	tx.root = newBucket(tx)
 	tx.root.InBucket = &common.InBucket{}
 	*tx.root.InBucket = *(tx.meta.RootBucket())
+
+	tx.Logger = db.Logger
 
 	// Increment the transaction id and add a page cache for writable transactions.
 	if tx.writable {
@@ -141,6 +144,7 @@ func (tx *Tx) OnCommit(fn func()) {
 // called on a read-only transaction.
 func (tx *Tx) Commit() error {
 	common.Assert(!tx.managed, "managed tx commit not allowed")
+	tx.Logger.Debugf("committing tx")
 	if tx.db == nil {
 		return errors.ErrTxClosed
 	} else if !tx.writable {

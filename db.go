@@ -110,6 +110,9 @@ type DB struct {
 	// Supported only on Unix via mlock/munlock syscalls.
 	Mlock bool
 
+	// Logger is the logger used for bbolt.
+	Logger Logger
+
 	path     string
 	openFile func(string, int, os.FileMode) (*os.File, error)
 	file     *os.File
@@ -188,6 +191,12 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 	db.MaxBatchSize = common.DefaultMaxBatchSize
 	db.MaxBatchDelay = common.DefaultMaxBatchDelay
 	db.AllocSize = common.DefaultAllocSize
+
+	if options.Logger == nil {
+		db.Logger = getDiscardLogger()
+	} else {
+		db.Logger = options.Logger
+	}
 
 	flag := os.O_RDWR
 	if options.ReadOnly {
@@ -287,6 +296,7 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 	}
 
 	// Mark the database as opened and return.
+	db.Logger.Debug("bbolt opened successfully")
 	return db, nil
 }
 
@@ -1253,6 +1263,9 @@ type Options struct {
 	// It prevents potential page faults, however
 	// used memory can't be reclaimed. (UNIX only)
 	Mlock bool
+
+	// Logger is the logger used for bbolt.
+	Logger Logger
 }
 
 // DefaultOptions represent the options used if nil options are passed into Open().
