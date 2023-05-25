@@ -60,7 +60,7 @@ type concurrentConfig struct {
 }
 
 /*
-TestConcurrentReadAndWrite verifies:
+TestConcurrentGenericReadAndWrite verifies:
  1. Repeatable read: a read transaction should always see the same data
     view during its lifecycle.
  2. Any data written by a writing transaction should be visible to any
@@ -222,7 +222,7 @@ func mustCreateDB(t *testing.T, o *bolt.Options) *bolt.DB {
 func mustReOpenDB(t *testing.T, db *bolt.DB, o *bolt.Options) *bolt.DB {
 	f := db.Path()
 
-	t.Logf("CLosing bbolt DB at: %s", f)
+	t.Logf("Closing bbolt DB at: %s", f)
 	err := db.Close()
 	require.NoError(t, err)
 
@@ -753,6 +753,15 @@ func validateSequential(rs historyRecords) error {
 	return nil
 }
 
+/*
+TestConcurrentRepeatableRead verifies repeatable read. The case
+intentionally creates a scenario that read and write transactions
+are interleaved. It performs several writing operations after starting
+each long-running read transaction to ensure it has a larger txid
+than previous read transaction. It verifies that bbolt correctly
+releases free pages, and will not pollute (e.g. prematurely release)
+any pages which are still being used by any read transaction.
+*/
 func TestConcurrentRepeatableRead(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
@@ -805,6 +814,11 @@ func TestConcurrentRepeatableRead(t *testing.T) {
 
 			db := mustCreateDB(t, option)
 			defer func() {
+				// The db will be reopened later, so put `db.Close()` in a function
+				// to avoid premature evaluation of `db`. Note that the execution
+				// of a deferred function is deferred to the moment the surrounding
+				// function returns, but the function value and parameters to the
+				// call are evaluated as usual and saved anew.
 				db.Close()
 			}()
 
@@ -837,6 +851,11 @@ func TestConcurrentRepeatableRead(t *testing.T) {
 			})
 			require.NoError(t, err)
 
+			// bbolt will not release free pages directly after committing
+			// a writing transaction; instead all pages freed are putting
+			// into a pending list. Accordingly, the free pages might not
+			// be able to be reused by following writing transactions. So
+			// we reopen the db to completely release all free pages.
 			db = mustReOpenDB(t, db, option)
 
 			var (
