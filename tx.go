@@ -145,13 +145,13 @@ func (tx *Tx) OnCommit(fn func()) {
 // called on a read-only transaction.
 func (tx *Tx) Commit() error {
 	common.Assert(!tx.managed, "managed tx commit not allowed")
-	tx.Logger.Debugf("committing tx")
 	if tx.db == nil {
 		return berrors.ErrTxClosed
 	} else if !tx.writable {
 		return berrors.ErrTxNotWritable
 	}
 
+	tx.Logger.Infof("Committing transaction %d", tx.ID())
 	// TODO(benbjohnson): Use vectorized I/O to write out dirty pages.
 
 	// Rebalance nodes which have had deletions.
