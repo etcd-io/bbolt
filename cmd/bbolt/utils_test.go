@@ -11,7 +11,7 @@ import (
 )
 
 func loadMetaPage(t *testing.T, dbPath string, pageID uint64) *common.Meta {
-	_, buf, err := guts_cli.ReadPage(dbPath, 0)
+	_, buf, err := guts_cli.ReadPage(dbPath, pageID)
 	require.NoError(t, err)
 	return common.LoadPageMeta(buf)
 }
