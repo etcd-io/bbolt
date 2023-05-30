@@ -58,19 +58,19 @@ func (p *Page) Typ() string {
 }
 
 func (p *Page) IsBranchPage() bool {
-	return p.flags&BranchPageFlag != 0
+	return p.flags == BranchPageFlag
 }
 
 func (p *Page) IsLeafPage() bool {
-	return p.flags&LeafPageFlag != 0
+	return p.flags == LeafPageFlag
 }
 
 func (p *Page) IsMetaPage() bool {
-	return p.flags&MetaPageFlag != 0
+	return p.flags == MetaPageFlag
 }
 
 func (p *Page) IsFreelistPage() bool {
-	return p.flags&FreelistPageFlag != 0
+	return p.flags == FreelistPageFlag
 }
 
 // Meta returns a pointer to the metadata section of the page.
@@ -81,10 +81,10 @@ func (p *Page) Meta() *Meta {
 func (p *Page) FastCheck(id Pgid) {
 	Assert(p.id == id, "Page expected to be: %v, but self identifies as %v", id, p.id)
 	// Only one flag of page-type can be set.
-	Assert(p.flags == BranchPageFlag ||
-		p.flags == LeafPageFlag ||
-		p.flags == MetaPageFlag ||
-		p.flags == FreelistPageFlag,
+	Assert(p.IsBranchPage() ||
+		p.IsLeafPage() ||
+		p.IsMetaPage() ||
+		p.IsFreelistPage(),
 		"page %v: has unexpected type/flags: %x", p.id, p.flags)
 }
 
@@ -123,7 +123,7 @@ func (p *Page) BranchPageElements() []branchPageElement {
 }
 
 func (p *Page) FreelistPageCount() (int, int) {
-	Assert(p.flags == FreelistPageFlag, fmt.Sprintf("can't get freelist page count from a non-freelist page: %2x", p.flags))
+	Assert(p.IsFreelistPage(), fmt.Sprintf("can't get freelist page count from a non-freelist page: %2x", p.flags))
 
 	// If the page.count is at the max uint16 value (64k) then it's considered
 	// an overflow and the size of the freelist is stored as the first element.
@@ -141,7 +141,7 @@ func (p *Page) FreelistPageCount() (int, int) {
 }
 
 func (p *Page) FreelistPageIds() []Pgid {
-	Assert(p.flags == FreelistPageFlag, fmt.Sprintf("can't get freelist page IDs from a non-freelist page: %2x", p.flags))
+	Assert(p.IsFreelistPage(), fmt.Sprintf("can't get freelist page IDs from a non-freelist page: %2x", p.flags))
 
 	idx, count := p.FreelistPageCount()
 
@@ -183,10 +183,6 @@ func (p *Page) Flags() uint16 {
 
 func (p *Page) SetFlags(v uint16) {
 	p.flags = v
-}
-
-func (p *Page) FlagsXOR(v uint16) {
-	p.flags |= v
 }
 
 func (p *Page) Count() uint16 {
