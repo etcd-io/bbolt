@@ -43,6 +43,54 @@ type meta struct {
 	_       uint64
 }
 
+func TestResetAfterWrite(t *testing.T) {
+	f, err := os.CreateTemp("", "bolt-")
+	if err != nil {
+		panic(err)
+	}
+	t.Logf("Created file %q", f.Name())
+	defer func() {
+		t.Logf("Closing %q", f.Name())
+		if err := f.Close(); err != nil {
+			t.Errorf("Failed to close %q: %v", f.Name(), err)
+		}
+		if !t.Failed() {
+			t.Logf("Removing %q", f.Name())
+			if err := os.Remove(f.Name()); err != nil {
+				t.Errorf("Failed to remove %q: %v", f.Name(), err)
+			}
+		}
+	}()
+
+	buf1, buf2 := make([]byte, 4096), make([]byte, 4096)
+	for i := 0; i < len(buf1); i++ {
+		buf1[i] = 0x11
+	}
+
+	for i := 0; i < 1000; i++ {
+		n := copy(buf2, buf1)
+		if n != len(buf2) {
+			t.Fatalf("Unexpected copied len %d, want %d", n, len(buf2))
+		}
+
+		if n, err := f.WriteAt(buf2, 0); err != nil {
+			t.Fatalf("Failed to write data, len: %d, error: %v", n, err)
+		}
+
+		for i := range buf2 {
+			buf2[i] = 0
+		}
+
+		tmpBuf := make([]byte, 4096)
+		if n, err = f.ReadAt(tmpBuf, 0); err != nil {
+			t.Fatalf("Failed to read data, len: %d, error: %v", n, err)
+		}
+		if !bytes.Equal(buf1, tmpBuf) {
+			t.Fatal("Unexpected data inconsistency")
+		}
+	}
+}
+
 // Ensure that a database can be opened without error.
 func TestOpen(t *testing.T) {
 	path := tempfile()
