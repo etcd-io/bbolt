@@ -387,6 +387,9 @@ func (b *Bucket) ForEach(fn func(k, v []byte) error) error {
 	return nil
 }
 
+// ForEachBucket executes a function for each nested bucket in a bucket.
+// It's similar to `ForEach`, the only difference is it only iterates
+// on nested buckets, and ignore other non-bucket keys.
 func (b *Bucket) ForEachBucket(fn func(k []byte) error) error {
 	if b.tx.db == nil {
 		return errors.ErrTxClosed
@@ -395,6 +398,24 @@ func (b *Bucket) ForEachBucket(fn func(k []byte) error) error {
 	for k, _, flags := c.first(); k != nil; k, _, flags = c.next() {
 		if flags&common.BucketLeafFlag != 0 {
 			if err := fn(k); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// ForEachKey executes a function for each key/value pair in a bucket.
+// It's similar to `ForEach`, the only difference is it only iterates
+// on non-bucket keys, and ignore nested buckets.
+func (b *Bucket) ForEachKey(fn func(k, v []byte) error) error {
+	if b.tx.db == nil {
+		return errors.ErrTxClosed
+	}
+	c := b.Cursor()
+	for k, v, flags := c.first(); k != nil; k, v, flags = c.next() {
+		if flags&common.BucketLeafFlag == 0 {
+			if err := fn(k, v); err != nil {
 				return err
 			}
 		}

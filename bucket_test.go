@@ -1036,8 +1036,8 @@ func TestBucket_ForEachBucket(t *testing.T) {
 			items = append(items, k)
 			return nil
 		})
-		assert.NoErrorf(t, err, "b.ForEach failed")
-		assert.Equal(t, expectedItems, items, "what we iterated (ForEach) is not what we put")
+		assert.NoErrorf(t, err, "b.ForEachBucket failed")
+		assert.Equal(t, expectedItems, items, "what we iterated (ForEachBucket) is not what we put")
 	}
 
 	err := db.Update(func(tx *bolt.Tx) error {
@@ -1076,7 +1076,7 @@ func TestBucket_ForEachBucket_NoBuckets(t *testing.T) {
 			return nil
 		})
 		assert.NoErrorf(t, err, "b.ForEach failed")
-		assert.Emptyf(t, items, "what we iterated (ForEach) is not what we put")
+		assert.Emptyf(t, items, "what we iterated (ForEachBucket) is not what we put")
 	}
 
 	err := db.Update(func(tx *bolt.Tx) error {
@@ -1086,6 +1086,98 @@ func TestBucket_ForEachBucket_NoBuckets(t *testing.T) {
 		require.NoErrorf(t, b.Put([]byte("foo"), []byte("0000")), "put 'foo' failed")
 		require.NoErrorf(t, err, "creation of subbucket failed")
 		require.NoErrorf(t, b.Put([]byte("baz"), []byte("0001")), "put 'baz' failed")
+		require.NoErrorf(t, err, "creation of subbucket failed")
+
+		verifyReads(b)
+
+		return nil
+	})
+	require.NoErrorf(t, err, "db.Update failed")
+
+	err = db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("widgets"))
+		require.NotNil(t, b, "bucket opening failed")
+		verifyReads(b)
+		return nil
+	})
+	assert.NoErrorf(t, err, "db.View failed")
+}
+
+func TestBucket_ForEachKey(t *testing.T) {
+	db := btesting.MustCreateDB(t)
+
+	type record struct {
+		key   []byte
+		value []byte
+	}
+	expectedRecords := []record{
+		{
+			key:   []byte("key1"),
+			value: []byte("value1"),
+		},
+		{
+			key:   []byte("key2"),
+			value: []byte("value2"),
+		},
+	}
+
+	verifyReads := func(b *bolt.Bucket) {
+		var items []record
+		err := b.ForEachKey(func(k, v []byte) error {
+			items = append(items, record{k, v})
+			return nil
+		})
+		assert.NoErrorf(t, err, "b.ForEachKey failed")
+		assert.Equal(t, expectedRecords, items, "what we iterated (ForEachKey) is not what we put")
+	}
+
+	err := db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucket([]byte("widgets"))
+		require.NoError(t, err, "bucket creation failed")
+
+		require.NoErrorf(t, b.Put([]byte("key2"), []byte("value2")), "put 'key2' failed")
+		_, err = b.CreateBucket([]byte("subbucket1"))
+		require.NoErrorf(t, err, "creation of subbucket failed")
+		require.NoErrorf(t, b.Put([]byte("key1"), []byte("value1")), "put 'key1' failed")
+
+		b2, err := b.CreateBucket([]byte("subbucket2"))
+		require.NoErrorf(t, err, "creation of subbucket failed")
+		require.NoErrorf(t, b2.Put([]byte("foo"), []byte("bar")), "put 'foo' failed")
+
+		verifyReads(b)
+
+		return nil
+	})
+	assert.NoErrorf(t, err, "db.Update failed")
+	err = db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("widgets"))
+		require.NotNil(t, b, "bucket opening failed")
+		verifyReads(b)
+		return nil
+	})
+	assert.NoErrorf(t, err, "db.View failed")
+}
+
+func TestBucket_ForEachKey_NoKeys(t *testing.T) {
+	db := btesting.MustCreateDB(t)
+
+	verifyReads := func(b *bolt.Bucket) {
+		var keys [][]byte
+		err := b.ForEachKey(func(k, v []byte) error {
+			keys = append(keys, k)
+			return nil
+		})
+		assert.NoErrorf(t, err, "b.ForEachKey failed")
+		assert.Emptyf(t, keys, "what we iterated (ForEachKey) is not what we put")
+	}
+
+	err := db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucket([]byte("widgets"))
+		require.NoError(t, err, "bucket creation failed")
+
+		_, err = b.CreateBucket([]byte("subbucket1"))
+		require.NoErrorf(t, err, "creation of subbucket failed")
+		_, err = b.CreateBucket([]byte("subbucket2"))
 		require.NoErrorf(t, err, "creation of subbucket failed")
 
 		verifyReads(b)
