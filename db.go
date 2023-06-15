@@ -119,7 +119,6 @@ type DB struct {
 	dataref  []byte // mmap'ed readonly, write throws SEGV
 	data     *[maxMapSize]byte
 	datasz   int
-	filesz   int // current on disk file size
 	meta0    *common.Meta
 	meta1    *common.Meta
 	pageSize int
@@ -402,21 +401,29 @@ func (db *DB) hasSyncedFreelist() bool {
 	return db.meta().Freelist() != common.PgidNoFreelist
 }
 
+func (db *DB) fileSize() (int, error) {
+	info, err := db.file.Stat()
+	if err != nil {
+		return 0, fmt.Errorf("file stat error: %w", err)
+	}
+	sz := int(info.Size())
+	if sz < db.pageSize*2 {
+		return 0, fmt.Errorf("file size too small %d", sz)
+	}
+	return sz, nil
+}
+
 // mmap opens the underlying memory-mapped file and initializes the meta references.
 // minsz is the minimum size that the new mmap can be.
 func (db *DB) mmap(minsz int) (err error) {
 	db.mmaplock.Lock()
 	defer db.mmaplock.Unlock()
 
-	info, err := db.file.Stat()
-	if err != nil {
-		return fmt.Errorf("mmap stat error: %s", err)
-	} else if int(info.Size()) < db.pageSize*2 {
-		return fmt.Errorf("file size too small")
-	}
-
 	// Ensure the size is at least the minimum size.
-	fileSize := int(info.Size())
+	fileSize, err := db.fileSize()
+	if err != nil {
+		return err
+	}
 	var size = fileSize
 	if size < minsz {
 		size = minsz
@@ -610,7 +617,6 @@ func (db *DB) init() error {
 	if err := fdatasync(db); err != nil {
 		return err
 	}
-	db.filesz = len(buf)
 
 	return nil
 }
@@ -1120,7 +1126,11 @@ func (db *DB) allocate(txid common.Txid, count int) (*common.Page, error) {
 // grow grows the size of the database to the given sz.
 func (db *DB) grow(sz int) error {
 	// Ignore if the new size is less than available file size.
-	if sz <= db.filesz {
+	fileSize, err := db.fileSize()
+	if err != nil {
+		return err
+	}
+	if sz <= fileSize {
 		return nil
 	}
 
@@ -1147,13 +1157,12 @@ func (db *DB) grow(sz int) error {
 		}
 		if db.Mlock {
 			// unlock old file and lock new one
-			if err := db.mrelock(db.filesz, sz); err != nil {
+			if err := db.mrelock(fileSize, sz); err != nil {
 				return fmt.Errorf("mlock/munlock error: %s", err)
 			}
 		}
 	}
 
-	db.filesz = sz
 	return nil
 }
 

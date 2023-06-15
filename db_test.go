@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -443,7 +444,7 @@ func TestOpen_FileTooSmall(t *testing.T) {
 	}
 
 	_, err = bolt.Open(path, 0666, nil)
-	if err == nil || err.Error() != "file size too small" {
+	if err == nil || !strings.Contains(err.Error(), "file size too small") {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }
