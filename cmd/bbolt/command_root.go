@@ -18,6 +18,7 @@ func NewRootCommand() *cobra.Command {
 
 	rootCmd.AddCommand(
 		newSurgeryCobraCommand(),
+		newCheckCobraCommand(),
 	)
 
 	return rootCmd
