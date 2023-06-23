@@ -218,11 +218,16 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 	// if !options.ReadOnly.
 	// The database file is locked using the shared lock (more than one process may
 	// hold a lock at the same time) otherwise (options.ReadOnly is set).
-	if err := flock(db, !db.readOnly, options.Timeout); err != nil {
-		_ = db.close()
-		return nil, err
+	// In case we only do a readonly open, the env variable BBOLT_NO_FLOCK=1 allows to enter without locking.
+	// This is useful with the bbolt cli tool for inspecting a db that is permanently locked by a writer process.
+	// (It may cause crashes when the db is currently being written to -- probably better left undocumented)
+	if !db.readOnly || (os.Getenv("BBOLT_NO_FLOCK") == "") {
+		if err := flock(db, !db.readOnly, options.Timeout); err != nil {
+			_ = db.close()
+			return nil, err
+		}
 	}
-
+	
 	// Default values for test hooks
 	db.ops.writeAt = db.file.WriteAt
 
