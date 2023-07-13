@@ -116,9 +116,20 @@ type DB struct {
 	// `dataref` isn't used at all on Windows, and the golangci-lint
 	// always fails on Windows platform.
 	//nolint
-	dataref  []byte // mmap'ed readonly, write throws SEGV
-	data     *[maxMapSize]byte
-	datasz   int
+	dataref []byte // mmap'ed readonly, write throws SEGV
+	data    *[maxMapSize]byte
+	datasz  int
+
+	// meta0 and meta1 are used to implement copy-on-write mechanism for meta page,
+	// the one which has legal checksum and higher txid is "effective" and the other one is "free".
+	// The current "effective" can be retrieved with meta().
+	// When a writable transaction is executed, we will copy "effective" into memory, update it in memory,
+	// and finally write it back to "free" when transaction is committed.
+	// Hence, even there is a crash during transaction commit and "free" page is partially flushed,
+	// its checksum will be illegal and can't be switched to "effective",
+	// db is still in a consistent state and the transaction is treated as rollback.
+	// If "free" has legal checksum after transaction commit, then it is switched to "effective" automatically
+	// because it has a higher txid.
 	meta0    *common.Meta
 	meta1    *common.Meta
 	pageSize int
