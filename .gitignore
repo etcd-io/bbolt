@@ -6,5 +6,6 @@ cover.out
 cover-*.out
 /.idea
 *.iml
+/bbolt
 /cmd/bbolt/bbolt
 
