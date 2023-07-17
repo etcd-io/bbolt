@@ -10,7 +10,7 @@ import (
 const MaxMmapStep = 1 << 30 // 1GB
 
 // Version represents the data file format version.
-const Version = 2
+const Version uint32 = 2
 
 // Magic represents a marker value to indicate that a file is a Bolt DB.
 const Magic uint32 = 0xED0CDAED
