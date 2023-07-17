@@ -72,6 +72,10 @@ func (m *Meta) SetMagic(v uint32) {
 	m.magic = v
 }
 
+func (m *Meta) Version() uint32 {
+	return m.version
+}
+
 func (m *Meta) SetVersion(v uint32) {
 	m.version = v
 }
@@ -134,6 +138,10 @@ func (m *Meta) IncTxid() {
 
 func (m *Meta) DecTxid() {
 	m.txid -= 1
+}
+
+func (m *Meta) Checksum() uint64 {
+	return m.checksum
 }
 
 func (m *Meta) SetChecksum(v uint64) {
