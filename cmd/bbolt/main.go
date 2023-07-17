@@ -829,9 +829,9 @@ The following errors can be reported:
         The page type is not "meta", "leaf", "branch", or "freelist".
 
 No errors should occur in your database. However, if for some reason you
-experience corruption, please submit a ticket to the Bolt project page:
+experience corruption, please submit a ticket to the etcd-io/bbolt project page:
 
-  https://github.com/boltdb/bolt/issues
+  https://github.com/etcd-io/bbolt/issues
 `, "\n")
 }
 
