@@ -101,7 +101,7 @@ To use bbolt as an embedded key-value store, import as:
 ```go
 import bolt "go.etcd.io/bbolt"
 
-db, err := bolt.Open(path, 0666, nil)
+db, err := bolt.Open(path, 0600, nil)
 if err != nil {
   return err
 }
@@ -664,7 +664,7 @@ uses a shared lock to allow multiple processes to read from the database but
 it will block any processes from opening the database in read-write mode.
 
 ```go
-db, err := bolt.Open("my.db", 0666, &bolt.Options{ReadOnly: true})
+db, err := bolt.Open("my.db", 0600, &bolt.Options{ReadOnly: true})
 if err != nil {
 	log.Fatal(err)
 }
