@@ -237,3 +237,35 @@ func TestFailpoint_ResizeFileFail(t *testing.T) {
 
 	require.NoError(t, err)
 }
+
+func TestFailpoint_LackOfDiskSpace(t *testing.T) {
+	db := btesting.MustCreateDB(t)
+
+	err := gofail.Enable("lackOfDiskSpace", `return("grow somehow failed")`)
+	require.NoError(t, err)
+
+	tx, err := db.Begin(true)
+	require.NoError(t, err)
+
+	err = tx.Commit()
+	require.Error(t, err)
+	require.ErrorContains(t, err, "grow somehow failed")
+
+	err = tx.Rollback()
+	require.Error(t, err)
+	require.ErrorIs(t, err, bolt.ErrTxClosed)
+
+	// It should work after disabling the failpoint.
+	err = gofail.Disable("lackOfDiskSpace")
+	require.NoError(t, err)
+
+	tx, err = db.Begin(true)
+	require.NoError(t, err)
+
+	err = tx.Commit()
+	require.NoError(t, err)
+
+	err = tx.Rollback()
+	require.Error(t, err)
+	require.ErrorIs(t, err, bolt.ErrTxClosed)
+}
