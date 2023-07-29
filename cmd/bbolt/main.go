@@ -208,7 +208,7 @@ func (cmd *checkCommand) Run(args ...string) error {
 	}
 
 	// Open database.
-	db, err := bolt.Open(path, 0666, &bolt.Options{
+	db, err := bolt.Open(path, 0600, &bolt.Options{
 		ReadOnly:        true,
 		PreLoadFreelist: true,
 	})
@@ -284,7 +284,7 @@ func (cmd *infoCommand) Run(args ...string) error {
 	}
 
 	// Open the database.
-	db, err := bolt.Open(path, 0666, &bolt.Options{ReadOnly: true})
+	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
@@ -644,7 +644,7 @@ func (cmd *pagesCommand) Run(args ...string) error {
 	}
 
 	// Open database.
-	db, err := bolt.Open(path, 0666, &bolt.Options{
+	db, err := bolt.Open(path, 0600, &bolt.Options{
 		ReadOnly:        true,
 		PreLoadFreelist: true,
 	})
@@ -737,7 +737,7 @@ func (cmd *statsCommand) Run(args ...string) error {
 	}
 
 	// Open database.
-	db, err := bolt.Open(path, 0666, &bolt.Options{ReadOnly: true})
+	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
@@ -868,7 +868,7 @@ func (cmd *bucketsCommand) Run(args ...string) error {
 	}
 
 	// Open database.
-	db, err := bolt.Open(path, 0666, &bolt.Options{ReadOnly: true})
+	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
@@ -929,7 +929,7 @@ func (cmd *keysCommand) Run(args ...string) error {
 	}
 
 	// Open database.
-	db, err := bolt.Open(path, 0666, &bolt.Options{ReadOnly: true})
+	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
@@ -1020,7 +1020,7 @@ func (cmd *getCommand) Run(args ...string) error {
 	}
 
 	// Open database.
-	db, err := bolt.Open(path, 0666, &bolt.Options{ReadOnly: true})
+	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
@@ -1097,7 +1097,7 @@ func (cmd *benchCommand) Run(args ...string) error {
 	}
 
 	// Create database.
-	db, err := bolt.Open(options.Path, 0666, nil)
+	db, err := bolt.Open(options.Path, 0600, nil)
 	if err != nil {
 		return err
 	}
@@ -1652,7 +1652,7 @@ func (cmd *compactCommand) Run(args ...string) (err error) {
 	initialSize := fi.Size()
 
 	// Open source database.
-	src, err := bolt.Open(cmd.SrcPath, 0444, &bolt.Options{ReadOnly: true})
+	src, err := bolt.Open(cmd.SrcPath, 0400, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
