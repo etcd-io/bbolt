@@ -1885,7 +1885,7 @@ func TestBucket_Delete_Quick(t *testing.T) {
 
 func ExampleBucket_Put() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0666, nil)
+	db, err := bolt.Open(tempfile(), 0600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1928,7 +1928,7 @@ func ExampleBucket_Put() {
 
 func ExampleBucket_Delete() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0666, nil)
+	db, err := bolt.Open(tempfile(), 0600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1986,7 +1986,7 @@ func ExampleBucket_Delete() {
 
 func ExampleBucket_ForEach() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0666, nil)
+	db, err := bolt.Open(tempfile(), 0600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
