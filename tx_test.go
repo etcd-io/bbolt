@@ -37,7 +37,7 @@ func TestTx_Check_ReadOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	readOnlyDB, err := bolt.Open(db.Path(), 0666, &bolt.Options{ReadOnly: true})
+	readOnlyDB, err := bolt.Open(db.Path(), 0600, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -645,7 +645,7 @@ func TestTx_CopyFile_Error_Normal(t *testing.T) {
 func TestTx_Rollback(t *testing.T) {
 	for _, isSyncFreelist := range []bool{false, true} {
 		// Open the database.
-		db, err := bolt.Open(tempfile(), 0666, nil)
+		db, err := bolt.Open(tempfile(), 0600, nil)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -798,7 +798,7 @@ func TestTx_releaseRange(t *testing.T) {
 
 func ExampleTx_Rollback() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0666, nil)
+	db, err := bolt.Open(tempfile(), 0600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -852,7 +852,7 @@ func ExampleTx_Rollback() {
 
 func ExampleTx_CopyFile() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0666, nil)
+	db, err := bolt.Open(tempfile(), 0600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -882,7 +882,7 @@ func ExampleTx_CopyFile() {
 	defer os.Remove(toFile)
 
 	// Open the cloned database.
-	db2, err := bolt.Open(toFile, 0666, nil)
+	db2, err := bolt.Open(toFile, 0600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}

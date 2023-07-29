@@ -22,7 +22,7 @@ func TestFailpoint_MapFail(t *testing.T) {
 	}()
 
 	f := filepath.Join(t.TempDir(), "db")
-	_, err = bolt.Open(f, 0666, nil)
+	_, err = bolt.Open(f, 0600, nil)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "map somehow failed")
 }
@@ -36,14 +36,14 @@ func TestFailpoint_UnmapFail_DbClose(t *testing.T) {
 
 	err := gofail.Enable("unmapError", `return("unmap somehow failed")`)
 	require.NoError(t, err)
-	_, err = bolt.Open(f, 0666, nil)
+	_, err = bolt.Open(f, 0600, nil)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "unmap somehow failed")
 	//disable the error, and try to reopen the db
 	err = gofail.Disable("unmapError")
 	require.NoError(t, err)
 
-	db, err := bolt.Open(f, 0666, &bolt.Options{Timeout: 30 * time.Second})
+	db, err := bolt.Open(f, 0600, &bolt.Options{Timeout: 30 * time.Second})
 	require.NoError(t, err)
 	err = db.Close()
 	require.NoError(t, err)
@@ -54,7 +54,7 @@ func TestFailpoint_mLockFail(t *testing.T) {
 	require.NoError(t, err)
 
 	f := filepath.Join(t.TempDir(), "db")
-	_, err = bolt.Open(f, 0666, &bolt.Options{Mlock: true})
+	_, err = bolt.Open(f, 0600, &bolt.Options{Mlock: true})
 	require.Error(t, err)
 	require.ErrorContains(t, err, "mlock somehow failed")
 
@@ -62,7 +62,7 @@ func TestFailpoint_mLockFail(t *testing.T) {
 	err = gofail.Disable("mlockError")
 	require.NoError(t, err)
 
-	_, err = bolt.Open(f, 0666, &bolt.Options{Mlock: true})
+	_, err = bolt.Open(f, 0600, &bolt.Options{Mlock: true})
 	require.NoError(t, err)
 }
 

@@ -56,7 +56,7 @@ func MustOpenDBWithOption(t testing.TB, f string, o *bolt.Options) *DB {
 
 	o.FreelistType = freelistType
 
-	db, err := bolt.Open(f, 0666, o)
+	db, err := bolt.Open(f, 0600, o)
 	require.NoError(t, err)
 	resDB := &DB{
 		DB: db,
@@ -115,7 +115,7 @@ func (db *DB) MustReopen() {
 		panic("Please call Close() before MustReopen()")
 	}
 	db.t.Logf("Reopening bbolt DB at: %s", db.f)
-	indb, err := bolt.Open(db.Path(), 0666, db.o)
+	indb, err := bolt.Open(db.Path(), 0600, db.o)
 	require.NoError(db.t, err)
 	db.DB = indb
 	db.strictModeEnabledDefault()
