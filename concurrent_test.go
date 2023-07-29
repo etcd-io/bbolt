@@ -242,7 +242,7 @@ func mustOpenDB(t *testing.T, dbPath string, o *bolt.Options) *bolt.DB {
 
 	o.FreelistType = freelistType
 
-	db, err := bolt.Open(dbPath, 0666, o)
+	db, err := bolt.Open(dbPath, 0600, o)
 	require.NoError(t, err)
 
 	return db
