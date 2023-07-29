@@ -1,6 +1,7 @@
 package bbolt
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -10,7 +11,7 @@ import (
 	"time"
 	"unsafe"
 
-	"go.etcd.io/bbolt/errors"
+	berrors "go.etcd.io/bbolt/errors"
 	"go.etcd.io/bbolt/internal/common"
 )
 
@@ -142,9 +143,9 @@ func (tx *Tx) OnCommit(fn func()) {
 func (tx *Tx) Commit() error {
 	common.Assert(!tx.managed, "managed tx commit not allowed")
 	if tx.db == nil {
-		return errors.ErrTxClosed
+		return berrors.ErrTxClosed
 	} else if !tx.writable {
-		return errors.ErrTxNotWritable
+		return berrors.ErrTxNotWritable
 	}
 
 	// TODO(benbjohnson): Use vectorized I/O to write out dirty pages.
@@ -185,6 +186,10 @@ func (tx *Tx) Commit() error {
 
 	// If the high water mark has moved up then attempt to grow the database.
 	if tx.meta.Pgid() > opgid {
+		_ = errors.New("")
+		// gofail: var lackOfDiskSpace string
+		// tx.rollback()
+		// return errors.New(lackOfDiskSpace)
 		if err := tx.db.grow(int(tx.meta.Pgid()+1) * tx.db.pageSize); err != nil {
 			tx.rollback()
 			return err
@@ -254,7 +259,7 @@ func (tx *Tx) commitFreelist() error {
 func (tx *Tx) Rollback() error {
 	common.Assert(!tx.managed, "managed tx rollback not allowed")
 	if tx.db == nil {
-		return errors.ErrTxClosed
+		return berrors.ErrTxClosed
 	}
 	tx.nonPhysicalRollback()
 	return nil
@@ -561,13 +566,13 @@ func (tx *Tx) forEachPageInternal(pgidstack []common.Pgid, fn func(*common.Page,
 // This is only safe for concurrent use when used by a writable transaction.
 func (tx *Tx) Page(id int) (*common.PageInfo, error) {
 	if tx.db == nil {
-		return nil, errors.ErrTxClosed
+		return nil, berrors.ErrTxClosed
 	} else if common.Pgid(id) >= tx.meta.Pgid() {
 		return nil, nil
 	}
 
 	if tx.db.freelist == nil {
-		return nil, errors.ErrFreePagesNotLoaded
+		return nil, berrors.ErrFreePagesNotLoaded
 	}
 
 	// Build the page info.
