@@ -8,4 +8,5 @@ cover-*.out
 *.iml
 /bbolt
 /cmd/bbolt/bbolt
+.DS_Store
 
