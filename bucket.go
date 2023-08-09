@@ -183,15 +183,17 @@ func (b *Bucket) CreateBucket(key []byte) (*Bucket, error) {
 	var value = bucket.write()
 
 	// Insert into node.
-	key = cloneBytes(key)
-	c.node().put(key, key, value, 0, bucketLeafFlag)
+	// Tip: Use a new variable `newKey` instead of reusing the existing `key` to prevent
+	// it from being marked as leaking, and accordingly cannot be allocated on stack.
+	newKey := cloneBytes(key)
+	c.node().put(newKey, newKey, value, 0, bucketLeafFlag)
 
 	// Since subbuckets are not allowed on inline buckets, we need to
 	// dereference the inline page, if it exists. This will cause the bucket
 	// to be treated as a regular, non-inline bucket for the rest of the tx.
 	b.page = nil
 
-	return b.Bucket(key), nil
+	return b.Bucket(newKey), nil
 }
 
 // CreateBucketIfNotExists creates a new bucket if it doesn't already exist and returns a reference to it.
@@ -298,8 +300,10 @@ func (b *Bucket) Put(key []byte, value []byte) error {
 	}
 
 	// Insert into node.
-	key = cloneBytes(key)
-	c.node().put(key, key, value, 0, 0)
+	// Tip: Use a new variable `newKey` instead of reusing the existing `key` to prevent
+	// it from being marked as leaking, and accordingly cannot be allocated on stack.
+	newKey := cloneBytes(key)
+	c.node().put(newKey, newKey, value, 0, 0)
 
 	return nil
 }
