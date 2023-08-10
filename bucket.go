@@ -190,13 +190,55 @@ func (b *Bucket) CreateBucket(key []byte) (*Bucket, error) {
 // Returns an error if the bucket name is blank, or if the bucket name is too long.
 // The bucket instance is only valid for the lifetime of the transaction.
 func (b *Bucket) CreateBucketIfNotExists(key []byte) (*Bucket, error) {
-	child, err := b.CreateBucket(key)
-	if err == errors.ErrBucketExists {
-		return b.Bucket(key), nil
-	} else if err != nil {
-		return nil, err
+	if b.tx.db == nil {
+		return nil, errors.ErrTxClosed
+	} else if !b.tx.writable {
+		return nil, errors.ErrTxNotWritable
+	} else if len(key) == 0 {
+		return nil, errors.ErrBucketNameRequired
 	}
-	return child, nil
+
+	if b.buckets != nil {
+		if child := b.buckets[string(key)]; child != nil {
+			return child, nil
+		}
+	}
+
+	// Move cursor to correct position.
+	c := b.Cursor()
+	k, v, flags := c.seek(key)
+
+	// Return an error if there is an existing non-bucket key.
+	if bytes.Equal(key, k) {
+		if (flags & common.BucketLeafFlag) != 0 {
+			var child = b.openBucket(v)
+			if b.buckets != nil {
+				b.buckets[string(key)] = child
+			}
+
+			return child, nil
+		}
+		return nil, errors.ErrIncompatibleValue
+	}
+
+	// Create empty, inline bucket.
+	var bucket = Bucket{
+		InBucket:    &common.InBucket{},
+		rootNode:    &node{isLeaf: true},
+		FillPercent: DefaultFillPercent,
+	}
+	var value = bucket.write()
+
+	// Insert into node.
+	key = cloneBytes(key)
+	c.node().put(key, key, value, 0, common.BucketLeafFlag)
+
+	// Since subbuckets are not allowed on inline buckets, we need to
+	// dereference the inline page, if it exists. This will cause the bucket
+	// to be treated as a regular, non-inline bucket for the rest of the tx.
+	b.page = nil
+
+	return b.Bucket(key), nil
 }
 
 // DeleteBucket deletes a bucket at the given key.
