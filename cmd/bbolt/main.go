@@ -156,6 +156,7 @@ Usage:
 
 The commands are:
 
+    version     print the current version of bbolt
     bench       run synthetic benchmark against bbolt
     buckets     print a list of buckets
     check       verifies integrity of bbolt database
