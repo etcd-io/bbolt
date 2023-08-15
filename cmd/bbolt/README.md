@@ -40,6 +40,7 @@
 
   The commands are:
 
+      version     prints the current version of bbolt
       bench       run synthetic benchmark against bbolt
       buckets     print a list of buckets
       check       verifies integrity of bbolt database
@@ -59,6 +60,21 @@
 - you can use `help` with any command: `bbolt [command] -h` for more information about command.
 
 ## Analyse bbolt database with bbolt command line
+
+### version
+
+- `version` print the current version information of bbolt command-line.
+- usage:
+  `bbolt version`
+
+  Example:
+  
+  ```bash
+  $bbolt version
+  bbolt version: 1.3.7
+  Go Version: go1.20.7
+  Go OS/Arch: darwin/arm64
+  ```
 
 ### info
 
