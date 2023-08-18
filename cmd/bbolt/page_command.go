@@ -71,7 +71,7 @@ func (cmd *pageCommand) printPages(pageIDs []uint64, path string, formatValue *s
 		}
 		_, err2 := cmd.printPage(path, pageID, *formatValue)
 		if err2 != nil {
-			fmt.Fprintf(cmd.Stdout, "Prining page %d failed: %s. Continuuing...\n", pageID, err2)
+			fmt.Fprintf(cmd.Stdout, "Prining page %d failed: %s. Continuing...\n", pageID, err2)
 		}
 	}
 }
@@ -90,7 +90,7 @@ func (cmd *pageCommand) printAllPages(path string, formatValue *string) {
 		}
 		overflow, err2 := cmd.printPage(path, pageID, *formatValue)
 		if err2 != nil {
-			fmt.Fprintf(cmd.Stdout, "Prining page %d failed: %s. Continuuing...\n", pageID, err2)
+			fmt.Fprintf(cmd.Stdout, "Prining page %d failed: %s. Continuing...\n", pageID, err2)
 			pageID++
 		} else {
 			pageID += uint64(overflow) + 1
