@@ -461,7 +461,6 @@ func TestCompactCommand_Run(t *testing.T) {
 	if err := binary.Read(crypto.Reader, binary.BigEndian, &s); err != nil {
 		t.Fatal(err)
 	}
-	rand.Seed(s)
 
 	dstdb := btesting.MustCreateDB(t)
 	dstdb.Close()

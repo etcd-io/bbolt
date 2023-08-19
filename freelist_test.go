@@ -322,7 +322,6 @@ func benchmark_FreelistRelease(b *testing.B, size int) {
 }
 
 func randomPgids(n int) []common.Pgid {
-	rand.Seed(42)
 	pgids := make(common.Pgids, n)
 	for i := range pgids {
 		pgids[i] = common.Pgid(rand.Int63())
