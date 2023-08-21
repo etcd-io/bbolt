@@ -10,12 +10,6 @@ var (
 	// Deprecated: Use the error variables defined in the bbolt/errors package.
 	ErrDatabaseNotOpen = errors.ErrDatabaseNotOpen
 
-	// ErrDatabaseOpen is returned when opening a database that is
-	// already open.
-	//
-	// Deprecated: Use the error variables defined in the bbolt/errors package.
-	ErrDatabaseOpen = errors.ErrDatabaseOpen
-
 	// ErrInvalid is returned when both meta pages on a database are invalid.
 	// This typically occurs when a file is not a bolt database.
 	//
