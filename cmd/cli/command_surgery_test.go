@@ -1,4 +1,4 @@
-package main_test
+package cli_test
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	bolt "go.etcd.io/bbolt"
-	main "go.etcd.io/bbolt/cmd/bbolt"
+	main "go.etcd.io/bbolt/cmd/cli"
 	"go.etcd.io/bbolt/internal/btesting"
 	"go.etcd.io/bbolt/internal/common"
 	"go.etcd.io/bbolt/internal/guts_cli"
