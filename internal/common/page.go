@@ -13,6 +13,7 @@ const MinKeysPerPage = 2
 
 const BranchPageElementSize = unsafe.Sizeof(branchPageElement{})
 const LeafPageElementSize = unsafe.Sizeof(leafPageElement{})
+const pgidSize = unsafe.Sizeof(Pgid(0))
 
 const (
 	BranchPageFlag   = 0x01
@@ -99,9 +100,8 @@ func (p *Page) LeafPageElements() []leafPageElement {
 	if p.count == 0 {
 		return nil
 	}
-	var elems []leafPageElement
 	data := UnsafeAdd(unsafe.Pointer(p), unsafe.Sizeof(*p))
-	UnsafeSlice(unsafe.Pointer(&elems), data, int(p.count))
+	elems := unsafe.Slice((*leafPageElement)(data), int(p.count))
 	return elems
 }
 
@@ -116,9 +116,8 @@ func (p *Page) BranchPageElements() []branchPageElement {
 	if p.count == 0 {
 		return nil
 	}
-	var elems []branchPageElement
 	data := UnsafeAdd(unsafe.Pointer(p), unsafe.Sizeof(*p))
-	UnsafeSlice(unsafe.Pointer(&elems), data, int(p.count))
+	elems := unsafe.Slice((*branchPageElement)(data), int(p.count))
 	return elems
 }
 
@@ -149,9 +148,8 @@ func (p *Page) FreelistPageIds() []Pgid {
 		return nil
 	}
 
-	var ids []Pgid
-	data := UnsafeIndex(unsafe.Pointer(p), unsafe.Sizeof(*p), unsafe.Sizeof(ids[0]), idx)
-	UnsafeSlice(unsafe.Pointer(&ids), data, count)
+	data := UnsafeIndex(unsafe.Pointer(p), unsafe.Sizeof(*p), pgidSize, idx)
+	ids := unsafe.Slice((*Pgid)(data), count)
 
 	return ids
 }

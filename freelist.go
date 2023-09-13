@@ -311,15 +311,13 @@ func (f *freelist) write(p *common.Page) error {
 		p.SetCount(uint16(l))
 	} else if l < 0xFFFF {
 		p.SetCount(uint16(l))
-		var ids []common.Pgid
 		data := common.UnsafeAdd(unsafe.Pointer(p), unsafe.Sizeof(*p))
-		common.UnsafeSlice(unsafe.Pointer(&ids), data, l)
+		ids := unsafe.Slice((*common.Pgid)(data), l)
 		f.copyall(ids)
 	} else {
 		p.SetCount(0xFFFF)
-		var ids []common.Pgid
 		data := common.UnsafeAdd(unsafe.Pointer(p), unsafe.Sizeof(*p))
-		common.UnsafeSlice(unsafe.Pointer(&ids), data, l+1)
+		ids := unsafe.Slice((*common.Pgid)(data), l+1)
 		ids[0] = common.Pgid(l)
 		f.copyall(ids[1:])
 	}
