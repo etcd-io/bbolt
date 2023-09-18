@@ -1208,8 +1208,7 @@ func (db *DB) freepages() []common.Pgid {
 // Options represents the options that can be set when opening a database.
 type Options struct {
 	// Timeout is the amount of time to wait to obtain a file lock.
-	// When set to zero it will wait indefinitely. This option is only
-	// available on Darwin and Linux.
+	// When set to zero it will wait indefinitely.
 	Timeout time.Duration
 
 	// Sets the DB.NoGrowSync flag before memory mapping the file.
