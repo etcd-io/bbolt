@@ -578,44 +578,64 @@ func (db *DB) mrelock(fileSizeFrom, fileSizeTo int) error {
 	return nil
 }
 
+// writeNewPageAtSync writes a newly allocated page at the given offset, applies the function and directly fsyncs to disk.
+func (db *DB) writeNewPageAtSync(offset int64, pageFunc func(page *common.Page)) error {
+	buf := make([]byte, db.pageSize)
+	p := db.pageInBuffer(buf, common.Pgid(0))
+	pageFunc(p)
+
+	if _, err := db.ops.writeAt(buf, offset); err != nil {
+		return err
+	}
+	if err := db.Sync(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // init creates a new database file and initializes its meta pages.
 func (db *DB) init() error {
 	// Create two meta pages on a buffer.
-	buf := make([]byte, db.pageSize*4)
 	for i := 0; i < 2; i++ {
-		p := db.pageInBuffer(buf, common.Pgid(i))
-		p.SetId(common.Pgid(i))
-		p.SetFlags(common.MetaPageFlag)
+		err := db.writeNewPageAtSync(int64(i*db.pageSize), func(p *common.Page) {
+			p.SetId(common.Pgid(i))
+			p.SetFlags(common.MetaPageFlag)
 
-		// Initialize the meta page.
-		m := p.Meta()
-		m.SetMagic(common.Magic)
-		m.SetVersion(common.Version)
-		m.SetPageSize(uint32(db.pageSize))
-		m.SetFreelist(2)
-		m.SetRootBucket(common.NewInBucket(3, 0))
-		m.SetPgid(4)
-		m.SetTxid(common.Txid(i))
-		m.SetChecksum(m.Sum64())
+			// Initialize the meta page.
+			m := p.Meta()
+			m.SetMagic(common.Magic)
+			m.SetVersion(common.Version)
+			m.SetPageSize(uint32(db.pageSize))
+			m.SetFreelist(2)
+			m.SetRootBucket(common.NewInBucket(3, 0))
+			m.SetPgid(4)
+			m.SetTxid(common.Txid(i))
+			m.SetChecksum(m.Sum64())
+		})
+
+		if err != nil {
+			return err
+		}
 	}
 
 	// Write an empty freelist at page 3.
-	p := db.pageInBuffer(buf, common.Pgid(2))
-	p.SetId(2)
-	p.SetFlags(common.FreelistPageFlag)
-	p.SetCount(0)
-
-	// Write an empty leaf page at page 4.
-	p = db.pageInBuffer(buf, common.Pgid(3))
-	p.SetId(3)
-	p.SetFlags(common.LeafPageFlag)
-	p.SetCount(0)
-
-	// Write the buffer to our data file.
-	if _, err := db.ops.writeAt(buf, 0); err != nil {
+	err := db.writeNewPageAtSync(int64(2*db.pageSize), func(p *common.Page) {
+		p.SetId(2)
+		p.SetFlags(common.FreelistPageFlag)
+		p.SetCount(0)
+	})
+	if err != nil {
 		return err
 	}
-	if err := fdatasync(db); err != nil {
+
+	// Write an empty leaf page at page 4.
+	err = db.writeNewPageAtSync(int64(3*db.pageSize), func(p *common.Page) {
+		p.SetId(3)
+		p.SetFlags(common.LeafPageFlag)
+		p.SetCount(0)
+	})
+	if err != nil {
 		return err
 	}
 
