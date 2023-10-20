@@ -7,7 +7,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -153,8 +152,8 @@ func (tx *Tx) Commit() error {
 	// Rebalance nodes which have had deletions.
 	var startTime = time.Now()
 	tx.root.rebalance()
-	if tx.stats.GetRebalance() > 0 {
-		tx.stats.IncRebalanceTime(time.Since(startTime))
+	if tx.stats.Rebalance > 0 {
+		tx.stats.RebalanceTime += time.Since(startTime)
 	}
 
 	opgid := tx.meta.Pgid()
@@ -165,7 +164,7 @@ func (tx *Tx) Commit() error {
 		tx.rollback()
 		return err
 	}
-	tx.stats.IncSpillTime(time.Since(startTime))
+	tx.stats.SpillTime += time.Since(startTime)
 
 	// Free the old root bucket.
 	tx.meta.RootBucket().SetRootPage(tx.root.RootPage())
@@ -224,7 +223,7 @@ func (tx *Tx) Commit() error {
 		tx.rollback()
 		return err
 	}
-	tx.stats.IncWriteTime(time.Since(startTime))
+	tx.stats.WriteTime += time.Since(startTime)
 
 	// Finalize the transaction.
 	tx.close()
@@ -423,8 +422,8 @@ func (tx *Tx) allocate(count int) (*common.Page, error) {
 	tx.pages[p.Id()] = p
 
 	// Update statistics.
-	tx.stats.IncPageCount(int64(count))
-	tx.stats.IncPageAlloc(int64(count * tx.db.pageSize))
+	tx.stats.PageCount += count
+	tx.stats.PageAlloc += count * tx.db.pageSize
 
 	return p, nil
 }
@@ -459,7 +458,7 @@ func (tx *Tx) write() error {
 			}
 
 			// Update statistics.
-			tx.stats.IncWrite(1)
+			tx.stats.Write++
 
 			// Exit inner for loop if we've written all the chunks.
 			rem -= sz
@@ -518,7 +517,7 @@ func (tx *Tx) writeMeta() error {
 	}
 
 	// Update statistics.
-	tx.stats.IncWrite(1)
+	tx.stats.Write++
 
 	return nil
 }
@@ -596,61 +595,43 @@ func (tx *Tx) Page(id int) (*common.PageInfo, error) {
 // TxStats represents statistics about the actions performed by the transaction.
 type TxStats struct {
 	// Page statistics.
-	//
-	// DEPRECATED: Use GetPageCount() or IncPageCount()
-	PageCount int64 // number of page allocations
-	// DEPRECATED: Use GetPageAlloc() or IncPageAlloc()
-	PageAlloc int64 // total bytes allocated
+	PageCount int // number of page allocations
+	PageAlloc int // total bytes allocated
 
 	// Cursor statistics.
-	//
-	// DEPRECATED: Use GetCursorCount() or IncCursorCount()
-	CursorCount int64 // number of cursors created
+	CursorCount int // number of cursors created
 
 	// Node statistics
-	//
-	// DEPRECATED: Use GetNodeCount() or IncNodeCount()
-	NodeCount int64 // number of node allocations
-	// DEPRECATED: Use GetNodeDeref() or IncNodeDeref()
-	NodeDeref int64 // number of node dereferences
+	NodeCount int // number of node allocations
+	NodeDeref int // number of node dereferences
 
 	// Rebalance statistics.
-	//
-	// DEPRECATED: Use GetRebalance() or IncRebalance()
-	Rebalance int64 // number of node rebalances
-	// DEPRECATED: Use GetRebalanceTime() or IncRebalanceTime()
+	Rebalance     int           // number of node rebalances
 	RebalanceTime time.Duration // total time spent rebalancing
 
 	// Split/Spill statistics.
-	//
-	// DEPRECATED: Use GetSplit() or IncSplit()
-	Split int64 // number of nodes split
-	// DEPRECATED: Use GetSpill() or IncSpill()
-	Spill int64 // number of nodes spilled
-	// DEPRECATED: Use GetSpillTime() or IncSpillTime()
+	Split     int           // number of nodes split
+	Spill     int           // number of nodes spilled
 	SpillTime time.Duration // total time spent spilling
 
 	// Write statistics.
-	//
-	// DEPRECATED: Use GetWrite() or IncWrite()
-	Write int64 // number of writes performed
-	// DEPRECATED: Use GetWriteTime() or IncWriteTime()
+	Write     int           // number of writes performed
 	WriteTime time.Duration // total time spent writing to disk
 }
 
 func (s *TxStats) add(other *TxStats) {
-	s.IncPageCount(other.GetPageCount())
-	s.IncPageAlloc(other.GetPageAlloc())
-	s.IncCursorCount(other.GetCursorCount())
-	s.IncNodeCount(other.GetNodeCount())
-	s.IncNodeDeref(other.GetNodeDeref())
-	s.IncRebalance(other.GetRebalance())
-	s.IncRebalanceTime(other.GetRebalanceTime())
-	s.IncSplit(other.GetSplit())
-	s.IncSpill(other.GetSpill())
-	s.IncSpillTime(other.GetSpillTime())
-	s.IncWrite(other.GetWrite())
-	s.IncWriteTime(other.GetWriteTime())
+	s.PageCount += other.PageCount
+	s.PageAlloc += other.PageAlloc
+	s.CursorCount += other.CursorCount
+	s.NodeCount += other.NodeCount
+	s.NodeDeref += other.NodeDeref
+	s.Rebalance += other.Rebalance
+	s.RebalanceTime += other.RebalanceTime
+	s.Split += other.Split
+	s.Spill += other.Spill
+	s.SpillTime += other.SpillTime
+	s.Write += other.Write
+	s.WriteTime += other.WriteTime
 }
 
 // Sub calculates and returns the difference between two sets of transaction stats.
@@ -658,145 +639,17 @@ func (s *TxStats) add(other *TxStats) {
 // you need the performance counters that occurred within that time span.
 func (s *TxStats) Sub(other *TxStats) TxStats {
 	var diff TxStats
-	diff.PageCount = s.GetPageCount() - other.GetPageCount()
-	diff.PageAlloc = s.GetPageAlloc() - other.GetPageAlloc()
-	diff.CursorCount = s.GetCursorCount() - other.GetCursorCount()
-	diff.NodeCount = s.GetNodeCount() - other.GetNodeCount()
-	diff.NodeDeref = s.GetNodeDeref() - other.GetNodeDeref()
-	diff.Rebalance = s.GetRebalance() - other.GetRebalance()
-	diff.RebalanceTime = s.GetRebalanceTime() - other.GetRebalanceTime()
-	diff.Split = s.GetSplit() - other.GetSplit()
-	diff.Spill = s.GetSpill() - other.GetSpill()
-	diff.SpillTime = s.GetSpillTime() - other.GetSpillTime()
-	diff.Write = s.GetWrite() - other.GetWrite()
-	diff.WriteTime = s.GetWriteTime() - other.GetWriteTime()
+	diff.PageCount = s.PageCount - other.PageCount
+	diff.PageAlloc = s.PageAlloc - other.PageAlloc
+	diff.CursorCount = s.CursorCount - other.CursorCount
+	diff.NodeCount = s.NodeCount - other.NodeCount
+	diff.NodeDeref = s.NodeDeref - other.NodeDeref
+	diff.Rebalance = s.Rebalance - other.Rebalance
+	diff.RebalanceTime = s.RebalanceTime - other.RebalanceTime
+	diff.Split = s.Split - other.Split
+	diff.Spill = s.Spill - other.Spill
+	diff.SpillTime = s.SpillTime - other.SpillTime
+	diff.Write = s.Write - other.Write
+	diff.WriteTime = s.WriteTime - other.WriteTime
 	return diff
-}
-
-// GetPageCount returns PageCount atomically.
-func (s *TxStats) GetPageCount() int64 {
-	return atomic.LoadInt64(&s.PageCount)
-}
-
-// IncPageCount increases PageCount atomically and returns the new value.
-func (s *TxStats) IncPageCount(delta int64) int64 {
-	return atomic.AddInt64(&s.PageCount, delta)
-}
-
-// GetPageAlloc returns PageAlloc atomically.
-func (s *TxStats) GetPageAlloc() int64 {
-	return atomic.LoadInt64(&s.PageAlloc)
-}
-
-// IncPageAlloc increases PageAlloc atomically and returns the new value.
-func (s *TxStats) IncPageAlloc(delta int64) int64 {
-	return atomic.AddInt64(&s.PageAlloc, delta)
-}
-
-// GetCursorCount returns CursorCount atomically.
-func (s *TxStats) GetCursorCount() int64 {
-	return atomic.LoadInt64(&s.CursorCount)
-}
-
-// IncCursorCount increases CursorCount atomically and return the new value.
-func (s *TxStats) IncCursorCount(delta int64) int64 {
-	return atomic.AddInt64(&s.CursorCount, delta)
-}
-
-// GetNodeCount returns NodeCount atomically.
-func (s *TxStats) GetNodeCount() int64 {
-	return atomic.LoadInt64(&s.NodeCount)
-}
-
-// IncNodeCount increases NodeCount atomically and returns the new value.
-func (s *TxStats) IncNodeCount(delta int64) int64 {
-	return atomic.AddInt64(&s.NodeCount, delta)
-}
-
-// GetNodeDeref returns NodeDeref atomically.
-func (s *TxStats) GetNodeDeref() int64 {
-	return atomic.LoadInt64(&s.NodeDeref)
-}
-
-// IncNodeDeref increases NodeDeref atomically and returns the new value.
-func (s *TxStats) IncNodeDeref(delta int64) int64 {
-	return atomic.AddInt64(&s.NodeDeref, delta)
-}
-
-// GetRebalance returns Rebalance atomically.
-func (s *TxStats) GetRebalance() int64 {
-	return atomic.LoadInt64(&s.Rebalance)
-}
-
-// IncRebalance increases Rebalance atomically and returns the new value.
-func (s *TxStats) IncRebalance(delta int64) int64 {
-	return atomic.AddInt64(&s.Rebalance, delta)
-}
-
-// GetRebalanceTime returns RebalanceTime atomically.
-func (s *TxStats) GetRebalanceTime() time.Duration {
-	return atomicLoadDuration(&s.RebalanceTime)
-}
-
-// IncRebalanceTime increases RebalanceTime atomically and returns the new value.
-func (s *TxStats) IncRebalanceTime(delta time.Duration) time.Duration {
-	return atomicAddDuration(&s.RebalanceTime, delta)
-}
-
-// GetSplit returns Split atomically.
-func (s *TxStats) GetSplit() int64 {
-	return atomic.LoadInt64(&s.Split)
-}
-
-// IncSplit increases Split atomically and returns the new value.
-func (s *TxStats) IncSplit(delta int64) int64 {
-	return atomic.AddInt64(&s.Split, delta)
-}
-
-// GetSpill returns Spill atomically.
-func (s *TxStats) GetSpill() int64 {
-	return atomic.LoadInt64(&s.Spill)
-}
-
-// IncSpill increases Spill atomically and returns the new value.
-func (s *TxStats) IncSpill(delta int64) int64 {
-	return atomic.AddInt64(&s.Spill, delta)
-}
-
-// GetSpillTime returns SpillTime atomically.
-func (s *TxStats) GetSpillTime() time.Duration {
-	return atomicLoadDuration(&s.SpillTime)
-}
-
-// IncSpillTime increases SpillTime atomically and returns the new value.
-func (s *TxStats) IncSpillTime(delta time.Duration) time.Duration {
-	return atomicAddDuration(&s.SpillTime, delta)
-}
-
-// GetWrite returns Write atomically.
-func (s *TxStats) GetWrite() int64 {
-	return atomic.LoadInt64(&s.Write)
-}
-
-// IncWrite increases Write atomically and returns the new value.
-func (s *TxStats) IncWrite(delta int64) int64 {
-	return atomic.AddInt64(&s.Write, delta)
-}
-
-// GetWriteTime returns WriteTime atomically.
-func (s *TxStats) GetWriteTime() time.Duration {
-	return atomicLoadDuration(&s.WriteTime)
-}
-
-// IncWriteTime increases WriteTime atomically and returns the new value.
-func (s *TxStats) IncWriteTime(delta time.Duration) time.Duration {
-	return atomicAddDuration(&s.WriteTime, delta)
-}
-
-func atomicAddDuration(ptr *time.Duration, du time.Duration) time.Duration {
-	return time.Duration(atomic.AddInt64((*int64)(unsafe.Pointer(ptr)), int64(du)))
-}
-
-func atomicLoadDuration(ptr *time.Duration) time.Duration {
-	return time.Duration(atomic.LoadInt64((*int64)(unsafe.Pointer(ptr))))
 }

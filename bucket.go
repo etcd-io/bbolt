@@ -73,7 +73,7 @@ func (b *Bucket) Writable() bool {
 // Do not use a cursor after the transaction is closed.
 func (b *Bucket) Cursor() *Cursor {
 	// Update transaction statistics.
-	b.tx.stats.IncCursorCount(1)
+	b.tx.stats.CursorCount++
 
 	// Allocate and return a cursor.
 	return &Cursor{
@@ -724,7 +724,7 @@ func (b *Bucket) node(pgId common.Pgid, parent *node) *node {
 	b.nodes[pgId] = n
 
 	// Update statistics.
-	b.tx.stats.IncNodeCount(1)
+	b.tx.stats.NodeCount++
 
 	return n
 }

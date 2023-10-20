@@ -21,7 +21,7 @@ func TestTx_allocatePageStats(t *testing.T) {
 	}
 
 	txStats := tx.Stats()
-	prePageCnt := txStats.GetPageCount()
+	prePageCnt := txStats.PageCount
 	allocateCnt := f.free_count()
 
 	if _, err := tx.allocate(allocateCnt); err != nil {
@@ -29,7 +29,7 @@ func TestTx_allocatePageStats(t *testing.T) {
 	}
 
 	txStats = tx.Stats()
-	if txStats.GetPageCount() != prePageCnt+int64(allocateCnt) {
-		t.Errorf("Allocated %d but got %d page in stats", allocateCnt, txStats.GetPageCount())
+	if txStats.PageCount != prePageCnt+allocateCnt {
+		t.Errorf("Allocated %d but got %d page in stats", allocateCnt, txStats.PageCount)
 	}
 }
