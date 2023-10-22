@@ -73,7 +73,12 @@ func (b *Bucket) Writable() bool {
 // Do not use a cursor after the transaction is closed.
 func (b *Bucket) Cursor() *Cursor {
 	// Update transaction statistics.
+	// Note that `Cursor()` may be called by multiple readonly
+	// transactions concurrently, so we need to hold the lock
+	// `statlock` when updating the stats.
+	b.tx.db.statlock.Lock()
 	b.tx.stats.CursorCount++
+	b.tx.db.statlock.Unlock()
 
 	// Allocate and return a cursor.
 	return &Cursor{
