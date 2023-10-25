@@ -36,6 +36,12 @@ const (
 // All data access is performed through transactions which can be obtained through the DB.
 // All the functions on DB will return a ErrDatabaseNotOpen if accessed before Open() is called.
 type DB struct {
+	// Put `stats` at the first field to ensure it's 64-bit aligned. Note that
+	// the first word in an allocated struct can be relied upon to be 64-bit
+	// aligned. Refer to https://pkg.go.dev/sync/atomic#pkg-note-BUG. Also
+	// refer to discussion in https://github.com/etcd-io/bbolt/issues/577.
+	stats Stats
+
 	// When enabled, the database will perform a Check() after every commit.
 	// A panic is issued if the database is in an inconsistent state. This
 	// flag has a large performance impact so it should only be used for
@@ -125,7 +131,6 @@ type DB struct {
 	opened   bool
 	rwtx     *Tx
 	txs      []*Tx
-	stats    Stats
 
 	freelist     *freelist
 	freelistLoad sync.Once
@@ -1275,6 +1280,12 @@ var DefaultOptions = &Options{
 
 // Stats represents statistics about the database.
 type Stats struct {
+	// Put `TxStats` at the first field to ensure it's 64-bit aligned. Note
+	// that the first word in an allocated struct can be relied upon to be
+	// 64-bit aligned. Refer to https://pkg.go.dev/sync/atomic#pkg-note-BUG.
+	// Also refer to discussion in https://github.com/etcd-io/bbolt/issues/577.
+	TxStats TxStats // global, ongoing stats.
+
 	// Freelist stats
 	FreePageN     int // total number of free pages on the freelist
 	PendingPageN  int // total number of pending pages on the freelist
@@ -1284,8 +1295,6 @@ type Stats struct {
 	// Transaction stats
 	TxN     int // total number of started read transactions
 	OpenTxN int // number of currently open read transactions
-
-	TxStats TxStats // global, ongoing stats.
 }
 
 // Sub calculates and returns the difference between two sets of database stats.
