@@ -448,6 +448,7 @@ func Test_freelist_hashmapGetFreePageIDs(t *testing.T) {
 		val = rand.Int31n(1000)
 		fm[common.Pgid(i)] = uint64(val)
 		i += val
+		f.freePagesCount += uint64(val)
 	}
 
 	f.forwardMap = fm
