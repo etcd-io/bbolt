@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"runtime"
 	"sort"
@@ -139,11 +140,14 @@ type DB struct {
 
 	batchMu sync.Mutex
 	batch   *batch
+	batChan chan *batch
+	bPruns  chan struct{} // has 1 if batchProcessor runs
 
 	rwlock   sync.Mutex   // Allows only one writer at a time.
 	metalock sync.Mutex   // Protects meta page access.
 	mmaplock sync.RWMutex // Protects mmap access during remapping.
 	statlock sync.RWMutex // Protects stats access.
+	bpmux    sync.Mutex   // locks batchProcessor
 
 	ops struct {
 		writeAt func(b []byte, off int64) (n int, err error)
@@ -192,6 +196,7 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 	// Set default values for later DB operations.
 	db.MaxBatchSize = common.DefaultMaxBatchSize
 	db.MaxBatchDelay = common.DefaultMaxBatchDelay
+	//db.BatchQueueSize = common.DefaultBatchQueueSize // TODO var
 	db.AllocSize = common.DefaultAllocSize
 
 	flag := os.O_RDWR
@@ -291,6 +296,10 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 			return nil, err
 		}
 	}
+
+	db.bpmux.Lock()
+	defer db.bpmux.Unlock()
+	go db.BatchProcessor()
 
 	// Mark the database as opened and return.
 	return db, nil
@@ -631,6 +640,25 @@ func (db *DB) init() error {
 // It will block waiting for any open transactions to finish
 // before closing the database and returning.
 func (db *DB) Close() error {
+
+	if db.batChan != nil {
+		// passing a nil pointer down the chan quits batchProcessor
+		// never close `db.batChan` because there could be senders
+		// a panic (here) will crash the DB!
+		db.batChan <- nil
+	}
+
+	for {
+		time.Sleep(10 * time.Millisecond)
+		if len(db.bPruns) == 0 {
+			break
+		}
+		log.Printf("bbolt Close wait batchProcessor queued=%d", len(db.batChan))
+	}
+
+	db.bpmux.Lock()
+	defer db.bpmux.Unlock()
+
 	db.rwlock.Lock()
 	defer db.rwlock.Unlock()
 
@@ -932,18 +960,26 @@ func (db *DB) Batch(fn func(*Tx) error) error {
 	errCh := make(chan error, 1)
 
 	db.batchMu.Lock()
-	if (db.batch == nil) || (db.batch != nil && len(db.batch.calls) >= db.MaxBatchSize) {
-		// There is no existing batch, or the existing batch is full; start a new one.
-		db.batch = &batch{
-			db: db,
-		}
-		db.batch.timer = time.AfterFunc(db.MaxBatchDelay, db.batch.trigger)
+	// check if existing batch exceeds size
+	if db.batch != nil && len(db.batch.calls) >= db.MaxBatchSize {
+		// get the pointer
+		batptr := db.batch
+		// reset batch
+		db.batch = nil
+		// unlocks before sending to channel!
+		db.batchMu.Unlock()
+		// pass batched calls to BatchProcessor
+		db.batChan <- batptr
+		//log.Printf("Batch passed batches=%d to batChan db.MaxBatchSize=%d", len(batches), db.MaxBatchSize)
+		// locks again to create new batch and append
+		db.batchMu.Lock()
 	}
+
+	if db.batch == nil {
+		db.batch = &batch{}
+	}
+
 	db.batch.calls = append(db.batch.calls, call{fn: fn, err: errCh})
-	if len(db.batch.calls) >= db.MaxBatchSize {
-		// wake up batch, it's ready to run
-		go db.batch.trigger()
-	}
 	db.batchMu.Unlock()
 
 	err := <-errCh
@@ -953,39 +989,126 @@ func (db *DB) Batch(fn func(*Tx) error) error {
 	return err
 }
 
+func (db *DB) BatchProcessor() {
+	// we keep this lock open until break forever to quit
+	db.bpmux.Lock()
+	defer db.bpmux.Unlock()
+	if db.batChan != nil {
+		log.Printf("ERROR BatchProcessor db.batChan!=nil batchcap=%d db.MaxBatchSize=%d", cap(db.batChan), db.MaxBatchSize)
+		return
+	}
+
+	batchQueueSize := 1 // TODO hardcoded expose var as db.Option
+	if db.batChan == nil {
+		db.batChan = make(chan *batch, batchQueueSize)
+		db.bPruns = make(chan struct{}, 1)
+	}
+
+	select {
+	case db.bPruns <- struct{}{}:
+		// notify BatchProcessor runs
+		// pass
+	default:
+		log.Printf("ERROR db.bPruns locked")
+		return
+	}
+
+	// TODO DEBUG SLEEP
+	// because db.MaxBatchSize and db.MaxBatchDelay are not exposed
+	// and have to be set from outside after db has been opened
+	// it often happens that this go routine boots with default/common values ...
+	time.Sleep(100 * time.Millisecond) // TODO <-- stupid 100ms sleep prevents this.
+
+	// define loop vars
+	var batptr *batch
+	var batchcap = cap(db.batChan)
+	var maxbatch = db.MaxBatchSize
+	var maxdelay = db.MaxBatchDelay
+	var timer = time.NewTimer(maxdelay)
+	var timeout, ok bool
+	log.Printf("BatchProcessor batchcap=%d maxbatch=%d maxdelay=%d", batchcap, maxbatch, maxdelay)
+
+	//now := time.Now().UnixNano()
+	//lastrun := now
+forever:
+	for {
+
+		// in this forever loop: don't use return!
+		// only `break forever` so it can suck out the `bPruns`
+		// we can stop BatchProcessor by passing a nil pointer to the chan
+		// and start it again if needed, even from outside
+		// note: we normally never close the channel batChan but check for ok (closed)
+		select {
+		case <-timer.C:
+			timeout = true
+			//now = time.Now().UnixNano()
+			// diff = now - lastrun
+			//if diff > 0 {
+			//	log.Printf("bP timeout lr=(%d mils)", (now - lastrun) / 1e6)
+			//}
+			//lastrun = now
+
+		case batptr, ok = <-db.batChan: // receives pointer to batch containing `calls []call`
+			if batptr == nil || !ok {
+				// channel received nil pointer or got closed
+				//log.Printf("bbolt BatchProcessor break")
+				break forever // so we can run anything after end forever
+			}
+		}
+		// left select: either timeout or received calls
+		if timeout {
+			// MaxBatchDelay timeout triggered
+			db.batchMu.Lock()
+			if db.batch == nil || len(db.batch.calls) == 0 {
+				// nothing todo unlocks
+				db.batchMu.Unlock()
+				timeout = false
+				timer.Reset(maxdelay)
+				continue forever
+			}
+			// we have waiting calls in db.batch we should flush
+			// get the pointer
+			batptr = db.batch
+			// reset db batch slice
+			db.batch = nil
+			// we can safely unlock here
+			db.batchMu.Unlock()
+			// runs batches because of timeout
+			// DEBUG POINT
+			//log.Printf("BP timeout Q=%d/%d | batches=%d/%d maxdelay=(%d mils)", len(db.batChan), batchcap, len(batptr.calls), maxbatch, maxdelay/1e6)
+
+		} else {
+			// received *batched as batptr from channel db.batChan
+			// DEBUG POINT
+			//log.Printf("BP batChan Q=%d/%d | batches=%d/%d", len(db.batChan), batchcap, len(batptr.calls), maxbatch)
+		} // end if else timeout
+
+		db.runBatch(batptr)
+
+		timeout, batptr = false, nil
+		timer.Reset(maxdelay)
+		continue forever
+	} // end forever
+	<-db.bPruns // suck it out we're dead
+	//log.Printf("bbolt BatchProcessor quit")
+} // end func BatchProcessor
+
 type call struct {
 	fn  func(*Tx) error
 	err chan<- error
 }
 
+// is used as batptr in BatchProcessor
 type batch struct {
-	db    *DB
-	timer *time.Timer
-	start sync.Once
 	calls []call
 }
 
-// trigger runs the batch if it hasn't already been run.
-func (b *batch) trigger() {
-	b.start.Do(b.run)
-}
-
-// run performs the transactions in the batch and communicates results
-// back to DB.Batch.
-func (b *batch) run() {
-	b.db.batchMu.Lock()
-	b.timer.Stop()
-	// Make sure no new work is added to this batch, but don't break
-	// other batches.
-	if b.db.batch == b {
-		b.db.batch = nil
-	}
-	b.db.batchMu.Unlock()
-
+func (db *DB) runBatch(b *batch) {
+	//log.Printf("runBatch recv=%d", len(bc))
 retry:
 	for len(b.calls) > 0 {
 		var failIdx = -1
-		err := b.db.Update(func(tx *Tx) error {
+		err := db.Update(func(tx *Tx) error {
 			for i, c := range b.calls {
 				if err := safelyCall(c.fn, tx); err != nil {
 					failIdx = i
@@ -996,12 +1119,12 @@ retry:
 		})
 
 		if failIdx >= 0 {
-			// take the failing transaction out of the batch. it's
-			// safe to shorten b.calls here because db.batch no longer
-			// points to us, and we hold the mutex anyway.
+			// take the failing transaction out of the batch.
+			// it's safe to shorten b.calls here because *batch is ours now.
 			c := b.calls[failIdx]
 			b.calls[failIdx], b.calls = b.calls[len(b.calls)-1], b.calls[:len(b.calls)-1]
 			// tell the submitter re-run it solo, continue with the rest of the batch
+			//log.Printf("ERROR runBatch db.Update err = trySolo")
 			c.err <- trySolo
 			continue retry
 		}
@@ -1010,6 +1133,8 @@ retry:
 		for _, c := range b.calls {
 			c.err <- err
 		}
+
+		b = nil
 		break retry
 	}
 }
