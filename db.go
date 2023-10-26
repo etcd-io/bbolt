@@ -15,9 +15,6 @@ import (
 	"go.etcd.io/bbolt/internal/common"
 )
 
-// When enabled, the database will perform assert function to check the slow-path code
-var assertVerify = os.Getenv("BBOLT_VERIFY") == "true"
-
 // The time elapsed between consecutive file locking attempts.
 const flockRetryTimeout = 50 * time.Millisecond
 
@@ -1311,10 +1308,4 @@ func (s *Stats) Sub(other *Stats) Stats {
 type Info struct {
 	Data     uintptr
 	PageSize int
-}
-
-func _assertVerify(conditionFunc func() bool, msg string, v ...interface{}) {
-	if assertVerify && !conditionFunc() {
-		panic(fmt.Sprintf("assertion failed: "+msg, v...))
-	}
 }
