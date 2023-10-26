@@ -1,6 +1,18 @@
 Note that we start to track changes starting from v1.3.7.
 
 <hr>
+## v1.3.8(2023-10-26)
+
+### BoltDB
+- Fix [db.close() doesn't unlock the db file if db.munnmap() fails](https://github.com/etcd-io/bbolt/pull/439).
+- [Avoid syscall.Syscall use on OpenBSD](https://github.com/etcd-io/bbolt/pull/406).
+- Fix [rollback panicking after mlock failed or both meta pages corrupted](https://github.com/etcd-io/bbolt/pull/444).
+- Fix [bbolt panicking due to 64bit unaligned on arm32](https://github.com/etcd-io/bbolt/pull/584).
+
+### CMD
+- [Update the usage of surgery command](https://github.com/etcd-io/bbolt/pull/411).
+
+<hr>
 
 ## v1.3.7(2023-01-31)
 
