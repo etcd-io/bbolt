@@ -993,10 +993,6 @@ func (db *DB) BatchProcessor() {
 	// we keep this lock open until break forever to quit
 	db.bpmux.Lock()
 	defer db.bpmux.Unlock()
-	if db.batChan != nil {
-		log.Printf("ERROR BatchProcessor db.batChan!=nil batchcap=%d db.MaxBatchSize=%d", cap(db.batChan), db.MaxBatchSize)
-		return
-	}
 
 	batchQueueSize := 1 // TODO hardcoded expose var as db.Option
 	if db.batChan == nil {
