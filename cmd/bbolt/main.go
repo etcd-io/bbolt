@@ -456,7 +456,7 @@ func (cmd *pageItemCommand) Run(args ...string) error {
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	fs.BoolVar(&options.keyOnly, "key-only", false, "Print only the key")
 	fs.BoolVar(&options.valueOnly, "value-only", false, "Print only the value")
-	fs.StringVar(&options.format, "format", "ascii-encoded", "Output format. One of: "+FORMAT_MODES)
+	fs.StringVar(&options.format, "format", "auto", "Output format. One of: "+FORMAT_MODES)
 	fs.BoolVar(&options.help, "h", false, "")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -909,7 +909,7 @@ func newKeysCommand(m *Main) *keysCommand {
 func (cmd *keysCommand) Run(args ...string) error {
 	// Parse flags.
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
-	optionsFormat := fs.String("format", "auto", "Output format. One of: "+FORMAT_MODES+" (default: bytes)")
+	optionsFormat := fs.String("format", "auto", "Output format. One of: "+FORMAT_MODES+" (default: auto)")
 	help := fs.Bool("h", false, "")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -994,7 +994,7 @@ func (cmd *getCommand) Run(args ...string) error {
 	var parseFormat string
 	var format string
 	fs.StringVar(&parseFormat, "parse-format", "ascii-encoded", "Input format. One of: ascii-encoded|hex (default: ascii-encoded)")
-	fs.StringVar(&format, "format", "bytes", "Output format. One of: "+FORMAT_MODES+" (default: bytes)")
+	fs.StringVar(&format, "format", "auto", "Output format. One of: "+FORMAT_MODES+" (default: auto)")
 	help := fs.Bool("h", false, "")
 	if err := fs.Parse(args); err != nil {
 		return err
