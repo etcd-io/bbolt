@@ -606,7 +606,7 @@ Additional options include:
 	--value-only
 		Print only the value
 	--format
-		Output format. One of: `+FORMAT_MODES+` (default=ascii-encoded)
+		Output format. One of: `+FORMAT_MODES+` (default=auto)
 
 page-item prints a page item key and value.
 `, "\n")
@@ -969,7 +969,7 @@ Print a list of keys in the given (sub)bucket.
 Additional options include:
 
 	--format
-		Output format. One of: `+FORMAT_MODES+` (default=bytes)
+		Output format. One of: `+FORMAT_MODES+` (default=auto)
 
 Print a list of keys in the given bucket.
 `, "\n")
@@ -1062,7 +1062,7 @@ Print the value of the given key in the given (sub)bucket.
 Additional options include:
 
 	--format
-		Output format. One of: `+FORMAT_MODES+` (default=bytes)
+		Output format. One of: `+FORMAT_MODES+` (default=auto)
 	--parse-format
 		Input format (of key). One of: ascii-encoded|hex (default=ascii-encoded)"
 `, "\n")
