@@ -30,6 +30,7 @@ const IgnoreNoSync = runtime.GOOS == "openbsd"
 const (
 	DefaultMaxBatchSize  int = 1000
 	DefaultMaxBatchDelay     = 10 * time.Millisecond
+	DefaultMaxBatchQueue     = 1
 	DefaultAllocSize         = 16 * 1024 * 1024
 )
 

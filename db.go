@@ -92,6 +92,7 @@ type DB struct {
 
 	// MaxBatchSize is the maximum size of a batch. Default value is
 	// copied from DefaultMaxBatchSize in Open.
+	// When MaxBatchSize exceeds, BatchProcessor writes full batches without delays.
 	//
 	// If <=0, disables batching.
 	//
@@ -100,11 +101,21 @@ type DB struct {
 
 	// MaxBatchDelay is the maximum delay before a batch starts.
 	// Default value is copied from DefaultMaxBatchDelay in Open.
+	// BatchProcessor waits this amount of time to accumulate and write batches.
+	// The timer resets when a batch has been written.
 	//
-	// If <=0, effectively disables batching.
+	// If <=0, disables delayed batching.
 	//
-	// Do not change concurrently with calls to Batch.
 	MaxBatchDelay time.Duration
+
+	// MaxBatchQueue limits the amount of batches queued to BatchProcessor.
+	// Default value is copied from DefaultMaxQueueSize in Open.
+	// Higher values will eat more memory as more batches will queue up on slow storage.
+	//
+	// If == 1, means 1 open batch and 1 in execution which is mostly enough. (default)
+	// If == 0, works like a flip-flop without queue.
+	// Do not change concurrently with calls to Batch.
+	MaxBatchQueue int
 
 	// AllocSize is the amount of space allocated when the database
 	// needs to create new pages. This is done to amortize the cost
@@ -194,10 +205,10 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 	db.Mlock = options.Mlock
 
 	// Set default values for later DB operations.
-	db.MaxBatchSize = common.DefaultMaxBatchSize
-	db.MaxBatchDelay = common.DefaultMaxBatchDelay
-	//db.BatchQueueSize = common.DefaultBatchQueueSize // TODO var
-	db.AllocSize = common.DefaultAllocSize
+	db.AllocSize = options.AllocSize
+	db.MaxBatchDelay = options.MaxBatchDelay
+	db.MaxBatchQueue = options.MaxBatchQueue
+	db.MaxBatchSize = options.MaxBatchSize
 
 	flag := os.O_RDWR
 	if options.ReadOnly {
@@ -994,9 +1005,9 @@ func (db *DB) BatchProcessor() {
 	db.bpmux.Lock()
 	defer db.bpmux.Unlock()
 
-	batchQueueSize := 1 // TODO hardcoded expose var as db.Option
+	maxBatchQueue := db.MaxBatchQueue
 	if db.batChan == nil {
-		db.batChan = make(chan *batch, batchQueueSize)
+		db.batChan = make(chan *batch, maxBatchQueue)
 		db.bPruns = make(chan struct{}, 1)
 	}
 
@@ -1009,18 +1020,15 @@ func (db *DB) BatchProcessor() {
 		return
 	}
 
-	// TODO DEBUG SLEEP
-	// because db.MaxBatchSize and db.MaxBatchDelay are not exposed
-	// and have to be set from outside after db has been opened
-	// it often happens that this go routine boots with default/common values ...
-	time.Sleep(100 * time.Millisecond) // TODO <-- stupid 100ms sleep prevents this.
-
 	// define loop vars
 	var batptr *batch
 	var batchcap = cap(db.batChan)
 	var maxbatch = db.MaxBatchSize
 	var maxdelay = db.MaxBatchDelay
-	var timer = time.NewTimer(maxdelay)
+	var timer *time.Timer
+	if maxdelay > 0 {
+		timer = time.NewTimer(maxdelay)
+	}
 	var timeout, ok bool
 	log.Printf("BatchProcessor batchcap=%d maxbatch=%d maxdelay=%d", batchcap, maxbatch, maxdelay)
 
@@ -1038,7 +1046,7 @@ forever:
 		case <-timer.C:
 			timeout = true
 			//now = time.Now().UnixNano()
-			// diff = now - lastrun
+			//diff := now - lastrun
 			//if diff > 0 {
 			//	log.Printf("bP timeout lr=(%d mils)", (now - lastrun) / 1e6)
 			//}
@@ -1082,7 +1090,9 @@ forever:
 		db.runBatch(batptr)
 
 		timeout, batptr = false, nil
-		timer.Reset(maxdelay)
+		if maxdelay > 0 {
+			timer.Reset(maxdelay)
+		}
 		continue forever
 	} // end forever
 	<-db.bPruns // suck it out we're dead
@@ -1389,6 +1399,11 @@ type Options struct {
 	// It prevents potential page faults, however
 	// used memory can't be reclaimed. (UNIX only)
 	Mlock bool
+
+	AllocSize int
+	MaxBatchDelay time.Duration
+	MaxBatchQueue int
+	MaxBatchSize int
 }
 
 // DefaultOptions represent the options used if nil options are passed into Open().
@@ -1397,6 +1412,10 @@ var DefaultOptions = &Options{
 	Timeout:      0,
 	NoGrowSync:   false,
 	FreelistType: FreelistArrayType,
+	AllocSize: common.DefaultAllocSize,
+	MaxBatchDelay: common.DefaultMaxBatchDelay,
+	MaxBatchQueue: common.DefaultMaxBatchQueue,
+	MaxBatchSize: common.DefaultMaxBatchSize,
 }
 
 // Stats represents statistics about the database.
