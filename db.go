@@ -1025,12 +1025,13 @@ func (db *DB) BatchProcessor() {
 	var batchcap = cap(db.batChan)
 	var maxbatch = db.MaxBatchSize
 	var maxdelay = db.MaxBatchDelay
+	var maxqueue = db.MaxBatchQueue
 	var timer *time.Timer
 	if maxdelay > 0 {
 		timer = time.NewTimer(maxdelay)
 	}
 	var timeout, ok bool
-	log.Printf("BatchProcessor batchcap=%d maxbatch=%d maxdelay=%d", batchcap, maxbatch, maxdelay)
+	log.Printf("BatchProcessor maxqueue=%d batchcap=%d maxbatch=%d maxdelay=%d", maxqueue, batchcap, maxbatch, maxdelay)
 
 	//now := time.Now().UnixNano()
 	//lastrun := now
@@ -1096,12 +1097,13 @@ forever:
 		continue forever
 	} // end forever
 	// process remaining batches
-	// we lock but don't unlock so no new batches will be created?
+	// one should stop sending batches before closing the db...
 	db.batchMu.Lock()
 	if db.batch != nil && len(db.batch.calls) > 0 {
 		db.runBatch(db.batch)
+		db.batch = nil
 	}
-	//db.batchMu.Unlock()
+	db.batchMu.Unlock()
 	<-db.bPruns // suck it out we're dead
 	//log.Printf("bbolt BatchProcessor quit")
 } // end func BatchProcessor
