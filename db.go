@@ -1095,6 +1095,13 @@ forever:
 		}
 		continue forever
 	} // end forever
+	// process remaining batches
+	// we lock but don't unlock so no new batches will be created?
+	db.batchMu.Lock()
+	if db.batch != nil && len(db.batch.calls) > 0 {
+		db.runBatch(db.batch)
+	}
+	//db.batchMu.Unlock()
 	<-db.bPruns // suck it out we're dead
 	//log.Printf("bbolt BatchProcessor quit")
 } // end func BatchProcessor
