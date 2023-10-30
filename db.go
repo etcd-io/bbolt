@@ -1101,7 +1101,6 @@ forever:
 	db.batchMu.Lock()
 	if db.batch != nil && len(db.batch.calls) > 0 {
 		db.runBatch(db.batch)
-		db.batch = nil
 	}
 	db.batchMu.Unlock()
 	<-db.bPruns // suck it out we're dead
