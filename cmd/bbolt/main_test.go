@@ -135,36 +135,71 @@ func TestPageCommand_Run(t *testing.T) {
 }
 
 func TestPageItemCommand_Run(t *testing.T) {
-	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
-	srcPath := db.Path()
+	t.Run("test data in string format", func(t *testing.T) {
+		db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
+		srcPath := db.Path()
 
-	// Insert some sample data
-	t.Log("Insert some sample data")
-	err := db.Fill([]byte("data"), 1, 100,
-		func(tx int, k int) []byte { return []byte(fmt.Sprintf("key_%d", k)) },
-		func(tx int, k int) []byte { return []byte(fmt.Sprintf("value_%d", k)) },
-	)
-	require.NoError(t, err)
-
-	defer requireDBNoChange(t, dbData(t, srcPath), srcPath)
-
-	meta := readMetaPage(t, srcPath)
-	leafPageId := 0
-	for i := 2; i < int(meta.Pgid()); i++ {
-		p, _, err := guts_cli.ReadPage(srcPath, uint64(i))
+		// Insert some sample data
+		t.Log("Insert some sample data")
+		err := db.Fill([]byte("data"), 1, 100,
+			func(tx int, k int) []byte { return []byte(fmt.Sprintf("key_%d", k)) },
+			func(tx int, k int) []byte { return []byte(fmt.Sprintf("value_%d", k)) },
+		)
 		require.NoError(t, err)
-		if p.IsLeafPage() && p.Count() > 1 {
-			leafPageId = int(p.Id())
-		}
-	}
-	require.NotEqual(t, 0, leafPageId)
 
-	m := NewMain()
-	err = m.Run("page-item", db.Path(), fmt.Sprintf("%d", leafPageId), "0")
-	require.NoError(t, err)
-	if !strings.Contains(m.Stdout.String(), "key_0") || !strings.Contains(m.Stdout.String(), "value_0") {
-		t.Fatalf("Unexpected output:\n%s\n", m.Stdout.String())
-	}
+		defer requireDBNoChange(t, dbData(t, srcPath), srcPath)
+
+		meta := readMetaPage(t, srcPath)
+		leafPageId := 0
+		for i := 2; i < int(meta.Pgid()); i++ {
+			p, _, err := guts_cli.ReadPage(srcPath, uint64(i))
+			require.NoError(t, err)
+			if p.IsLeafPage() && p.Count() > 1 {
+				leafPageId = int(p.Id())
+			}
+		}
+		require.NotEqual(t, 0, leafPageId)
+
+		m := NewMain()
+		err = m.Run("page-item", db.Path(), fmt.Sprintf("%d", leafPageId), "0")
+		require.NoError(t, err)
+		if !strings.Contains(m.Stdout.String(), "key_0") || !strings.Contains(m.Stdout.String(), "value_0") {
+			t.Fatalf("Unexpected output:\n%s\n", m.Stdout.String())
+		}
+	})
+
+	t.Run("test data in int64 format", func(t *testing.T) {
+		db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
+		srcPath := db.Path()
+
+		// Insert some sample data
+		t.Log("Insert some sample data")
+		err := db.Fill([]byte("data"), 1, 100,
+			func(tx int, k int) []byte { return convertInt64IntoBytes(t, 10001) },
+			func(tx int, k int) []byte { return convertInt64IntoBytes(t, 10002) },
+		)
+		require.NoError(t, err)
+
+		defer requireDBNoChange(t, dbData(t, srcPath), srcPath)
+
+		meta := readMetaPage(t, srcPath)
+		leafPageId := 0
+		for i := 2; i < int(meta.Pgid()); i++ {
+			p, _, err := guts_cli.ReadPage(srcPath, uint64(i))
+			require.NoError(t, err)
+			if p.IsLeafPage() && p.Count() > 1 {
+				leafPageId = int(p.Id())
+			}
+		}
+		require.NotEqual(t, 0, leafPageId)
+
+		m := NewMain()
+		err = m.Run("page-item", db.Path(), fmt.Sprintf("%d", leafPageId), "0")
+		require.NoError(t, err)
+		if !strings.Contains(m.Stdout.String(), "10001") || !strings.Contains(m.Stdout.String(), "10002") {
+			t.Fatalf("Unexpected output:\n%s\n", m.Stdout.String())
+		}
+	})
 }
 
 // Ensure the "stats" command can execute correctly.
@@ -277,75 +312,143 @@ func TestBucketsCommand_Run(t *testing.T) {
 
 // Ensure the "keys" command can print a list of keys for a bucket.
 func TestKeysCommand_Run(t *testing.T) {
-	db := btesting.MustCreateDB(t)
+	t.Run("test keys in string format", func(t *testing.T) {
+		db := btesting.MustCreateDB(t)
+		if err := db.Update(func(tx *bolt.Tx) error {
+			for _, name := range []string{"foo", "bar"} {
+				b, err := tx.CreateBucket([]byte(name))
+				if err != nil {
+					return err
+				}
+				for i := 0; i < 3; i++ {
+					key := fmt.Sprintf("%s-%d", name, i)
+					if err := b.Put([]byte(key), []byte{0}); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		db.Close()
 
-	if err := db.Update(func(tx *bolt.Tx) error {
-		for _, name := range []string{"foo", "bar"} {
-			b, err := tx.CreateBucket([]byte(name))
+		defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
+
+		expected := "foo-0\nfoo-1\nfoo-2\n"
+
+		// Run the command.
+		m := NewMain()
+		if err := m.Run("keys", db.Path(), "foo"); err != nil {
+			t.Fatal(err)
+		} else if actual := m.Stdout.String(); actual != expected {
+			t.Fatalf("unexpected stdout:\n\n%s", actual)
+		}
+	})
+
+	t.Run("test keys in int64 format", func(t *testing.T) {
+		db := btesting.MustCreateDB(t)
+		if err := db.Update(func(tx *bolt.Tx) error {
+			b, err := tx.CreateBucket([]byte("test-bucket"))
 			if err != nil {
 				return err
 			}
-			for i := 0; i < 3; i++ {
-				key := fmt.Sprintf("%s-%d", name, i)
-				if err := b.Put([]byte(key), []byte{0}); err != nil {
+			for _, k := range []int64{10001, 10002} {
+				if err := b.Put(convertInt64IntoBytes(t, k), []byte{0}); err != nil {
 					return err
 				}
 			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
 		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	db.Close()
+		db.Close()
 
-	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
+		defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
 
-	expected := "foo-0\nfoo-1\nfoo-2\n"
+		expected := "10001\n10002\n"
 
-	// Run the command.
-	m := NewMain()
-	if err := m.Run("keys", db.Path(), "foo"); err != nil {
-		t.Fatal(err)
-	} else if actual := m.Stdout.String(); actual != expected {
-		t.Fatalf("unexpected stdout:\n\n%s", actual)
-	}
+		// Run the command.
+		m := NewMain()
+		if err := m.Run("keys", db.Path(), "test-bucket"); err != nil {
+			t.Fatal(err)
+		} else if actual := m.Stdout.String(); actual != expected {
+			t.Fatalf("unexpected stdout:\n\n%s", actual)
+		}
+	})
 }
 
 // Ensure the "get" command can print the value of a key in a bucket.
 func TestGetCommand_Run(t *testing.T) {
-	db := btesting.MustCreateDB(t)
+	t.Run("test values in string format", func(t *testing.T) {
+		db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
-		for _, name := range []string{"foo", "bar"} {
-			b, err := tx.CreateBucket([]byte(name))
+		if err := db.Update(func(tx *bolt.Tx) error {
+			for _, name := range []string{"foo", "bar"} {
+				b, err := tx.CreateBucket([]byte(name))
+				if err != nil {
+					return err
+				}
+				for i := 0; i < 3; i++ {
+					key := fmt.Sprintf("%s-%d", name, i)
+					val := fmt.Sprintf("val-%s-%d", name, i)
+					if err := b.Put([]byte(key), []byte(val)); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		db.Close()
+
+		defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
+
+		expected := "val-foo-1\n"
+
+		// Run the command.
+		m := NewMain()
+		if err := m.Run("get", db.Path(), "foo", "foo-1"); err != nil {
+			t.Fatal(err)
+		} else if actual := m.Stdout.String(); actual != expected {
+			t.Fatalf("unexpected stdout:\n\n%s", actual)
+		}
+	})
+	t.Run("test values in int64 format", func(t *testing.T) {
+		db := btesting.MustCreateDB(t)
+
+		if err := db.Update(func(tx *bolt.Tx) error {
+			b, err := tx.CreateBucket([]byte("test-bucket"))
 			if err != nil {
 				return err
 			}
-			for i := 0; i < 3; i++ {
-				key := fmt.Sprintf("%s-%d", name, i)
-				val := fmt.Sprintf("val-%s-%d", name, i)
-				if err := b.Put([]byte(key), []byte(val)); err != nil {
+			for k, v := range map[string]int64{
+				"10001": 10001,
+				"10002": 10002,
+			} {
+				if err := b.Put([]byte(k), convertInt64IntoBytes(t, v)); err != nil {
 					return err
 				}
 			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
 		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	db.Close()
+		db.Close()
 
-	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
+		defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
 
-	expected := "val-foo-1\n"
+		expected := "10001\n"
 
-	// Run the command.
-	m := NewMain()
-	if err := m.Run("get", db.Path(), "foo", "foo-1"); err != nil {
-		t.Fatal(err)
-	} else if actual := m.Stdout.String(); actual != expected {
-		t.Fatalf("unexpected stdout:\n\n%s", actual)
-	}
+		// Run the command.
+		m := NewMain()
+		if err := m.Run("get", db.Path(), "test-bucket", "10001"); err != nil {
+			t.Fatal(err)
+		} else if actual := m.Stdout.String(); actual != expected {
+			t.Fatalf("unexpected stdout:\n\n%s", actual)
+		}
+	})
 }
 
 // Ensure the "pages" command neither panic, nor change the db file.
@@ -628,4 +731,12 @@ func requireDBNoChange(t *testing.T, oldData []byte, filePath string) {
 
 	noChange := bytes.Equal(oldData, newData)
 	require.True(t, noChange)
+}
+
+func convertInt64IntoBytes(t testing.TB, num int64) []byte {
+	t.Helper()
+
+	buf := make([]byte, binary.MaxVarintLen64)
+	n := binary.PutVarint(buf, num)
+	return buf[:n]
 }
