@@ -4,6 +4,7 @@ import (
 	"bytes"
 	crypto "crypto/rand"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"math/rand"
@@ -14,12 +15,12 @@ import (
 	"testing"
 
 	"go.etcd.io/bbolt/internal/btesting"
+	"go.etcd.io/bbolt/internal/guts_cli"
 
 	"github.com/stretchr/testify/require"
 
 	bolt "go.etcd.io/bbolt"
 	main "go.etcd.io/bbolt/cmd/bbolt"
-	"go.etcd.io/bbolt/internal/guts_cli"
 )
 
 // Ensure the "info" command can print information about a database.
@@ -135,35 +136,76 @@ func TestPageCommand_Run(t *testing.T) {
 }
 
 func TestPageItemCommand_Run(t *testing.T) {
-	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
-	srcPath := db.Path()
-
-	// Insert some sample data
-	t.Log("Insert some sample data")
-	err := db.Fill([]byte("data"), 1, 100,
-		func(tx int, k int) []byte { return []byte(fmt.Sprintf("key_%d", k)) },
-		func(tx int, k int) []byte { return []byte(fmt.Sprintf("value_%d", k)) },
-	)
-	require.NoError(t, err)
-
-	defer requireDBNoChange(t, dbData(t, srcPath), srcPath)
-
-	meta := readMetaPage(t, srcPath)
-	leafPageId := 0
-	for i := 2; i < int(meta.Pgid()); i++ {
-		p, _, err := guts_cli.ReadPage(srcPath, uint64(i))
-		require.NoError(t, err)
-		if p.IsLeafPage() && p.Count() > 1 {
-			leafPageId = int(p.Id())
-		}
+	testCases := []struct {
+		name          string
+		printable     bool
+		itemId        string
+		expectedKey   string
+		expectedValue string
+	}{
+		{
+			name:          "printable items",
+			printable:     true,
+			itemId:        "0",
+			expectedKey:   "key_0",
+			expectedValue: "value_0",
+		},
+		{
+			name:          "non printable items",
+			printable:     false,
+			itemId:        "0",
+			expectedKey:   hex.EncodeToString(convertInt64IntoBytes(0 + 1)),
+			expectedValue: hex.EncodeToString(convertInt64IntoBytes(0 + 2)),
+		},
 	}
-	require.NotEqual(t, 0, leafPageId)
 
-	m := NewMain()
-	err = m.Run("page-item", db.Path(), fmt.Sprintf("%d", leafPageId), "0")
-	require.NoError(t, err)
-	if !strings.Contains(m.Stdout.String(), "key_0") || !strings.Contains(m.Stdout.String(), "value_0") {
-		t.Fatalf("Unexpected output:\n%s\n", m.Stdout.String())
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
+			srcPath := db.Path()
+
+			t.Log("Insert some sample data")
+			err := db.Update(func(tx *bolt.Tx) error {
+				b, bErr := tx.CreateBucketIfNotExists([]byte("data"))
+				if bErr != nil {
+					return bErr
+				}
+
+				for i := 0; i < 100; i++ {
+					if tc.printable {
+						if bErr = b.Put([]byte(fmt.Sprintf("key_%d", i)), []byte(fmt.Sprintf("value_%d", i))); bErr != nil {
+							return bErr
+						}
+					} else {
+						k, v := convertInt64IntoBytes(int64(i+1)), convertInt64IntoBytes(int64(i+2))
+						if bErr = b.Put(k, v); bErr != nil {
+							return bErr
+						}
+					}
+				}
+				return nil
+			})
+			require.NoError(t, err)
+			defer requireDBNoChange(t, dbData(t, srcPath), srcPath)
+
+			meta := readMetaPage(t, srcPath)
+			leafPageId := 0
+			for i := 2; i < int(meta.Pgid()); i++ {
+				p, _, err := guts_cli.ReadPage(srcPath, uint64(i))
+				require.NoError(t, err)
+				if p.IsLeafPage() && p.Count() > 1 {
+					leafPageId = int(p.Id())
+				}
+			}
+			require.NotEqual(t, 0, leafPageId)
+
+			m := NewMain()
+			err = m.Run("page-item", db.Path(), fmt.Sprintf("%d", leafPageId), tc.itemId)
+			require.NoError(t, err)
+			if !strings.Contains(m.Stdout.String(), tc.expectedKey) || !strings.Contains(m.Stdout.String(), tc.expectedValue) {
+				t.Fatalf("Unexpected output:\n%s\n", m.Stdout.String())
+			}
+		})
 	}
 }
 
@@ -628,4 +670,10 @@ func requireDBNoChange(t *testing.T, oldData []byte, filePath string) {
 
 	noChange := bytes.Equal(oldData, newData)
 	require.True(t, noChange)
+}
+
+func convertInt64IntoBytes(num int64) []byte {
+	buf := make([]byte, binary.MaxVarintLen64)
+	n := binary.PutVarint(buf, num)
+	return buf[:n]
 }
