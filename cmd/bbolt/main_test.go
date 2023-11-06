@@ -17,6 +17,7 @@ import (
 	"go.etcd.io/bbolt/internal/btesting"
 	"go.etcd.io/bbolt/internal/guts_cli"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	bolt "go.etcd.io/bbolt"
@@ -355,38 +356,64 @@ func TestKeysCommand_Run(t *testing.T) {
 
 // Ensure the "get" command can print the value of a key in a bucket.
 func TestGetCommand_Run(t *testing.T) {
-	db := btesting.MustCreateDB(t)
+	testCases := []struct {
+		name          string
+		printable     bool
+		testBucket    string
+		testKey       string
+		expectedValue string
+	}{
+		{
+			name:          "printable data",
+			printable:     true,
+			testBucket:    "foo",
+			testKey:       "foo-1",
+			expectedValue: "val-foo-1\n",
+		},
+		{
+			name:          "non printable data",
+			printable:     false,
+			testBucket:    "bar",
+			testKey:       "100001",
+			expectedValue: hex.EncodeToString(convertInt64IntoBytes(100001)) + "\n",
+		},
+	}
 
-	if err := db.Update(func(tx *bolt.Tx) error {
-		for _, name := range []string{"foo", "bar"} {
-			b, err := tx.CreateBucket([]byte(name))
-			if err != nil {
-				return err
-			}
-			for i := 0; i < 3; i++ {
-				key := fmt.Sprintf("%s-%d", name, i)
-				val := fmt.Sprintf("val-%s-%d", name, i)
-				if err := b.Put([]byte(key), []byte(val)); err != nil {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := btesting.MustCreateDB(t)
+
+			if err := db.Update(func(tx *bolt.Tx) error {
+				b, err := tx.CreateBucket([]byte(tc.testBucket))
+				if err != nil {
 					return err
 				}
+				if tc.printable {
+					val := fmt.Sprintf("val-%s", tc.testKey)
+					if err := b.Put([]byte(tc.testKey), []byte(val)); err != nil {
+						return err
+					}
+				} else {
+					if err := b.Put([]byte(tc.testKey), convertInt64IntoBytes(100001)); err != nil {
+						return err
+					}
+				}
+				return nil
+			}); err != nil {
+				t.Fatal(err)
 			}
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	db.Close()
+			db.Close()
 
-	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
+			defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
 
-	expected := "val-foo-1\n"
-
-	// Run the command.
-	m := NewMain()
-	if err := m.Run("get", db.Path(), "foo", "foo-1"); err != nil {
-		t.Fatal(err)
-	} else if actual := m.Stdout.String(); actual != expected {
-		t.Fatalf("unexpected stdout:\n\n%s", actual)
+			// Run the command.
+			m := NewMain()
+			if err := m.Run("get", db.Path(), tc.testBucket, tc.testKey); err != nil {
+				t.Fatal(err)
+			}
+			actual := m.Stdout.String()
+			assert.Equal(t, tc.expectedValue, actual)
+		})
 	}
 }
 
