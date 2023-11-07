@@ -456,7 +456,7 @@ func (cmd *pageItemCommand) Run(args ...string) error {
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	fs.BoolVar(&options.keyOnly, "key-only", false, "Print only the key")
 	fs.BoolVar(&options.valueOnly, "value-only", false, "Print only the value")
-	fs.StringVar(&options.format, "format", "ascii-encoded", "Output format. One of: "+FORMAT_MODES)
+	fs.StringVar(&options.format, "format", "auto", "Output format. One of: "+FORMAT_MODES)
 	fs.BoolVar(&options.help, "h", false, "")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -606,7 +606,7 @@ Additional options include:
 	--value-only
 		Print only the value
 	--format
-		Output format. One of: `+FORMAT_MODES+` (default=ascii-encoded)
+		Output format. One of: `+FORMAT_MODES+` (default=auto)
 
 page-item prints a page item key and value.
 `, "\n")
