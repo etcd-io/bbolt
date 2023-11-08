@@ -994,7 +994,7 @@ func (cmd *getCommand) Run(args ...string) error {
 	var parseFormat string
 	var format string
 	fs.StringVar(&parseFormat, "parse-format", "ascii-encoded", "Input format. One of: ascii-encoded|hex (default: ascii-encoded)")
-	fs.StringVar(&format, "format", "bytes", "Output format. One of: "+FORMAT_MODES+" (default: bytes)")
+	fs.StringVar(&format, "format", "auto", "Output format. One of: "+FORMAT_MODES+" (default: auto)")
 	help := fs.Bool("h", false, "")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -1062,7 +1062,7 @@ Print the value of the given key in the given (sub)bucket.
 Additional options include:
 
 	--format
-		Output format. One of: `+FORMAT_MODES+` (default=bytes)
+		Output format. One of: `+FORMAT_MODES+` (default=auto)
 	--parse-format
 		Input format (of key). One of: ascii-encoded|hex (default=ascii-encoded)"
 `, "\n")
