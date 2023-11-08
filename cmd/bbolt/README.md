@@ -241,7 +241,7 @@
       --value-only
           Print only the value
       --format
-          Output format. One of: auto|ascii-encoded|hex|bytes|redacted (default=ascii-encoded)
+          Output format. One of: auto|ascii-encoded|hex|bytes|redacted (default=auto)
   ```
 
   Example:
@@ -269,7 +269,7 @@
 
   Additional options include:
   --format
-    Output format. One of: auto|ascii-encoded|hex|bytes|redacted (default=bytes)
+    Output format. One of: auto|ascii-encoded|hex|bytes|redacted (default=auto)
   ```
 
   Example 1:
@@ -303,7 +303,7 @@
 
   Additional options include:
   --format
-    Output format. One of: auto|ascii-encoded|hex|bytes|redacted (default=bytes)
+    Output format. One of: auto|ascii-encoded|hex|bytes|redacted (default=auto)
   --parse-format
     Input format (of key). One of: ascii-encoded|hex (default=ascii-encoded)"
   ```
