@@ -909,7 +909,7 @@ func newKeysCommand(m *Main) *keysCommand {
 func (cmd *keysCommand) Run(args ...string) error {
 	// Parse flags.
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
-	optionsFormat := fs.String("format", "bytes", "Output format. One of: "+FORMAT_MODES+" (default: bytes)")
+	optionsFormat := fs.String("format", "auto", "Output format. One of: "+FORMAT_MODES+" (default: auto)")
 	help := fs.Bool("h", false, "")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -969,7 +969,7 @@ Print a list of keys in the given (sub)bucket.
 Additional options include:
 
 	--format
-		Output format. One of: `+FORMAT_MODES+` (default=bytes)
+		Output format. One of: `+FORMAT_MODES+` (default=auto)
 
 Print a list of keys in the given bucket.
 `, "\n")

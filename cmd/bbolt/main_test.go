@@ -320,37 +320,68 @@ func TestBucketsCommand_Run(t *testing.T) {
 
 // Ensure the "keys" command can print a list of keys for a bucket.
 func TestKeysCommand_Run(t *testing.T) {
-	db := btesting.MustCreateDB(t)
-
-	if err := db.Update(func(tx *bolt.Tx) error {
-		for _, name := range []string{"foo", "bar"} {
-			b, err := tx.CreateBucket([]byte(name))
-			if err != nil {
-				return err
-			}
-			for i := 0; i < 3; i++ {
-				key := fmt.Sprintf("%s-%d", name, i)
-				if err := b.Put([]byte(key), []byte{0}); err != nil {
-					return err
-				}
-			}
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
+	testCases := []struct {
+		name       string
+		printable  bool
+		testBucket string
+		expected   string
+	}{
+		{
+			name:       "printable keys",
+			printable:  true,
+			testBucket: "foo",
+			expected:   "foo-0\nfoo-1\nfoo-2\n",
+		},
+		{
+			name:       "non printable keys",
+			printable:  false,
+			testBucket: "bar",
+			expected:   convertInt64KeysIntoHexString(100001, 100002, 100003),
+		},
 	}
-	db.Close()
 
-	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Logf("creating test database for subtest '%s'", tc.name)
+			db := btesting.MustCreateDB(t)
 
-	expected := "foo-0\nfoo-1\nfoo-2\n"
+			err := db.Update(func(tx *bolt.Tx) error {
+				t.Logf("creating test bucket %s", tc.testBucket)
+				b, bErr := tx.CreateBucketIfNotExists([]byte(tc.testBucket))
+				if bErr != nil {
+					return fmt.Errorf("error creating test bucket %q: %v", tc.testBucket, bErr)
+				}
 
-	// Run the command.
-	m := NewMain()
-	if err := m.Run("keys", db.Path(), "foo"); err != nil {
-		t.Fatal(err)
-	} else if actual := m.Stdout.String(); actual != expected {
-		t.Fatalf("unexpected stdout:\n\n%s", actual)
+				t.Logf("inserting test data into test bucket %s", tc.testBucket)
+				if tc.printable {
+					for i := 0; i < 3; i++ {
+						key := fmt.Sprintf("%s-%d", tc.testBucket, i)
+						if pErr := b.Put([]byte(key), []byte{0}); pErr != nil {
+							return pErr
+						}
+					}
+				} else {
+					for i := 100001; i < 100004; i++ {
+						k := convertInt64IntoBytes(int64(i))
+						if pErr := b.Put(k, []byte{0}); pErr != nil {
+							return pErr
+						}
+					}
+				}
+				return nil
+			})
+			require.NoError(t, err)
+			db.Close()
+
+			defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
+
+			t.Log("running Keys cmd")
+			m := NewMain()
+			kErr := m.Run("keys", db.Path(), tc.testBucket)
+			require.NoError(t, kErr)
+			actual := m.Stdout.String()
+			assert.Equal(t, tc.expected, actual)
+		})
 	}
 }
 
@@ -703,4 +734,12 @@ func convertInt64IntoBytes(num int64) []byte {
 	buf := make([]byte, binary.MaxVarintLen64)
 	n := binary.PutVarint(buf, num)
 	return buf[:n]
+}
+
+func convertInt64KeysIntoHexString(nums ...int64) string {
+	var res []string
+	for _, num := range nums {
+		res = append(res, hex.EncodeToString(convertInt64IntoBytes(num)))
+	}
+	return strings.Join(res, "\n") + "\n" // last newline char
 }
