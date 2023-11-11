@@ -15,4 +15,3 @@ jobs:
       - run: |
           make gofail-enable
           make test-failpoint
-

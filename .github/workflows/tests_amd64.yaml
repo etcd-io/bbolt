@@ -1,0 +1,16 @@
+name: Tests AMD64
+permissions: read-all
+on: [push, pull_request]
+jobs:
+  test-linux-amd64:
+    uses: ./.github/workflows/tests-template.yml
+
+  coverage:
+    needs: ["test-linux-amd64"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v4
+        with:
+          go-version: "1.21.1"
+      - run: make coverage
