@@ -72,7 +72,7 @@
   ```bash
   $bbolt version
   bbolt version: 1.3.7
-  Go Version: go1.21.1
+  Go Version: go1.21.4
   Go OS/Arch: darwin/arm64
   ```
 
