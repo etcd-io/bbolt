@@ -42,13 +42,7 @@ jobs:
               CPU=4 make test
               ;;
             linux-unit-test-4-cpu-race)
-              # XXX: By default, the Github Action runner will terminate the process
-              # if it has high resource usage. Try to use GOGC to limit memory and
-              # cpu usage here to prevent unexpected terminating. It can be replaced
-              # with GOMEMLIMIT=2048MiB if the go-version is updated to >=1.19.x.
-              #
-              # REF: https://github.com/actions/runner-images/issues/6680#issuecomment-1335778010
-              GOGC=30 CPU=4 ENABLE_RACE=true make test
+              GOMEMLIMIT=2048MiB CPU=4 ENABLE_RACE=true make test
               ;;
             *)
               echo "Failed to find target"
