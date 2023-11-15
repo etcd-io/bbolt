@@ -11,6 +11,9 @@ import (
 	"testing"
 	"testing/quick"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	bolt "go.etcd.io/bbolt"
 	"go.etcd.io/bbolt/errors"
 	"go.etcd.io/bbolt/internal/btesting"
@@ -739,6 +742,95 @@ func TestCursor_QuickCheck_BucketsOnly_Reverse(t *testing.T) {
 		return nil
 	}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestCursor_DeleteAndPut_InTransactions_Forward(t *testing.T) {
+	testCursorWithBothDeleteAndPut(t,
+		func(c *bolt.Cursor) ([]byte, []byte) {
+			return c.First()
+		}, func(c *bolt.Cursor) ([]byte, []byte) {
+			return c.Next()
+		})
+}
+
+func TestCursor_DeleteAndPut_InTransactions_Reverse(t *testing.T) {
+	testCursorWithBothDeleteAndPut(t,
+		func(c *bolt.Cursor) ([]byte, []byte) {
+			return c.Last()
+		}, func(c *bolt.Cursor) ([]byte, []byte) {
+			return c.Prev()
+		})
+}
+
+func testCursorWithBothDeleteAndPut(t *testing.T, initPos func(*bolt.Cursor) ([]byte, []byte), nextPos func(*bolt.Cursor) ([]byte, []byte)) {
+	testCases := []struct {
+		name        string
+		separateTxn bool
+	}{
+		{
+			name:        "put and delete operations in one transaction",
+			separateTxn: false,
+		},
+		{
+			name:        "put and delete operations in separate transactions",
+			separateTxn: true,
+		},
+	}
+
+	const count = 10
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			db := btesting.MustCreateDB(t)
+
+			err := db.Update(func(tx *bolt.Tx) error {
+				b, _ := tx.CreateBucket([]byte("widgets"))
+				for i := 0; i < count; i++ {
+					k := make([]byte, 8)
+					binary.BigEndian.PutUint64(k, uint64(i))
+					if perr := b.Put(k, make([]byte, 100)); perr != nil {
+						return perr
+					}
+				}
+
+				if !tc.separateTxn {
+					c := b.Cursor()
+					for key, _ := initPos(c); key != nil; key, _ = nextPos(c) {
+						if derr := c.Delete(); derr != nil {
+							return derr
+						}
+					}
+				}
+
+				return nil
+			})
+			require.NoError(t, err)
+
+			if tc.separateTxn {
+				err := db.Update(func(tx *bolt.Tx) error {
+					b := tx.Bucket([]byte("widgets"))
+
+					c := b.Cursor()
+					for key, _ := initPos(c); key != nil; key, _ = nextPos(c) {
+						if err := c.Delete(); err != nil {
+							return err
+						}
+					}
+
+					return nil
+				})
+				require.NoError(t, err)
+			}
+
+			err = db.View(func(tx *bolt.Tx) error {
+				b := tx.Bucket([]byte("widgets"))
+				assert.Equal(t, 0, b.Stats().KeyN)
+				return nil
+			})
+			require.NoError(t, err)
+		})
 	}
 }
 
