@@ -4,10 +4,17 @@ on: [push, pull_request]
 jobs:
   test-linux-amd64:
     uses: ./.github/workflows/tests-template.yml
+  test-linux-amd64-race:
+    uses: ./.github/workflows/tests-template.yml
+    with:
+      runs-on: ubuntu-latest-8-cores
+      targets: "['linux-unit-test-4-cpu-race']"
 
   coverage:
-    needs: ["test-linux-amd64"]
-    runs-on: ubuntu-latest
+    needs:
+      - test-linux-amd64
+      - test-linux-amd64-race
+    runs-on: ubuntu-latest-8-cores
     steps:
       - uses: actions/checkout@v4
       - id: goversion
