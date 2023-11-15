@@ -151,6 +151,20 @@ func (c *Cursor) Delete() error {
 	}
 	c.node().del(key)
 
+	pos := c.curPos()
+	// If the deleted item is the first item in the node, we should keep
+	// the cursor's position (decrease by 1). Otherwise, the cursor will
+	// automatically move to the next item, and when clients call `Next`
+	// method afterward, it will skip one item in the node.
+	//
+	// Note if there isn't any write on current page in current transaction,
+	// then the cursor only iterates items against the page instead of the
+	// in-memory node. Since the page is immutable, so we don't need to change
+	// pos.index in such case.
+	if pos != nil && pos.index == 0 && pos.node != nil {
+		pos.index = -1
+	}
+
 	return nil
 }
 
@@ -375,6 +389,14 @@ func (c *Cursor) keyValue() ([]byte, []byte, uint32) {
 	// Or retrieve value from page.
 	elem := ref.page.LeafPageElement(uint16(ref.index))
 	return elem.Key(), elem.Value(), elem.Flags()
+}
+
+// curPos returns current position of the cursor.
+func (c *Cursor) curPos() *elemRef {
+	if len(c.stack) == 0 {
+		return nil
+	}
+	return &c.stack[len(c.stack)-1]
 }
 
 // node returns the node that the cursor is currently positioned on.
