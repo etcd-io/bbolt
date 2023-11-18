@@ -1,5 +1,5 @@
-//go:build !windows && !plan9 && !linux && !openbsd
-// +build !windows,!plan9,!linux,!openbsd
+//go:build !windows && !plan9 && !openbsd
+// +build !windows,!plan9,!openbsd
 
 package bbolt
 
