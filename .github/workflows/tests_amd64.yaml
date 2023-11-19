@@ -1,12 +1,13 @@
-name: Failpoint test
-on: [push, pull_request]
+name: Tests AMD64
 permissions: read-all
+on: [push, pull_request]
 jobs:
-  test:
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+  test-linux-amd64:
+    uses: ./.github/workflows/tests-template.yml
+
+  coverage:
+    needs: ["test-linux-amd64"]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - id: goversion
@@ -14,6 +15,4 @@ jobs:
       - uses: actions/setup-go@v4
         with:
           go-version: ${{ steps.goversion.outputs.goversion }}
-      - run: |
-          make gofail-enable
-          make test-failpoint
+      - run: make coverage

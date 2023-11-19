@@ -36,6 +36,12 @@ const (
 // All data access is performed through transactions which can be obtained through the DB.
 // All the functions on DB will return a ErrDatabaseNotOpen if accessed before Open() is called.
 type DB struct {
+	// Put `stats` at the first field to ensure it's 64-bit aligned. Note that
+	// the first word in an allocated struct can be relied upon to be 64-bit
+	// aligned. Refer to https://pkg.go.dev/sync/atomic#pkg-note-BUG. Also
+	// refer to discussion in https://github.com/etcd-io/bbolt/issues/577.
+	stats Stats
+
 	// When enabled, the database will perform a Check() after every commit.
 	// A panic is issued if the database is in an inconsistent state. This
 	// flag has a large performance impact so it should only be used for
@@ -122,14 +128,12 @@ type DB struct {
 	dataref  []byte // mmap'ed readonly, write throws SEGV
 	data     *[maxMapSize]byte
 	datasz   int
-	filesz   int // current on disk file size
 	meta0    *common.Meta
 	meta1    *common.Meta
 	pageSize int
 	opened   bool
 	rwtx     *Tx
 	txs      []*Tx
-	stats    Stats
 
 	freelist     *freelist
 	freelistLoad sync.Once
@@ -168,9 +172,10 @@ func (db *DB) String() string {
 	return fmt.Sprintf("DB<%q>", db.path)
 }
 
-// Open creates and opens a database at the given path.
-// If the file does not exist then it will be created automatically.
+// Open creates and opens a database at the given path with a given file mode.
+// If the file does not exist then it will be created automatically with a given file mode.
 // Passing in nil options will cause Bolt to open the database with the default options.
+// Note: For read/write transactions, ensure the owner has write permission on the created/opened database file, e.g. 0600
 func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 	db := &DB{
 		opened: true,
@@ -205,6 +210,7 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 	} else {
 		// always load free pages in write mode
 		db.PreLoadFreelist = true
+		flag |= os.O_CREATE
 	}
 
 	db.openFile = options.OpenFile
@@ -214,7 +220,7 @@ func Open(path string, mode os.FileMode, options *Options) (*DB, error) {
 
 	// Open data file and separate sync handler for metadata writes.
 	var err error
-	if db.file, err = db.openFile(path, flag|os.O_CREATE, mode); err != nil {
+	if db.file, err = db.openFile(path, flag, mode); err != nil {
 		_ = db.close()
 		return nil, err
 	}
@@ -411,21 +417,29 @@ func (db *DB) hasSyncedFreelist() bool {
 	return db.meta().Freelist() != common.PgidNoFreelist
 }
 
+func (db *DB) fileSize() (int, error) {
+	info, err := db.file.Stat()
+	if err != nil {
+		return 0, fmt.Errorf("file stat error: %w", err)
+	}
+	sz := int(info.Size())
+	if sz < db.pageSize*2 {
+		return 0, fmt.Errorf("file size too small %d", sz)
+	}
+	return sz, nil
+}
+
 // mmap opens the underlying memory-mapped file and initializes the meta references.
 // minsz is the minimum size that the new mmap can be.
 func (db *DB) mmap(minsz int) (err error) {
 	db.mmaplock.Lock()
 	defer db.mmaplock.Unlock()
 
-	info, err := db.file.Stat()
-	if err != nil {
-		return fmt.Errorf("mmap stat error: %s", err)
-	} else if int(info.Size()) < db.pageSize*2 {
-		return fmt.Errorf("file size too small")
-	}
-
 	// Ensure the size is at least the minimum size.
-	fileSize := int(info.Size())
+	fileSize, err := db.fileSize()
+	if err != nil {
+		return err
+	}
 	var size = fileSize
 	if size < minsz {
 		size = minsz
@@ -619,7 +633,6 @@ func (db *DB) init() error {
 	if err := fdatasync(db); err != nil {
 		return err
 	}
-	db.filesz = len(buf)
 
 	return nil
 }
@@ -1129,7 +1142,11 @@ func (db *DB) allocate(txid common.Txid, count int) (*common.Page, error) {
 // grow grows the size of the database to the given sz.
 func (db *DB) grow(sz int) error {
 	// Ignore if the new size is less than available file size.
-	if sz <= db.filesz {
+	fileSize, err := db.fileSize()
+	if err != nil {
+		return err
+	}
+	if sz <= fileSize {
 		return nil
 	}
 
@@ -1156,13 +1173,12 @@ func (db *DB) grow(sz int) error {
 		}
 		if db.Mlock {
 			// unlock old file and lock new one
-			if err := db.mrelock(db.filesz, sz); err != nil {
+			if err := db.mrelock(fileSize, sz); err != nil {
 				return fmt.Errorf("mlock/munlock error: %s", err)
 			}
 		}
 	}
 
-	db.filesz = sz
 	return nil
 }
 
@@ -1207,8 +1223,7 @@ func (db *DB) freepages() []common.Pgid {
 // Options represents the options that can be set when opening a database.
 type Options struct {
 	// Timeout is the amount of time to wait to obtain a file lock.
-	// When set to zero it will wait indefinitely. This option is only
-	// available on Darwin and Linux.
+	// When set to zero it will wait indefinitely.
 	Timeout time.Duration
 
 	// Sets the DB.NoGrowSync flag before memory mapping the file.
@@ -1278,6 +1293,12 @@ var DefaultOptions = &Options{
 
 // Stats represents statistics about the database.
 type Stats struct {
+	// Put `TxStats` at the first field to ensure it's 64-bit aligned. Note
+	// that the first word in an allocated struct can be relied upon to be
+	// 64-bit aligned. Refer to https://pkg.go.dev/sync/atomic#pkg-note-BUG.
+	// Also refer to discussion in https://github.com/etcd-io/bbolt/issues/577.
+	TxStats TxStats // global, ongoing stats.
+
 	// Freelist stats
 	FreePageN     int // total number of free pages on the freelist
 	PendingPageN  int // total number of pending pages on the freelist
@@ -1287,8 +1308,6 @@ type Stats struct {
 	// Transaction stats
 	TxN     int // total number of started read transactions
 	OpenTxN int // number of currently open read transactions
-
-	TxStats TxStats // global, ongoing stats.
 }
 
 // Sub calculates and returns the difference between two sets of database stats.

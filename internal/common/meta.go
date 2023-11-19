@@ -49,7 +49,7 @@ func (m *Meta) Write(p *Page) {
 
 	// Page id is either going to be 0 or 1 which we can determine by the transaction ID.
 	p.id = Pgid(m.txid % 2)
-	p.flags |= MetaPageFlag
+	p.SetFlags(MetaPageFlag)
 
 	// Calculate the checksum.
 	m.checksum = m.Sum64()
@@ -70,6 +70,10 @@ func (m *Meta) Magic() uint32 {
 
 func (m *Meta) SetMagic(v uint32) {
 	m.magic = v
+}
+
+func (m *Meta) Version() uint32 {
+	return m.version
 }
 
 func (m *Meta) SetVersion(v uint32) {
@@ -134,6 +138,10 @@ func (m *Meta) IncTxid() {
 
 func (m *Meta) DecTxid() {
 	m.txid -= 1
+}
+
+func (m *Meta) Checksum() uint64 {
+	return m.checksum
 }
 
 func (m *Meta) SetChecksum(v uint64) {

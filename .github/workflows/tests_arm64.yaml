@@ -1,0 +1,8 @@
+name: Tests ARM64
+permissions: read-all
+on: [push, pull_request]
+jobs:
+  test-linux-arm64:
+    uses: ./.github/workflows/tests-template.yml
+    with:
+      runs-on: "['actuated-arm64-4cpu-16gb']"

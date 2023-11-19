@@ -1883,9 +1883,37 @@ func TestBucket_Delete_Quick(t *testing.T) {
 	}
 }
 
+func BenchmarkBucket_CreateBucketIfNotExists(b *testing.B) {
+	db := btesting.MustCreateDB(b)
+	defer db.MustClose()
+
+	const bucketCount = 1_000_000
+
+	err := db.Update(func(tx *bolt.Tx) error {
+		for i := 0; i < bucketCount; i++ {
+			bucketName := fmt.Sprintf("bucket_%d", i)
+			_, berr := tx.CreateBucket([]byte(bucketName))
+			require.NoError(b, berr)
+		}
+		return nil
+	})
+	require.NoError(b, err)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		err := db.Update(func(tx *bolt.Tx) error {
+			_, berr := tx.CreateBucketIfNotExists([]byte("bucket_100"))
+			return berr
+		})
+		require.NoError(b, err)
+	}
+}
+
 func ExampleBucket_Put() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0666, nil)
+	db, err := bolt.Open(tempfile(), 0600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1928,7 +1956,7 @@ func ExampleBucket_Put() {
 
 func ExampleBucket_Delete() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0666, nil)
+	db, err := bolt.Open(tempfile(), 0600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1986,7 +2014,7 @@ func ExampleBucket_Delete() {
 
 func ExampleBucket_ForEach() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0666, nil)
+	db, err := bolt.Open(tempfile(), 0600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}

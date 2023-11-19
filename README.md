@@ -1,8 +1,8 @@
 bbolt
 =====
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/etcd-io/bbolt?style=flat-square)](https://goreportcard.com/report/github.com/etcd-io/bbolt)
-[![Godoc](http://img.shields.io/badge/go-documentation-blue.svg?style=flat-square)](https://godoc.org/github.com/etcd-io/bbolt)
+[![Go Report Card](https://goreportcard.com/badge/go.etcd.io/bbolt?style=flat-square)](https://goreportcard.com/report/go.etcd.io/bbolt)
+[![Go Reference](https://pkg.go.dev/badge/go.etcd.io/bbolt.svg)](https://pkg.go.dev/go.etcd.io/bbolt)
 [![Releases](https://img.shields.io/github/release/etcd-io/bbolt/all.svg?style=flat-square)](https://github.com/etcd-io/bbolt/releases)
 [![LICENSE](https://img.shields.io/github/license/etcd-io/bbolt.svg?style=flat-square)](https://github.com/etcd-io/bbolt/blob/master/LICENSE)
 
@@ -101,7 +101,7 @@ To use bbolt as an embedded key-value store, import as:
 ```go
 import bolt "go.etcd.io/bbolt"
 
-db, err := bolt.Open(path, 0666, nil)
+db, err := bolt.Open(path, 0600, nil)
 if err != nil {
   return err
 }
@@ -664,7 +664,7 @@ uses a shared lock to allow multiple processes to read from the database but
 it will block any processes from opening the database in read-write mode.
 
 ```go
-db, err := bolt.Open("my.db", 0666, &bolt.Options{ReadOnly: true})
+db, err := bolt.Open("my.db", 0600, &bolt.Options{ReadOnly: true})
 if err != nil {
 	log.Fatal(err)
 }
@@ -938,6 +938,7 @@ Below is a list of public, open source projects that use Bolt:
 * [BoltDbWeb](https://github.com/evnix/boltdbweb) - A web based GUI for BoltDB files.
 * [BoltDB Viewer](https://github.com/zc310/rich_boltdb) - A BoltDB Viewer Can run on Windows、Linux、Android system.
 * [bleve](http://www.blevesearch.com/) - A pure Go search engine similar to ElasticSearch that uses Bolt as the default storage backend.
+* [bstore](https://github.com/mjl-/bstore) - Database library storing Go values, with referential/unique/nonzero constraints, indices, automatic schema management with struct tags, and a query API.
 * [btcwallet](https://github.com/btcsuite/btcwallet) - A bitcoin wallet.
 * [buckets](https://github.com/joyrexus/buckets) - a bolt wrapper streamlining
   simple tx and key scans.

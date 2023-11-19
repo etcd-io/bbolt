@@ -30,6 +30,7 @@ type freelist struct {
 	freemaps       map[uint64]pidSet                         // key is the size of continuous pages(span), value is a set which contains the starting pgids of same size
 	forwardMap     map[common.Pgid]uint64                    // key is start pgid, value is its span size
 	backwardMap    map[common.Pgid]uint64                    // key is end pgid, value is its span size
+	freePagesCount uint64                                    // count of free pages(hashmap version)
 	allocate       func(txid common.Txid, n int) common.Pgid // the freelist allocate func
 	free_count     func() int                                // the function which gives you free page number
 	mergeSpans     func(ids common.Pgids)                    // the mergeSpan func
@@ -302,7 +303,7 @@ func (f *freelist) write(p *common.Page) error {
 	// Combine the old free pgids and pgids waiting on an open transaction.
 
 	// Update the header flag.
-	p.FlagsXOR(common.FreelistPageFlag)
+	p.SetFlags(common.FreelistPageFlag)
 
 	// The page.count can only hold up to 64k elements so if we overflow that
 	// number then we handle it by putting the size in the first element.
@@ -311,15 +312,13 @@ func (f *freelist) write(p *common.Page) error {
 		p.SetCount(uint16(l))
 	} else if l < 0xFFFF {
 		p.SetCount(uint16(l))
-		var ids []common.Pgid
 		data := common.UnsafeAdd(unsafe.Pointer(p), unsafe.Sizeof(*p))
-		common.UnsafeSlice(unsafe.Pointer(&ids), data, l)
+		ids := unsafe.Slice((*common.Pgid)(data), l)
 		f.copyall(ids)
 	} else {
 		p.SetCount(0xFFFF)
-		var ids []common.Pgid
 		data := common.UnsafeAdd(unsafe.Pointer(p), unsafe.Sizeof(*p))
-		common.UnsafeSlice(unsafe.Pointer(&ids), data, l+1)
+		ids := unsafe.Slice((*common.Pgid)(data), l+1)
 		ids[0] = common.Pgid(l)
 		f.copyall(ids[1:])
 	}

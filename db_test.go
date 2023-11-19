@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -48,7 +49,7 @@ func TestOpen(t *testing.T) {
 	path := tempfile()
 	defer os.RemoveAll(path)
 
-	db, err := bolt.Open(path, 0666, nil)
+	db, err := bolt.Open(path, 0600, nil)
 	if err != nil {
 		t.Fatal(err)
 	} else if db == nil {
@@ -107,7 +108,7 @@ func TestOpen_MultipleGoroutines(t *testing.T) {
 
 // Ensure that opening a database with a blank path returns an error.
 func TestOpen_ErrPathRequired(t *testing.T) {
-	_, err := bolt.Open("", 0666, nil)
+	_, err := bolt.Open("", 0600, nil)
 	if err == nil {
 		t.Fatalf("expected error")
 	}
@@ -115,7 +116,7 @@ func TestOpen_ErrPathRequired(t *testing.T) {
 
 // Ensure that opening a database with a bad path returns an error.
 func TestOpen_ErrNotExists(t *testing.T) {
-	_, err := bolt.Open(filepath.Join(tempfile(), "bad-path"), 0666, nil)
+	_, err := bolt.Open(filepath.Join(tempfile(), "bad-path"), 0600, nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -137,7 +138,7 @@ func TestOpen_ErrInvalid(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := bolt.Open(path, 0666, nil); err != berrors.ErrInvalid {
+	if _, err := bolt.Open(path, 0600, nil); err != berrors.ErrInvalid {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }
@@ -173,7 +174,7 @@ func TestOpen_ErrVersionMismatch(t *testing.T) {
 	}
 
 	// Reopen data file.
-	if _, err := bolt.Open(path, 0666, nil); err != berrors.ErrVersionMismatch {
+	if _, err := bolt.Open(path, 0600, nil); err != berrors.ErrVersionMismatch {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }
@@ -209,7 +210,7 @@ func TestOpen_ErrChecksum(t *testing.T) {
 	}
 
 	// Reopen data file.
-	if _, err := bolt.Open(path, 0666, nil); err != berrors.ErrChecksum {
+	if _, err := bolt.Open(path, 0600, nil); err != berrors.ErrChecksum {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }
@@ -365,7 +366,7 @@ func TestOpen_Size_Large(t *testing.T) {
 	}
 
 	// Reopen database, update, and check size again.
-	db0, err := bolt.Open(path, 0666, nil)
+	db0, err := bolt.Open(path, 0600, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -395,7 +396,7 @@ func TestOpen_Check(t *testing.T) {
 	path := tempfile()
 	defer os.RemoveAll(path)
 
-	db, err := bolt.Open(path, 0666, nil)
+	db, err := bolt.Open(path, 0600, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -406,7 +407,7 @@ func TestOpen_Check(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db, err = bolt.Open(path, 0666, nil)
+	db, err = bolt.Open(path, 0600, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -428,7 +429,7 @@ func TestOpen_FileTooSmall(t *testing.T) {
 	path := tempfile()
 	defer os.RemoveAll(path)
 
-	db, err := bolt.Open(path, 0666, nil)
+	db, err := bolt.Open(path, 0600, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -442,8 +443,8 @@ func TestOpen_FileTooSmall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = bolt.Open(path, 0666, nil)
-	if err == nil || err.Error() != "file size too small" {
+	_, err = bolt.Open(path, 0600, nil)
+	if err == nil || !strings.Contains(err.Error(), "file size too small") {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }
@@ -459,7 +460,7 @@ func TestDB_Open_InitialMmapSize(t *testing.T) {
 	initMmapSize := 1 << 30  // 1GB
 	testWriteSize := 1 << 27 // 134MB
 
-	db, err := bolt.Open(path, 0666, &bolt.Options{InitialMmapSize: initMmapSize})
+	db, err := bolt.Open(path, 0600, &bolt.Options{InitialMmapSize: initMmapSize})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -532,7 +533,7 @@ func TestDB_Open_ReadOnly(t *testing.T) {
 
 	f := db.Path()
 	o := &bolt.Options{ReadOnly: true}
-	readOnlyDB, err := bolt.Open(f, 0666, o)
+	readOnlyDB, err := bolt.Open(f, 0600, o)
 	if err != nil {
 		panic(err)
 	}
@@ -560,6 +561,12 @@ func TestDB_Open_ReadOnly(t *testing.T) {
 	if err := readOnlyDB.Close(); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestDB_Open_ReadOnly_NoCreate(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "db")
+	_, err := bolt.Open(f, 0600, &bolt.Options{ReadOnly: true})
+	require.ErrorIs(t, err, os.ErrNotExist)
 }
 
 // TestOpen_BigPage checks the database uses bigger pages when
@@ -1341,7 +1348,7 @@ func TestDBUnmap(t *testing.T) {
 
 func ExampleDB_Update() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0666, nil)
+	db, err := bolt.Open(tempfile(), 0600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1381,7 +1388,7 @@ func ExampleDB_Update() {
 
 func ExampleDB_View() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0666, nil)
+	db, err := bolt.Open(tempfile(), 0600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1424,7 +1431,7 @@ func ExampleDB_View() {
 
 func ExampleDB_Begin() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0666, nil)
+	db, err := bolt.Open(tempfile(), 0600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}

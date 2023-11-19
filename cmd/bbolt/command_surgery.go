@@ -28,6 +28,7 @@ func newSurgeryCobraCommand() *cobra.Command {
 	surgeryCmd.AddCommand(newSurgeryClearPageCommand())
 	surgeryCmd.AddCommand(newSurgeryClearPageElementsCommand())
 	surgeryCmd.AddCommand(newSurgeryFreelistCommand())
+	surgeryCmd.AddCommand(newSurgeryMetaCommand())
 
 	return surgeryCmd
 }
@@ -311,15 +312,23 @@ func surgeryClearPageElementFunc(srcDBPath string, cfg surgeryClearPageElementsO
 }
 
 func readMetaPage(path string) (*common.Meta, error) {
-	_, activeMetaPageId, err := guts_cli.GetRootPage(path)
+	pageSize, _, err := guts_cli.ReadPageAndHWMSize(path)
 	if err != nil {
-		return nil, fmt.Errorf("read root page failed: %w", err)
+		return nil, fmt.Errorf("read Page size failed: %w", err)
 	}
-	_, buf, err := guts_cli.ReadPage(path, uint64(activeMetaPageId))
-	if err != nil {
-		return nil, fmt.Errorf("read active mage page failed: %w", err)
+
+	m := make([]*common.Meta, 2)
+	for i := 0; i < 2; i++ {
+		m[i], _, err = ReadMetaPageAt(path, uint32(i), uint32(pageSize))
+		if err != nil {
+			return nil, fmt.Errorf("read meta page %d failed: %w", i, err)
+		}
 	}
-	return common.LoadPageMeta(buf), nil
+
+	if m[0].Txid() > m[1].Txid() {
+		return m[0], nil
+	}
+	return m[1], nil
 }
 
 func checkSourceDBPath(srcPath string) (os.FileInfo, error) {

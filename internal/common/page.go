@@ -13,6 +13,7 @@ const MinKeysPerPage = 2
 
 const BranchPageElementSize = unsafe.Sizeof(branchPageElement{})
 const LeafPageElementSize = unsafe.Sizeof(leafPageElement{})
+const pgidSize = unsafe.Sizeof(Pgid(0))
 
 const (
 	BranchPageFlag   = 0x01
@@ -58,19 +59,19 @@ func (p *Page) Typ() string {
 }
 
 func (p *Page) IsBranchPage() bool {
-	return p.flags&BranchPageFlag != 0
+	return p.flags == BranchPageFlag
 }
 
 func (p *Page) IsLeafPage() bool {
-	return p.flags&LeafPageFlag != 0
+	return p.flags == LeafPageFlag
 }
 
 func (p *Page) IsMetaPage() bool {
-	return p.flags&MetaPageFlag != 0
+	return p.flags == MetaPageFlag
 }
 
 func (p *Page) IsFreelistPage() bool {
-	return p.flags&FreelistPageFlag != 0
+	return p.flags == FreelistPageFlag
 }
 
 // Meta returns a pointer to the metadata section of the page.
@@ -81,10 +82,10 @@ func (p *Page) Meta() *Meta {
 func (p *Page) FastCheck(id Pgid) {
 	Assert(p.id == id, "Page expected to be: %v, but self identifies as %v", id, p.id)
 	// Only one flag of page-type can be set.
-	Assert(p.flags == BranchPageFlag ||
-		p.flags == LeafPageFlag ||
-		p.flags == MetaPageFlag ||
-		p.flags == FreelistPageFlag,
+	Assert(p.IsBranchPage() ||
+		p.IsLeafPage() ||
+		p.IsMetaPage() ||
+		p.IsFreelistPage(),
 		"page %v: has unexpected type/flags: %x", p.id, p.flags)
 }
 
@@ -99,9 +100,8 @@ func (p *Page) LeafPageElements() []leafPageElement {
 	if p.count == 0 {
 		return nil
 	}
-	var elems []leafPageElement
 	data := UnsafeAdd(unsafe.Pointer(p), unsafe.Sizeof(*p))
-	UnsafeSlice(unsafe.Pointer(&elems), data, int(p.count))
+	elems := unsafe.Slice((*leafPageElement)(data), int(p.count))
 	return elems
 }
 
@@ -116,14 +116,13 @@ func (p *Page) BranchPageElements() []branchPageElement {
 	if p.count == 0 {
 		return nil
 	}
-	var elems []branchPageElement
 	data := UnsafeAdd(unsafe.Pointer(p), unsafe.Sizeof(*p))
-	UnsafeSlice(unsafe.Pointer(&elems), data, int(p.count))
+	elems := unsafe.Slice((*branchPageElement)(data), int(p.count))
 	return elems
 }
 
 func (p *Page) FreelistPageCount() (int, int) {
-	Assert(p.flags == FreelistPageFlag, fmt.Sprintf("can't get freelist page count from a non-freelist page: %2x", p.flags))
+	Assert(p.IsFreelistPage(), fmt.Sprintf("can't get freelist page count from a non-freelist page: %2x", p.flags))
 
 	// If the page.count is at the max uint16 value (64k) then it's considered
 	// an overflow and the size of the freelist is stored as the first element.
@@ -141,7 +140,7 @@ func (p *Page) FreelistPageCount() (int, int) {
 }
 
 func (p *Page) FreelistPageIds() []Pgid {
-	Assert(p.flags == FreelistPageFlag, fmt.Sprintf("can't get freelist page IDs from a non-freelist page: %2x", p.flags))
+	Assert(p.IsFreelistPage(), fmt.Sprintf("can't get freelist page IDs from a non-freelist page: %2x", p.flags))
 
 	idx, count := p.FreelistPageCount()
 
@@ -149,9 +148,8 @@ func (p *Page) FreelistPageIds() []Pgid {
 		return nil
 	}
 
-	var ids []Pgid
-	data := UnsafeIndex(unsafe.Pointer(p), unsafe.Sizeof(*p), unsafe.Sizeof(ids[0]), idx)
-	UnsafeSlice(unsafe.Pointer(&ids), data, count)
+	data := UnsafeIndex(unsafe.Pointer(p), unsafe.Sizeof(*p), pgidSize, idx)
+	ids := unsafe.Slice((*Pgid)(data), count)
 
 	return ids
 }
@@ -183,10 +181,6 @@ func (p *Page) Flags() uint16 {
 
 func (p *Page) SetFlags(v uint16) {
 	p.flags = v
-}
-
-func (p *Page) FlagsXOR(v uint16) {
-	p.flags |= v
 }
 
 func (p *Page) Count() uint16 {

@@ -175,28 +175,74 @@ func (b *Bucket) CreateBucket(key []byte) (*Bucket, error) {
 	var value = bucket.write()
 
 	// Insert into node.
-	key = cloneBytes(key)
-	c.node().put(key, key, value, 0, common.BucketLeafFlag)
+	// Tip: Use a new variable `newKey` instead of reusing the existing `key` to prevent
+	// it from being marked as leaking, and accordingly cannot be allocated on stack.
+	newKey := cloneBytes(key)
+	c.node().put(newKey, newKey, value, 0, common.BucketLeafFlag)
 
 	// Since subbuckets are not allowed on inline buckets, we need to
 	// dereference the inline page, if it exists. This will cause the bucket
 	// to be treated as a regular, non-inline bucket for the rest of the tx.
 	b.page = nil
 
-	return b.Bucket(key), nil
+	return b.Bucket(newKey), nil
 }
 
 // CreateBucketIfNotExists creates a new bucket if it doesn't already exist and returns a reference to it.
 // Returns an error if the bucket name is blank, or if the bucket name is too long.
 // The bucket instance is only valid for the lifetime of the transaction.
 func (b *Bucket) CreateBucketIfNotExists(key []byte) (*Bucket, error) {
-	child, err := b.CreateBucket(key)
-	if err == errors.ErrBucketExists {
-		return b.Bucket(key), nil
-	} else if err != nil {
-		return nil, err
+	if b.tx.db == nil {
+		return nil, errors.ErrTxClosed
+	} else if !b.tx.writable {
+		return nil, errors.ErrTxNotWritable
+	} else if len(key) == 0 {
+		return nil, errors.ErrBucketNameRequired
 	}
-	return child, nil
+
+	if b.buckets != nil {
+		if child := b.buckets[string(key)]; child != nil {
+			return child, nil
+		}
+	}
+
+	// Move cursor to correct position.
+	c := b.Cursor()
+	k, v, flags := c.seek(key)
+
+	// Return an error if there is an existing non-bucket key.
+	if bytes.Equal(key, k) {
+		if (flags & common.BucketLeafFlag) != 0 {
+			var child = b.openBucket(v)
+			if b.buckets != nil {
+				b.buckets[string(key)] = child
+			}
+
+			return child, nil
+		}
+		return nil, errors.ErrIncompatibleValue
+	}
+
+	// Create empty, inline bucket.
+	var bucket = Bucket{
+		InBucket:    &common.InBucket{},
+		rootNode:    &node{isLeaf: true},
+		FillPercent: DefaultFillPercent,
+	}
+	var value = bucket.write()
+
+	// Insert into node.
+	// Tip: Use a new variable `newKey` instead of reusing the existing `key` to prevent
+	// it from being marked as leaking, and accordingly cannot be allocated on stack.
+	newKey := cloneBytes(key)
+	c.node().put(newKey, newKey, value, 0, common.BucketLeafFlag)
+
+	// Since subbuckets are not allowed on inline buckets, we need to
+	// dereference the inline page, if it exists. This will cause the bucket
+	// to be treated as a regular, non-inline bucket for the rest of the tx.
+	b.page = nil
+
+	return b.Bucket(newKey), nil
 }
 
 // DeleteBucket deletes a bucket at the given key.
@@ -248,6 +294,7 @@ func (b *Bucket) DeleteBucket(key []byte) error {
 // Get retrieves the value for a key in the bucket.
 // Returns a nil value if the key does not exist or if the key is a nested bucket.
 // The returned value is only valid for the life of the transaction.
+// The returned memory is owned by bbolt and must never be modified; writing to this memory might corrupt the database.
 func (b *Bucket) Get(key []byte) []byte {
 	k, v, flags := b.Cursor().seek(key)
 
@@ -290,8 +337,10 @@ func (b *Bucket) Put(key []byte, value []byte) error {
 	}
 
 	// Insert into node.
-	key = cloneBytes(key)
-	c.node().put(key, key, value, 0, 0)
+	// Tip: Use a new variable `newKey` instead of reusing the existing `key` to prevent
+	// it from being marked as leaking, and accordingly cannot be allocated on stack.
+	newKey := cloneBytes(key)
+	c.node().put(newKey, newKey, value, 0, 0)
 
 	return nil
 }
