@@ -455,6 +455,7 @@ func (tx *Tx) write() error {
 			buf := common.UnsafeByteSlice(unsafe.Pointer(p), written, 0, int(sz))
 
 			if _, err := tx.db.ops.writeAt(buf, offset); err != nil {
+				fmt.Printf("writeAt (offset: %d) failed: %v\n", offset, err)
 				return err
 			}
 
@@ -509,6 +510,7 @@ func (tx *Tx) writeMeta() error {
 
 	// Write the meta page to file.
 	if _, err := tx.db.ops.writeAt(buf, int64(p.Id())*int64(tx.db.pageSize)); err != nil {
+		fmt.Printf("writeMeta: writeAt (p.Id(): %d) failed: %v\n", p.Id(), err)
 		return err
 	}
 	if !tx.db.NoSync || common.IgnoreNoSync {
