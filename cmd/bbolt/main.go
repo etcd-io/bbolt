@@ -1237,7 +1237,7 @@ func (cmd *benchCommand) runWritesWithSource(db *bolt.DB, options *BenchOptions,
 			b, _ := tx.CreateBucketIfNotExists(benchBucketName)
 			b.FillPercent = options.FillPercent
 
-			fmt.Fprintf(cmd.Stderr, "Starting write iteration %d\n", i)
+			//fmt.Fprintf(cmd.Stderr, "Starting write iteration %d\n", i)
 			for j := int64(0); j < options.BatchSize; j++ {
 				key := make([]byte, options.KeySize)
 				value := make([]byte, options.ValueSize)
@@ -1252,7 +1252,7 @@ func (cmd *benchCommand) runWritesWithSource(db *bolt.DB, options *BenchOptions,
 
 				results.AddCompletedOps(1)
 			}
-			fmt.Fprintf(cmd.Stderr, "Finished write iteration %d\n", i)
+			//fmt.Fprintf(cmd.Stderr, "Finished write iteration %d\n", i)
 
 			return nil
 		}); err != nil {
