@@ -6,7 +6,11 @@ on:
       runs-on:
         required: false
         type: string
-        default: "['ubuntu-latest']"
+        default: ubuntu-latest
+      targets:
+        required: false
+        type: string
+        default: "['linux-unit-test-1-cpu','linux-unit-test-2-cpu','linux-unit-test-4-cpu']"
 permissions: read-all
 
 jobs:
@@ -14,12 +18,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - linux-unit-test-1-cpu
-          - linux-unit-test-2-cpu
-          - linux-unit-test-4-cpu
-          - linux-unit-test-4-cpu-race
-    runs-on: ${{ fromJson(inputs.runs-on) }}
+        target: ${{ fromJSON(inputs.targets) }}
+    runs-on: ${{ inputs.runs-on }}
     steps:
       - uses: actions/checkout@v4
       - id: goversion
@@ -42,13 +42,7 @@ jobs:
               CPU=4 make test
               ;;
             linux-unit-test-4-cpu-race)
-              # XXX: By default, the Github Action runner will terminate the process
-              # if it has high resource usage. Try to use GOGC to limit memory and
-              # cpu usage here to prevent unexpected terminating. It can be replaced
-              # with GOMEMLIMIT=2048MiB if the go-version is updated to >=1.19.x.
-              #
-              # REF: https://github.com/actions/runner-images/issues/6680#issuecomment-1335778010
-              GOGC=30 CPU=4 ENABLE_RACE=true make test
+              CPU=4 ENABLE_RACE=true make test
               ;;
             *)
               echo "Failed to find target"
