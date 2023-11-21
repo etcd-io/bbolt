@@ -15,6 +15,8 @@ permissions: read-all
 
 jobs:
   test-linux:
+    # this is to prevent arm64 jobs from running at forked projects
+    if: ${{ github.repository == 'etcd-io/bbolt' || startsWith(inputs.runs-on, 'ubuntu') }}
     strategy:
       fail-fast: false
       matrix:
