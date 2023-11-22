@@ -939,19 +939,13 @@ func (cmd *keysCommand) Run(args ...string) error {
 	// Print keys.
 	return db.View(func(tx *bolt.Tx) error {
 		// Find bucket.
-		var lastbucket *bolt.Bucket = tx.Bucket([]byte(buckets[0]))
-		if lastbucket == nil {
-			return berrors.ErrBucketNotFound
-		}
-		for _, bucket := range buckets[1:] {
-			lastbucket = lastbucket.Bucket([]byte(bucket))
-			if lastbucket == nil {
-				return berrors.ErrBucketNotFound
-			}
+		lastBucket, err := findLastBucket(tx, buckets)
+		if err != nil {
+			return err
 		}
 
 		// Iterate over each key.
-		return lastbucket.ForEach(func(key, _ []byte) error {
+		return lastBucket.ForEach(func(key, _ []byte) error {
 			return writelnBytes(cmd.Stdout, key, *optionsFormat)
 		})
 	})
@@ -1030,19 +1024,13 @@ func (cmd *getCommand) Run(args ...string) error {
 	// Print value.
 	return db.View(func(tx *bolt.Tx) error {
 		// Find bucket.
-		var lastbucket *bolt.Bucket = tx.Bucket([]byte(buckets[0]))
-		if lastbucket == nil {
-			return berrors.ErrBucketNotFound
-		}
-		for _, bucket := range buckets[1:] {
-			lastbucket = lastbucket.Bucket([]byte(bucket))
-			if lastbucket == nil {
-				return berrors.ErrBucketNotFound
-			}
+		lastBucket, err := findLastBucket(tx, buckets)
+		if err != nil {
+			return err
 		}
 
 		// Find value for given key.
-		val := lastbucket.Get(key)
+		val := lastBucket.Get(key)
 		if val == nil {
 			return fmt.Errorf("Error %w for key: %q hex: \"%x\"", ErrKeyNotFound, key, string(key))
 		}
@@ -1717,4 +1705,18 @@ func (_ cmdKvStringer) ValueToString(value []byte) string {
 
 func CmdKvStringer() bolt.KVStringer {
 	return cmdKvStringer{}
+}
+
+func findLastBucket(tx *bolt.Tx, bucketNames []string) (*bolt.Bucket, error) {
+	var lastbucket *bolt.Bucket = tx.Bucket([]byte(bucketNames[0]))
+	if lastbucket == nil {
+		return nil, berrors.ErrBucketNotFound
+	}
+	for _, bucket := range bucketNames[1:] {
+		lastbucket = lastbucket.Bucket([]byte(bucket))
+		if lastbucket == nil {
+			return nil, berrors.ErrBucketNotFound
+		}
+	}
+	return lastbucket, nil
 }
