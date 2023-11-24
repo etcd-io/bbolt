@@ -123,6 +123,15 @@ func (tx *Tx) DeleteBucket(name []byte) error {
 	return tx.root.DeleteBucket(name)
 }
 
+// MoveSubBucket moves a sub-bucket from the source bucket to the destination bucket.
+// Returns an error if
+//  1. the sub-bucket cannot be found in the source bucket;
+//  2. or the key already exists in the destination bucket;
+//  3. the key represents a non-bucket value.
+func (tx *Tx) MoveSubBucket(name []byte, src *Bucket, dst *Bucket) error {
+	return src.MoveSubBucket(name, dst)
+}
+
 // ForEach executes a function for each bucket in the root.
 // If the provided function returns an error then the iteration is stopped and
 // the error is returned to the caller.
