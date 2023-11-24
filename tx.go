@@ -127,6 +127,24 @@ func (tx *Tx) DeleteBucket(name []byte) error {
 	return tx.root.DeleteBucket(name)
 }
 
+// MoveBucket moves a sub-bucket from the source bucket to the destination bucket.
+// Returns an error if
+//  1. the sub-bucket cannot be found in the source bucket;
+//  2. or the key already exists in the destination bucket;
+//  3. the key represents a non-bucket value.
+//
+// If src is nil, it means moving a top level bucket into the target bucket.
+// If dst is nil, it means converting the child bucket into a top level bucket.
+func (tx *Tx) MoveBucket(child []byte, src *Bucket, dst *Bucket) error {
+	if src == nil {
+		src = &tx.root
+	}
+	if dst == nil {
+		dst = &tx.root
+	}
+	return src.MoveBucket(child, dst)
+}
+
 // ForEach executes a function for each bucket in the root.
 // If the provided function returns an error then the iteration is stopped and
 // the error is returned to the caller.
