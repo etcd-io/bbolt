@@ -1,12 +1,9 @@
-name: Failpoint test
+name: Robustness Test
 on: [push, pull_request]
 permissions: read-all
 jobs:
   test:
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - id: goversion
@@ -16,4 +13,6 @@ jobs:
           go-version: ${{ steps.goversion.outputs.goversion }}
       - run: |
           make gofail-enable
-          make test-failpoint
+          # build bbolt with failpoint
+          go install ./cmd/bbolt
+          sudo -E PATH=$PATH make test-robustness
