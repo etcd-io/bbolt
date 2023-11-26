@@ -470,6 +470,7 @@ func (tx *Tx) write() error {
 
 	// Ignore file sync if flag is set on DB.
 	if !tx.db.NoSync || IgnoreNoSync {
+		// gofail: var beforeSyncDataPages struct{}
 		if err := fdatasync(tx.db); err != nil {
 			return err
 		}
@@ -507,6 +508,7 @@ func (tx *Tx) writeMeta() error {
 		return err
 	}
 	if !tx.db.NoSync || IgnoreNoSync {
+		// gofail: var beforeSyncMetaPage struct{}
 		if err := fdatasync(tx.db); err != nil {
 			return err
 		}
