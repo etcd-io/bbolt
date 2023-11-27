@@ -1,11 +1,11 @@
 package bbolt
 
+// See https://github.com/etcd-io/raft/blob/main/logger.go
 import (
 	"fmt"
 	"io"
 	"log"
 	"os"
-	"sync"
 )
 
 type Logger interface {
