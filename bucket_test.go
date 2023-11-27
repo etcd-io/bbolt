@@ -464,6 +464,217 @@ func TestBucket_Delete_NonExisting(t *testing.T) {
 	}
 }
 
+func TestBucket_MoveSubBucket(t *testing.T) {
+	testCases := []struct {
+		name                    string
+		srcBucketName           string
+		subBucketName           string
+		subBucketKey            string
+		subBucketValue          string
+		dstBucketName           string
+		subBucketExistSrcBucket bool
+		subBucketExistDstBucket bool
+		keyNoSubBucketSrcBucket bool
+		keyNoSubBucketDstBucket bool
+		expErr                  error
+	}{
+		{
+			"happy path",
+			"srcBucket",
+			"subBucket",
+			"this is subBucket key",
+			"this is subBucket value",
+			"dstBucket",
+			true,
+			false,
+			false,
+			false,
+			nil,
+		},
+		{
+			"subBucket not exist in srcBucket",
+			"srcBucket",
+			"subBucket",
+			"this is subBucket key",
+			"this is subBucket value",
+			"dstBucket",
+			false,
+			false,
+			false,
+			false,
+			berrors.ErrBucketNotFound,
+		},
+		{
+			"suBucket exist in dstBucket",
+			"srcBucket",
+			"subBucket",
+			"this is subBucket key",
+			"this is subBucket value",
+			"dstBucket",
+			true,
+			true,
+			false,
+			false,
+			berrors.ErrBucketExists,
+		},
+		{
+			"subBucket key exist in srcBucket, but no subBucket value",
+			"srcBucket",
+			"subBucket",
+			"this is subBucket key",
+			"this is subBucket value",
+			"dstBucket",
+			false,
+			false,
+			true,
+			false,
+			berrors.ErrIncompatibleValue,
+		},
+		{
+			"subBucket key exist in dstBucket, but no subBucket value",
+			"srcBucket",
+			"subBucket",
+			"this is subBucket key",
+			"this is subBucket value",
+			"dstBucket",
+			true,
+			false,
+			false,
+			true,
+			berrors.ErrIncompatibleValue,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := btesting.MustCreateDB(t)
+
+			// arrange
+			if err := db.Update(func(tx *bolt.Tx) error {
+				// create src bucket
+				srcBucket, bErr := tx.CreateBucketIfNotExists([]byte(tc.srcBucketName))
+				if bErr != nil {
+					t.Fatalf("error creating src bucket %s: %v", tc.srcBucketName, bErr)
+				}
+				// insert K/V pair into src bucket
+				if pErr := srcBucket.Put([]byte("foo"), []byte("0000")); pErr != nil {
+					t.Fatal(pErr)
+				}
+
+				if tc.subBucketExistSrcBucket {
+					// create subBucket within srcBucket
+					subBucket, sErr := srcBucket.CreateBucket([]byte(tc.subBucketName))
+					if sErr != nil {
+						t.Fatal(sErr)
+					}
+					// insert K/V pair into  subBucket
+					if pErr := subBucket.Put([]byte(tc.subBucketKey), []byte(tc.subBucketValue)); pErr != nil {
+						t.Fatal(pErr)
+					}
+				}
+
+				if tc.keyNoSubBucketSrcBucket {
+					if pErr := srcBucket.Put([]byte(tc.subBucketName), []byte(tc.subBucketValue)); pErr != nil {
+						t.Fatal(pErr)
+					}
+				}
+
+				// create dst bucket
+				dstBucket, bErr := tx.CreateBucketIfNotExists([]byte(tc.dstBucketName))
+				if bErr != nil {
+					t.Fatalf("error creating dst bucket %s: %v", tc.dstBucketName, bErr)
+				}
+				// insert K/V pair into dst bucket
+				if pErr := dstBucket.Put([]byte("bar"), []byte("0000")); pErr != nil {
+					t.Fatal(pErr)
+				}
+
+				if tc.subBucketExistDstBucket {
+					// create subBucket within dstBucket
+					_, sErr := dstBucket.CreateBucket([]byte(tc.subBucketName))
+					if sErr != nil {
+						t.Fatal(sErr)
+					}
+				}
+
+				if tc.keyNoSubBucketDstBucket {
+					if pErr := dstBucket.Put([]byte(tc.subBucketName), []byte(tc.subBucketValue)); pErr != nil {
+						t.Fatal(pErr)
+					}
+				}
+
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			db.MustCheck()
+
+			// act: move the subBucket from srcBucket to dstBucket
+			if err := db.Update(func(tx *bolt.Tx) error {
+				srcBucket := tx.Bucket([]byte(tc.srcBucketName))
+				if srcBucket == nil {
+					t.Fatalf("src bucket %s does not exist: %v", tc.srcBucketName, berrors.ErrBucketNotFound)
+				}
+
+				dstBucket := tx.Bucket([]byte(tc.dstBucketName))
+				if dstBucket == nil {
+					t.Fatalf("dst bucket %s does not exist: %v", tc.dstBucketName, berrors.ErrBucketNotFound)
+				}
+
+				mvErr := tx.MoveSubBucket([]byte(tc.subBucketName), srcBucket, dstBucket)
+				if !tc.subBucketExistSrcBucket || tc.keyNoSubBucketSrcBucket || tc.subBucketExistDstBucket || tc.keyNoSubBucketDstBucket {
+					require.ErrorIs(t, mvErr, tc.expErr)
+				} else if mvErr != nil {
+					t.Fatalf("failed to move subBucket '%v' from srcBucket '%v' to dstBucket '%v': %v", tc.subBucketName, tc.srcBucketName, tc.dstBucketName, mvErr)
+				}
+
+				return nil
+
+			}); err != nil {
+				t.Fatal(err)
+			}
+			db.MustCheck()
+
+			// skip assertion in these cases
+			if !tc.subBucketExistSrcBucket || tc.keyNoSubBucketSrcBucket || tc.subBucketExistDstBucket || tc.keyNoSubBucketDstBucket {
+				return
+			}
+
+			// assert: check subBucket has been deleted from srcBucket, and exists in dstBucket
+			if err := db.View(func(tx *bolt.Tx) error {
+				srcBucket := tx.Bucket([]byte(tc.srcBucketName))
+				if srcBucket == nil {
+					t.Fatalf("src bucket %s does not exist: %v", tc.srcBucketName, berrors.ErrBucketNotFound)
+				}
+				srcCur := srcBucket.Cursor()
+				k, _ := srcCur.Seek([]byte(tc.subBucketName))
+				if bytes.Equal([]byte(tc.subBucketName), k) {
+					t.Fatalf("key %q still exists in the source bucket: %v", tc.subBucketName, berrors.ErrIncompatibleValue)
+				}
+
+				dstBucket := tx.Bucket([]byte(tc.dstBucketName))
+				if dstBucket == nil {
+					t.Fatalf("dst bucket %s does not exist: %v", tc.dstBucketName, berrors.ErrBucketNotFound)
+				}
+				v := dstBucket.Get([]byte(tc.subBucketName))
+				if v != nil {
+					t.Fatalf("expected nil value, as the key is nested bucket, got %v instead", v)
+				}
+				subBucket := dstBucket.Bucket([]byte(tc.subBucketName))
+				v = subBucket.Get([]byte(tc.subBucketKey))
+				if v == nil {
+					t.Fatalf("expected value %v, but got %v instead", tc.subBucketValue, v)
+				}
+
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			db.MustCheck()
+		})
+	}
+}
+
 // Ensure that accessing and updating nested buckets is ok across transactions.
 func TestBucket_Nested(t *testing.T) {
 	db := btesting.MustCreateDB(t)

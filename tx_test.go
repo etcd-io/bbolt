@@ -433,6 +433,169 @@ func TestTx_DeleteBucket_NotFound(t *testing.T) {
 	}
 }
 
+func TestTx_MoveSubBucket(t *testing.T) {
+	testCases := []struct {
+		name                     string
+		subBucketName            string
+		subBucketKey             string
+		subBucketValue           string
+		dstBucketName            string
+		subBucketExistRootBucket bool
+		subBucketExistDstBucket  bool
+		keyNoSubBucketDstBucket  bool
+		expErr                   error
+	}{
+		{
+			"happy path",
+			"subBucket",
+			"this is subBucket key",
+			"this is subBucket value",
+			"dstBucket",
+			true,
+			false,
+			false,
+			nil,
+		},
+		{
+			"subBucket not exist in root bucket",
+			"subBucket",
+			"this is subBucket key",
+			"this is subBucket value",
+			"dstBucket",
+			false,
+			false,
+			false,
+			berrors.ErrBucketNotFound,
+		},
+		{
+			"suBucket exist in dstBucket",
+			"subBucket",
+			"this is subBucket key",
+			"this is subBucket value",
+			"dstBucket",
+			true,
+			true,
+			false,
+			berrors.ErrBucketExists,
+		},
+		{
+			"subBucket key exist in dstBucket, but no subBucket value",
+			"subBucket",
+			"this is subBucket key",
+			"this is subBucket value",
+			"dstBucket",
+			true,
+			false,
+			true,
+			berrors.ErrIncompatibleValue,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := btesting.MustCreateDB(t)
+
+			// arrange
+			if err := db.Update(func(tx *bolt.Tx) error {
+				if tc.subBucketExistRootBucket {
+					// create subBucket within root Bucket
+					subBucket, sErr := tx.CreateBucketIfNotExists([]byte(tc.subBucketName))
+					if sErr != nil {
+						t.Fatalf("error creating subBucket %s within root bucket: %v", tc.subBucketName, sErr)
+					}
+					// insert K/V pair into  subBucket
+					if pErr := subBucket.Put([]byte(tc.subBucketKey), []byte(tc.subBucketValue)); pErr != nil {
+						t.Fatal(pErr)
+					}
+				}
+
+				// create dst bucket
+				dstBucket, bErr := tx.CreateBucketIfNotExists([]byte(tc.dstBucketName))
+				if bErr != nil {
+					t.Fatalf("error creating dst bucket %s: %v", tc.dstBucketName, bErr)
+				}
+				// insert K/V pair into dst bucket
+				if pErr := dstBucket.Put([]byte("bar"), []byte("0000")); pErr != nil {
+					t.Fatal(pErr)
+				}
+
+				if tc.subBucketExistDstBucket {
+					// create subBucket within dstBucket
+					_, sErr := dstBucket.CreateBucket([]byte(tc.subBucketName))
+					if sErr != nil {
+						t.Fatal(sErr)
+					}
+				}
+
+				if tc.keyNoSubBucketDstBucket {
+					if pErr := dstBucket.Put([]byte(tc.subBucketName), []byte(tc.subBucketValue)); pErr != nil {
+						t.Fatal(pErr)
+					}
+				}
+
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			db.MustCheck()
+
+			// act: move the subBucket from root Bucket to dstBucket
+			if err := db.Update(func(tx *bolt.Tx) error {
+				dstBucket := tx.Bucket([]byte(tc.dstBucketName))
+				if dstBucket == nil {
+					t.Fatalf("dst bucket %s does not exist: %v", tc.dstBucketName, berrors.ErrBucketNotFound)
+				}
+
+				mvErr := tx.MoveSubBucket([]byte(tc.subBucketName), nil, dstBucket)
+				if !tc.subBucketExistRootBucket || tc.subBucketExistDstBucket || tc.keyNoSubBucketDstBucket {
+					require.ErrorIs(t, mvErr, tc.expErr)
+				} else if mvErr != nil {
+					t.Fatalf("failed to move subBucket '%v' from root bucket to dstBucket '%v': %v", tc.subBucketName, tc.dstBucketName, mvErr)
+				}
+
+				return nil
+
+			}); err != nil {
+				t.Fatal(err)
+			}
+			db.MustCheck()
+
+			// skip assertion in these cases
+			if !tc.subBucketExistRootBucket || tc.subBucketExistDstBucket || tc.keyNoSubBucketDstBucket {
+				return
+			}
+
+			// assert: check subBucket has been deleted from srcBucket, and exists in dstBucket
+			if err := db.View(func(tx *bolt.Tx) error {
+				rootCur := tx.Cursor()
+				k, _ := rootCur.Seek([]byte(tc.subBucketName))
+				if bytes.Equal([]byte(tc.subBucketName), k) {
+					t.Fatalf("key %q still exists in the root bucket: %v", tc.subBucketName, berrors.ErrIncompatibleValue)
+				}
+
+				dstBucket := tx.Bucket([]byte(tc.dstBucketName))
+				if dstBucket == nil {
+					t.Fatalf("dst bucket %s does not exist: %v", tc.dstBucketName, berrors.ErrBucketNotFound)
+				}
+				v := dstBucket.Get([]byte(tc.subBucketName))
+				if v != nil {
+					t.Fatalf("expected nil value, as the key is nested bucket, got %v instead", v)
+				}
+				subBucket := dstBucket.Bucket([]byte(tc.subBucketName))
+				v = subBucket.Get([]byte(tc.subBucketKey))
+				if v == nil {
+					t.Fatalf("expected value %v, but got %v instead", tc.subBucketValue, v)
+				}
+
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			db.MustCheck()
+		})
+	}
+}
+
 // Ensure that no error is returned when a tx.ForEach function does not return
 // an error.
 func TestTx_ForEach_NoError(t *testing.T) {

@@ -129,7 +129,10 @@ func (tx *Tx) DeleteBucket(name []byte) error {
 //  2. or the key already exists in the destination bucket;
 //  3. the key represents a non-bucket value.
 func (tx *Tx) MoveSubBucket(name []byte, src *Bucket, dst *Bucket) error {
-	return src.MoveSubBucket(name, dst)
+	if src != nil {
+		return src.MoveSubBucket(name, dst)
+	}
+	return tx.root.MoveSubBucket(name, dst)
 }
 
 // ForEach executes a function for each bucket in the root.
