@@ -8,7 +8,7 @@ require (
 	github.com/stretchr/testify v1.8.4
 	go.etcd.io/gofail v0.1.0
 	golang.org/x/sync v0.5.0
-	golang.org/x/sys v0.14.0
+	golang.org/x/sys v0.15.0
 )
 
 require (
