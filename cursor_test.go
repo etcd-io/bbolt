@@ -160,6 +160,52 @@ func TestCursor_Delete(t *testing.T) {
 	}
 }
 
+// https://github.com/etcd-io/bbolt/issues/146
+func TestCursor_Position_After_Delete(t *testing.T) {
+	db := btesting.MustCreateDB(t)
+	seen := map[string]bool{"a": false, "b": false, "c": false}
+
+	if err := db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucket([]byte("widgets"))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// put k/v entries
+		for s, _ := range seen {
+			if err := b.Put([]byte(s), []byte("value")); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		c := tx.Bucket([]byte("widgets")).Cursor()
+
+		// iterate k/v entries
+		for key, _ := c.First(); key != nil; key, _ = c.Next() {
+			seen[string(key)] = true
+
+			// delete a value
+			if bytes.Equal(key, []byte("a")) {
+				err := c.Delete()
+				if err != nil {
+					return err
+				}
+				continue
+			}
+		}
+
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// every key should have been iterated over
+	if !reflect.DeepEqual(seen, map[string]bool{"a": true, "b": true, "c": true}) {
+		fmt.Println(seen)
+		t.Fatal("failed to iterate over all keys")
+	}
+}
+
 // Ensure that a Tx cursor can seek to the appropriate keys when there are a
 // large number of keys. This test also checks that seek will always move
 // forward to the next key.

@@ -151,6 +151,11 @@ func (c *Cursor) Delete() error {
 	}
 	c.node().del(key)
 
+	// Rewind the cursor when an element is deleted.
+	if c.node().unbalanced {
+		c.stack[len(c.stack)-1].index--
+	}
+
 	return nil
 }
 
