@@ -12,33 +12,17 @@ import (
 	"testing"
 	"time"
 
+	testutils "go.etcd.io/bbolt/tests/utils"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sys/unix"
 )
 
-var enableRoot bool
-
-func init() {
-	flag.BoolVar(&enableRoot, "test.root", false, "enable tests that require root")
-}
-
 func TestMain(m *testing.M) {
 	flag.Parse()
-	requiresRoot()
+	testutils.RequiresRoot()
 	os.Exit(m.Run())
-}
-
-func requiresRoot() {
-	if !enableRoot {
-		fmt.Fprintln(os.Stderr, "Skip tests that require root")
-		os.Exit(0)
-	}
-
-	if os.Getuid() != 0 {
-		fmt.Fprintln(os.Stderr, "This test must be run as root.")
-		os.Exit(1)
-	}
 }
 
 func TestBasic(t *testing.T) {
