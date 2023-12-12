@@ -69,8 +69,12 @@ var (
 	// ErrValueTooLarge is returned when inserting a value that is larger than MaxValueSize.
 	ErrValueTooLarge = errors.New("value too large")
 
-	// ErrIncompatibleValue is returned when trying create or delete a bucket
+	// ErrIncompatibleValue is returned when trying to create or delete a bucket
 	// on an existing non-bucket key or when trying to create or delete a
 	// non-bucket key on an existing bucket key.
 	ErrIncompatibleValue = errors.New("incompatible value")
+
+	// ErrSameBuckets is returned when trying to move a sub-bucket between
+	// source and target buckets, while source and target buckets are the same.
+	ErrSameBuckets = errors.New("the source and target are the same bucket")
 )
