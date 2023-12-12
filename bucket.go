@@ -336,6 +336,8 @@ func (b *Bucket) Put(key []byte, value []byte) error {
 		return errors.ErrIncompatibleValue
 	}
 
+	// gofail: var beforeBucketPut struct{}
+
 	// Insert into node.
 	// Tip: Use a new variable `newKey` instead of reusing the existing `key` to prevent
 	// it from being marked as leaking, and accordingly cannot be allocated on stack.
