@@ -326,7 +326,8 @@ func (b *Bucket) DeleteBucket(key []byte) (err error) {
 // Returns an error if
 //  1. the sub-bucket cannot be found in the source bucket;
 //  2. or the key already exists in the destination bucket;
-//  3. the key represents a non-bucket value.
+//  3. or the key represents a non-bucket value;
+//  4. the source and destination buckets are the same.
 func (b *Bucket) MoveBucket(key []byte, dstBucket *Bucket) error {
 	if b.tx.db == nil || dstBucket.tx.db == nil {
 		return errors.ErrTxClosed
@@ -348,7 +349,7 @@ func (b *Bucket) MoveBucket(key []byte, dstBucket *Bucket) error {
 	// Do nothing (return true directly) if the source bucket and the
 	// destination bucket are actually the same bucket.
 	if b == dstBucket || (b.RootPage() == dstBucket.RootPage() && b.RootPage() != 0) {
-		return nil
+		return fmt.Errorf("source bucket %s and target bucket %s are the same: %w", b.String(), dstBucket.String(), errors.ErrSameBuckets)
 	}
 
 	// check whether the key already exists in the destination bucket
