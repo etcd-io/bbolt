@@ -327,21 +327,22 @@ func (b *Bucket) Put(key []byte, value []byte) error {
 		return errors.ErrValueTooLarge
 	}
 
+	// Insert into node.
+	// Tip: Use a new variable `newKey` instead of reusing the existing `key` to prevent
+	// it from being marked as leaking, and accordingly cannot be allocated on stack.
+	newKey := cloneBytes(key)
+
 	// Move cursor to correct position.
 	c := b.Cursor()
-	k, _, flags := c.seek(key)
+	k, _, flags := c.seek(newKey)
 
 	// Return an error if there is an existing key with a bucket value.
-	if bytes.Equal(key, k) && (flags&common.BucketLeafFlag) != 0 {
+	if bytes.Equal(newKey, k) && (flags&common.BucketLeafFlag) != 0 {
 		return errors.ErrIncompatibleValue
 	}
 
 	// gofail: var beforeBucketPut struct{}
 
-	// Insert into node.
-	// Tip: Use a new variable `newKey` instead of reusing the existing `key` to prevent
-	// it from being marked as leaking, and accordingly cannot be allocated on stack.
-	newKey := cloneBytes(key)
 	c.node().put(newKey, newKey, value, 0, 0)
 
 	return nil
