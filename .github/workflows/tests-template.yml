@@ -23,6 +23,8 @@ jobs:
         target: ${{ fromJSON(inputs.targets) }}
     runs-on: ${{ inputs.runs-on }}
     steps:
+      - name: Collect Workflow Telemetry
+        uses: catchpoint/workflow-telemetry-action@v1
       - uses: actions/checkout@v4
       - id: goversion
         run: echo "goversion=$(cat .go-version)" >> "$GITHUB_OUTPUT"
