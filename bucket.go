@@ -201,22 +201,27 @@ func (b *Bucket) CreateBucketIfNotExists(key []byte) (*Bucket, error) {
 		return nil, errors.ErrBucketNameRequired
 	}
 
+	// Insert into node.
+	// Tip: Use a new variable `newKey` instead of reusing the existing `key` to prevent
+	// it from being marked as leaking, and accordingly cannot be allocated on stack.
+	newKey := cloneBytes(key)
+
 	if b.buckets != nil {
-		if child := b.buckets[string(key)]; child != nil {
+		if child := b.buckets[string(newKey)]; child != nil {
 			return child, nil
 		}
 	}
 
 	// Move cursor to correct position.
 	c := b.Cursor()
-	k, v, flags := c.seek(key)
+	k, v, flags := c.seek(newKey)
 
 	// Return an error if there is an existing non-bucket key.
-	if bytes.Equal(key, k) {
+	if bytes.Equal(newKey, k) {
 		if (flags & common.BucketLeafFlag) != 0 {
 			var child = b.openBucket(v)
 			if b.buckets != nil {
-				b.buckets[string(key)] = child
+				b.buckets[string(newKey)] = child
 			}
 
 			return child, nil
@@ -232,10 +237,6 @@ func (b *Bucket) CreateBucketIfNotExists(key []byte) (*Bucket, error) {
 	}
 	var value = bucket.write()
 
-	// Insert into node.
-	// Tip: Use a new variable `newKey` instead of reusing the existing `key` to prevent
-	// it from being marked as leaking, and accordingly cannot be allocated on stack.
-	newKey := cloneBytes(key)
 	c.node().put(newKey, newKey, value, 0, common.BucketLeafFlag)
 
 	// Since subbuckets are not allowed on inline buckets, we need to
