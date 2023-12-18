@@ -27,11 +27,52 @@ func (tx *Tx) Check(options ...CheckOption) <-chan error {
 	}
 
 	ch := make(chan error)
-	go tx.check(chkConfig.kvStringer, ch)
+	go tx.check(chkConfig.kvStringer, nil, ch)
 	return ch
 }
 
-func (tx *Tx) check(kvStringer KVStringer, ch chan error) {
+func (tx *Tx) CheckPage(pageId *int, options ...CheckOption) <-chan error {
+	chkConfig := checkConfig{
+		kvStringer: HexKVStringer(),
+	}
+	for _, op := range options {
+		op(&chkConfig)
+	}
+
+	ch := make(chan error)
+	go tx.check(chkConfig.kvStringer, pageId, ch)
+	return ch
+}
+
+func (tx *Tx) check(kvStringer KVStringer, pageId *int, ch chan error) {
+
+	// check freelist pages
+	freed := tx.checkFreeList(ch)
+
+	// init reachable map with meta & free list pages
+	reachable := tx.trackMetaAndFreeListPages()
+
+	if pageId != nil {
+		// Recursively check pages starting from pageId.
+		tx.checkPage(common.Pgid(*pageId), reachable, freed, kvStringer, ch)
+	} else {
+		// Recursively check buckets starting from db root bucket.
+		tx.checkBucket(&tx.root, reachable, freed, kvStringer, ch)
+	}
+
+	// Ensure all pages below high water mark are either reachable or freed.
+	for i := common.Pgid(0); i < tx.meta.Pgid(); i++ {
+		_, isReachable := reachable[i]
+		if !isReachable && !freed[i] {
+			ch <- fmt.Errorf("page %d: unreachable unfreed", int(i))
+		}
+	}
+
+	// Close the channel to signal completion.
+	close(ch)
+}
+
+func (tx *Tx) checkFreeList(ch chan error) map[common.Pgid]bool {
 	// Force loading free list if opened in ReadOnly mode.
 	tx.db.loadFreelist()
 
@@ -46,7 +87,11 @@ func (tx *Tx) check(kvStringer KVStringer, ch chan error) {
 		freed[id] = true
 	}
 
-	// Track every reachable page.
+	return freed
+}
+
+func (tx *Tx) trackMetaAndFreeListPages() map[common.Pgid]*common.Page {
+	// add meta and free list pages to reachable map
 	reachable := make(map[common.Pgid]*common.Page)
 	reachable[0] = tx.page(0) // meta0
 	reachable[1] = tx.page(1) // meta1
@@ -56,19 +101,7 @@ func (tx *Tx) check(kvStringer KVStringer, ch chan error) {
 		}
 	}
 
-	// Recursively check buckets.
-	tx.checkBucket(&tx.root, reachable, freed, kvStringer, ch)
-
-	// Ensure all pages below high water mark are either reachable or freed.
-	for i := common.Pgid(0); i < tx.meta.Pgid(); i++ {
-		_, isReachable := reachable[i]
-		if !isReachable && !freed[i] {
-			ch <- fmt.Errorf("page %d: unreachable unfreed", int(i))
-		}
-	}
-
-	// Close the channel to signal completion.
-	close(ch)
+	return reachable
 }
 
 func (tx *Tx) checkBucket(b *Bucket, reachable map[common.Pgid]*common.Page, freed map[common.Pgid]bool,
@@ -78,10 +111,23 @@ func (tx *Tx) checkBucket(b *Bucket, reachable map[common.Pgid]*common.Page, fre
 		return
 	}
 
+	tx.checkPage(b.RootPage(), reachable, freed, kvStringer, ch)
+
+	// Check each bucket within this bucket.
+	_ = b.ForEachBucket(func(k []byte) error {
+		if child := b.Bucket(k); child != nil {
+			tx.checkBucket(child, reachable, freed, kvStringer, ch)
+		}
+		return nil
+	})
+}
+
+func (tx *Tx) checkPage(pgidnum common.Pgid, reachable map[common.Pgid]*common.Page, freed map[common.Pgid]bool, kvStringer KVStringer, ch chan error) {
+
 	// Check every page used by this bucket.
-	b.tx.forEachPage(b.RootPage(), func(p *common.Page, _ int, stack []common.Pgid) {
+	tx.forEachPage(pgidnum, func(p *common.Page, _ int, stack []common.Pgid) {
 		if p.Id() > tx.meta.Pgid() {
-			ch <- fmt.Errorf("page %d: out of bounds: %d (stack: %v)", int(p.Id()), int(b.tx.meta.Pgid()), stack)
+			ch <- fmt.Errorf("page %d: out of bounds: %d (stack: %v)", int(p.Id()), int(tx.meta.Pgid()), stack)
 		}
 
 		// Ensure each page is only referenced once.
@@ -101,15 +147,7 @@ func (tx *Tx) checkBucket(b *Bucket, reachable map[common.Pgid]*common.Page, fre
 		}
 	})
 
-	tx.recursivelyCheckPages(b.RootPage(), kvStringer.KeyToString, ch)
-
-	// Check each bucket within this bucket.
-	_ = b.ForEachBucket(func(k []byte) error {
-		if child := b.Bucket(k); child != nil {
-			tx.checkBucket(child, reachable, freed, kvStringer, ch)
-		}
-		return nil
-	})
+	tx.recursivelyCheckPages(pgidnum, kvStringer.KeyToString, ch)
 }
 
 // recursivelyCheckPages confirms database consistency with respect to b-tree

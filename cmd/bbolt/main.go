@@ -193,6 +193,8 @@ func (cmd *checkCommand) Run(args ...string) error {
 	// Parse flags.
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	help := fs.Bool("h", false, "")
+	pageId := fs.Int("pageId", 0, "")
+
 	if err := fs.Parse(args); err != nil {
 		return err
 	} else if *help {
@@ -221,9 +223,16 @@ func (cmd *checkCommand) Run(args ...string) error {
 	// Perform consistency check.
 	return db.View(func(tx *bolt.Tx) error {
 		var count int
-		for err := range tx.Check(bolt.WithKVStringer(CmdKvStringer())) {
-			fmt.Fprintln(cmd.Stdout, err)
-			count++
+		if pageId != nil {
+			for err := range tx.CheckPage(pageId, bolt.WithKVStringer(CmdKvStringer())) {
+				fmt.Fprintln(cmd.Stdout, err)
+				count++
+			}
+		} else {
+			for err := range tx.Check(bolt.WithKVStringer(CmdKvStringer())) {
+				fmt.Fprintln(cmd.Stdout, err)
+				count++
+			}
 		}
 
 		// Print summary of errors.
