@@ -85,7 +85,7 @@ func (tx *Tx) checkBucket(b *Bucket, reachable map[common.Pgid]*common.Page, fre
 		}
 
 		// Ensure each page is only referenced once.
-		for i := common.Pgid(0); i <= common.Pgid(p.Overflow()); i++ {
+		for i := common.Pgid(p.Id()); i <= common.Pgid(p.Overflow()); i++ {
 			var id = p.Id() + i
 			if _, ok := reachable[id]; ok {
 				ch <- fmt.Errorf("page %d: multiple references (stack: %v)", int(id), stack)
