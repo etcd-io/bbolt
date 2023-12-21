@@ -6,3 +6,5 @@ approvers:
   - serathius       # Marek Siarkowicz <siarkowicz@google.com> <marek.siarkowicz@gmail.com>
   - ptabor          # Piotr Tabor <piotr.tabor@gmail.com>
   - spzala          # Sahdev Zala <spzala@us.ibm.com>
+reviewers:
+  - fuweid          # Wei Fu <fuweid89@gmail.com>
