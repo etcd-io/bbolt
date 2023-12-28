@@ -1,3 +1,4 @@
+---
 name: Tests
 on: [push, pull_request]
 jobs:
@@ -14,7 +15,7 @@ jobs:
         #
         #   ThreadSanitizer failed to allocate 0x000200000000 (8589934592) bytes at 0x0400c0000000 (error code: 1455)
         #
-        #- windows-amd64-unit-test-4-cpu-race
+        # - windows-amd64-unit-test-4-cpu-race
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,7 +42,7 @@ jobs:
         uses: golangci/golangci-lint-action@3a919529898de77ec3da873e3063ca4b10e7f5cc # v3.7.0
 
   coverage:
-    needs: ["test-windows" ]
+    needs: ["test-windows"]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
