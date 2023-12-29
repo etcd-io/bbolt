@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -32,7 +33,6 @@ type Tx struct {
 	pages          map[common.Pgid]*common.Page
 	stats          TxStats
 	commitHandlers []func()
-	Logger         Logger
 
 	// WriteFlag specifies the flag for write-related methods like WriteTo().
 	// Tx opens the database file with the specified flag to copy the data.
@@ -57,8 +57,6 @@ func (tx *Tx) init(db *DB) {
 	tx.root.InBucket = &common.InBucket{}
 	*tx.root.InBucket = *(tx.meta.RootBucket())
 
-	tx.Logger = db.Logger
-
 	// Increment the transaction id and add a page cache for writable transactions.
 	if tx.writable {
 		tx.pages = make(map[common.Pgid]*common.Page)
@@ -68,6 +66,9 @@ func (tx *Tx) init(db *DB) {
 
 // ID returns the transaction id.
 func (tx *Tx) ID() int {
+	if tx == nil || tx.meta == nil {
+		return -1
+	}
 	return int(tx.meta.Txid())
 }
 
@@ -143,7 +144,18 @@ func (tx *Tx) OnCommit(fn func()) {
 // Commit writes all changes to disk, updates the meta page and closes the transaction.
 // Returns an error if a disk write error occurs, or if Commit is
 // called on a read-only transaction.
-func (tx *Tx) Commit() error {
+func (tx *Tx) Commit() (err error) {
+	txId := tx.ID()
+	lg := tx.db.Logger()
+	lg.Debugf("Committing transaction %d", txId)
+	defer func() {
+		if err != nil {
+			lg.Errorf("Committing transaction failed: %v", err)
+		} else {
+			lg.Debugf("Committing transaction %d successfully", txId)
+		}
+	}()
+
 	common.Assert(!tx.managed, "managed tx commit not allowed")
 	if tx.db == nil {
 		return berrors.ErrTxClosed
@@ -151,7 +163,6 @@ func (tx *Tx) Commit() error {
 		return berrors.ErrTxNotWritable
 	}
 
-	tx.Logger.Infof("Committing transaction %d", tx.ID())
 	// TODO(benbjohnson): Use vectorized I/O to write out dirty pages.
 
 	// Rebalance nodes which have had deletions.
@@ -165,7 +176,8 @@ func (tx *Tx) Commit() error {
 
 	// spill data onto dirty pages.
 	startTime = time.Now()
-	if err := tx.root.spill(); err != nil {
+	if err = tx.root.spill(); err != nil {
+		lg.Errorf("spilling data onto dirty pages failed: %v", err)
 		tx.rollback()
 		return err
 	}
@@ -180,8 +192,9 @@ func (tx *Tx) Commit() error {
 	}
 
 	if !tx.db.NoFreelistSync {
-		err := tx.commitFreelist()
+		err = tx.commitFreelist()
 		if err != nil {
+			lg.Errorf("committing freelist failed: %v", err)
 			return err
 		}
 	} else {
@@ -194,7 +207,8 @@ func (tx *Tx) Commit() error {
 		// gofail: var lackOfDiskSpace string
 		// tx.rollback()
 		// return errors.New(lackOfDiskSpace)
-		if err := tx.db.grow(int(tx.meta.Pgid()+1) * tx.db.pageSize); err != nil {
+		if err = tx.db.grow(int(tx.meta.Pgid()+1) * tx.db.pageSize); err != nil {
+			lg.Errorf("growing db size failed, pgid: %d, pagesize: %d, error: %v", tx.meta.Pgid(), tx.db.pageSize, err)
 			tx.rollback()
 			return err
 		}
@@ -202,7 +216,8 @@ func (tx *Tx) Commit() error {
 
 	// Write dirty pages to disk.
 	startTime = time.Now()
-	if err := tx.write(); err != nil {
+	if err = tx.write(); err != nil {
+		lg.Errorf("writing data failed: %v", err)
 		tx.rollback()
 		return err
 	}
@@ -212,11 +227,11 @@ func (tx *Tx) Commit() error {
 		ch := tx.Check()
 		var errs []string
 		for {
-			err, ok := <-ch
+			chkErr, ok := <-ch
 			if !ok {
 				break
 			}
-			errs = append(errs, err.Error())
+			errs = append(errs, chkErr.Error())
 		}
 		if len(errs) > 0 {
 			panic("check fail: " + strings.Join(errs, "\n"))
@@ -224,7 +239,8 @@ func (tx *Tx) Commit() error {
 	}
 
 	// Write meta to disk.
-	if err := tx.writeMeta(); err != nil {
+	if err = tx.writeMeta(); err != nil {
+		lg.Errorf("writeMeta failed: %v", err)
 		tx.rollback()
 		return err
 	}
@@ -418,8 +434,10 @@ func (tx *Tx) CopyFile(path string, mode os.FileMode) error {
 
 // allocate returns a contiguous block of memory starting at a given page.
 func (tx *Tx) allocate(count int) (*common.Page, error) {
+	lg := tx.db.Logger()
 	p, err := tx.db.allocate(tx.meta.Txid(), count)
 	if err != nil {
+		lg.Errorf("allocating failed, txid: %d, count: %d, error: %v", tx.meta.Txid(), count, err)
 		return nil, err
 	}
 
@@ -436,6 +454,7 @@ func (tx *Tx) allocate(count int) (*common.Page, error) {
 // write writes any dirty pages to disk.
 func (tx *Tx) write() error {
 	// Sort pages by id.
+	lg := tx.db.Logger()
 	pages := make(common.Pages, 0, len(tx.pages))
 	for _, p := range tx.pages {
 		pages = append(pages, p)
@@ -459,6 +478,7 @@ func (tx *Tx) write() error {
 			buf := common.UnsafeByteSlice(unsafe.Pointer(p), written, 0, int(sz))
 
 			if _, err := tx.db.ops.writeAt(buf, offset); err != nil {
+				lg.Errorf("writeAt failed, offset: %d: %w", offset, err)
 				return err
 			}
 
@@ -481,6 +501,7 @@ func (tx *Tx) write() error {
 	if !tx.db.NoSync || common.IgnoreNoSync {
 		// gofail: var beforeSyncDataPages struct{}
 		if err := fdatasync(tx.db); err != nil {
+			lg.Errorf("[GOOS: %s, GOARCH: %s] fdatasync failed: %w", runtime.GOOS, runtime.GOARCH, err)
 			return err
 		}
 	}
@@ -508,17 +529,20 @@ func (tx *Tx) write() error {
 // writeMeta writes the meta to the disk.
 func (tx *Tx) writeMeta() error {
 	// Create a temporary buffer for the meta page.
+	lg := tx.db.Logger()
 	buf := make([]byte, tx.db.pageSize)
 	p := tx.db.pageInBuffer(buf, 0)
 	tx.meta.Write(p)
 
 	// Write the meta page to file.
 	if _, err := tx.db.ops.writeAt(buf, int64(p.Id())*int64(tx.db.pageSize)); err != nil {
+		lg.Errorf("writeAt failed, pgid: %d, pageSize: %d, error: %v", p.Id(), tx.db.pageSize, err)
 		return err
 	}
 	if !tx.db.NoSync || common.IgnoreNoSync {
 		// gofail: var beforeSyncMetaPage struct{}
 		if err := fdatasync(tx.db); err != nil {
+			lg.Errorf("[GOOS: %s, GOARCH: %s] fdatasync failed: %w", runtime.GOOS, runtime.GOARCH, err)
 			return err
 		}
 	}
