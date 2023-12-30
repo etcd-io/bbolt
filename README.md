@@ -945,6 +945,7 @@ Below is a list of public, open source projects that use Bolt:
 * [boltcli](https://github.com/spacewander/boltcli) - the redis-cli for boltdb with Lua script support.
 * [BoltHold](https://github.com/timshannon/bolthold) - An embeddable NoSQL store for Go types built on BoltDB
 * [BoltStore](https://github.com/yosssi/boltstore) - Session store using Bolt.
+* [BoltWiZ](https://github.com/moniseeta/boltwiz) - UI tool for navigating and managing BoltDB files with ease and precision.
 * [Boltdb Boilerplate](https://github.com/bobintornado/boltdb-boilerplate) - Boilerplate wrapper around bolt aiming to make simple calls one-liners.
 * [BoltDbWeb](https://github.com/evnix/boltdbweb) - A web based GUI for BoltDB files.
 * [BoltDB Viewer](https://github.com/zc310/rich_boltdb) - A BoltDB Viewer Can run on Windows、Linux、Android system.
