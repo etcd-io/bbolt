@@ -78,12 +78,7 @@ func (tx *Tx) recursivelyCheckBucket(b *Bucket, reachable map[common.Pgid]*commo
 		return
 	}
 
-	// Check every page used by this bucket.
-	b.tx.forEachPage(b.RootPage(), func(p *common.Page, _ int, stack []common.Pgid) {
-		verifyPageReachable(p, tx.meta.Pgid(), stack, reachable, freed, ch)
-	})
-
-	tx.recursivelyCheckPageKeyOrder(b.RootPage(), kvStringer.KeyToString, ch)
+	tx.checkInvariantProperties(b.RootPage(), reachable, freed, kvStringer, ch)
 
 	// Check each bucket within this bucket.
 	_ = b.ForEachBucket(func(k []byte) error {
@@ -92,6 +87,15 @@ func (tx *Tx) recursivelyCheckBucket(b *Bucket, reachable map[common.Pgid]*commo
 		}
 		return nil
 	})
+}
+
+func (tx *Tx) checkInvariantProperties(pageId common.Pgid, reachable map[common.Pgid]*common.Page, freed map[common.Pgid]bool,
+	kvStringer KVStringer, ch chan error) {
+	tx.forEachPage(pageId, func(p *common.Page, _ int, stack []common.Pgid) {
+		verifyPageReachable(p, tx.meta.Pgid(), stack, reachable, freed, ch)
+	})
+
+	tx.recursivelyCheckPageKeyOrder(pageId, kvStringer.KeyToString, ch)
 }
 
 func verifyPageReachable(p *common.Page, hwm common.Pgid, stack []common.Pgid, reachable map[common.Pgid]*common.Page, freed map[common.Pgid]bool, ch chan error) {
