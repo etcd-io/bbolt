@@ -3,16 +3,8 @@ on: [push, pull_request]
 permissions: read-all
 jobs:
   test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - id: goversion
-        run: echo "goversion=$(cat .go-version)" >> "$GITHUB_OUTPUT"
-      - uses: actions/setup-go@v5
-        with:
-          go-version: ${{ steps.goversion.outputs.goversion }}
-      - run: |
-          make gofail-enable
-          # build bbolt with failpoint
-          go install ./cmd/bbolt
-          sudo -E PATH=$PATH make test-robustness
+    uses: ./.github/workflows/robustness_template.yaml
+    with:
+      count: 10
+      testTimeout: 30m
+      runs-on: "['ubuntu-latest-8-cores']"
