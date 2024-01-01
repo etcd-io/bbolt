@@ -4,8 +4,11 @@ package robustness
 
 import (
 	"bytes"
+	"crypto/rand"
 	"fmt"
 	"io"
+	"math"
+	"math/big"
 	"net/http"
 	"net/url"
 	"os"
@@ -23,9 +26,65 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+var panicFailpoints = []string{
+	"beforeSyncDataPages",
+	"beforeSyncMetaPage",
+	"lackOfDiskSpace",
+	"mapError",
+	"resizeFileError",
+	"unmapError",
+}
+
 // TestRestartFromPowerFailure is to test data after unexpected power failure.
 func TestRestartFromPowerFailure(t *testing.T) {
-	flakey := initFlakeyDevice(t, t.Name(), dmflakey.FSTypeEXT4, "")
+	for _, tc := range []struct {
+		name         string
+		du           time.Duration
+		fsMountOpt   string
+		useFailpoint bool
+	}{
+		{
+			name:         "fp_ext4_commit5s",
+			du:           5 * time.Second,
+			fsMountOpt:   "commit=5",
+			useFailpoint: true,
+		},
+		{
+			name:         "fp_ext4_commit1s",
+			du:           10 * time.Second,
+			fsMountOpt:   "commit=1",
+			useFailpoint: true,
+		},
+		{
+			name:         "fp_ext4_commit1000s",
+			du:           10 * time.Second,
+			fsMountOpt:   "commit=1000",
+			useFailpoint: true,
+		},
+		{
+			name:       "kill_ext4_commit5s",
+			du:         5 * time.Second,
+			fsMountOpt: "commit=5",
+		},
+		{
+			name:       "kill_ext4_commit1s",
+			du:         10 * time.Second,
+			fsMountOpt: "commit=1",
+		},
+		{
+			name:       "kill_ext4_commit1000s",
+			du:         10 * time.Second,
+			fsMountOpt: "commit=1000",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doPowerFailure(t, tc.du, tc.fsMountOpt, tc.useFailpoint)
+		})
+	}
+}
+
+func doPowerFailure(t *testing.T, du time.Duration, fsMountOpt string, useFailpoint bool) {
+	flakey := initFlakeyDevice(t, strings.Replace(t.Name(), "/", "_", -1), dmflakey.FSTypeEXT4, fsMountOpt)
 	root := flakey.RootFS()
 
 	dbPath := filepath.Join(root, "boltdb")
@@ -38,6 +97,8 @@ func TestRestartFromPowerFailure(t *testing.T) {
 	}
 
 	logPath := filepath.Join(t.TempDir(), fmt.Sprintf("%s.log", t.Name()))
+	require.NoError(t, os.MkdirAll(path.Dir(logPath), 0600))
+
 	logFd, err := os.Create(logPath)
 	require.NoError(t, err)
 	defer logFd.Close()
@@ -64,10 +125,18 @@ func TestRestartFromPowerFailure(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(time.Duration(time.Now().UnixNano()%5+1) * time.Second)
+	time.Sleep(du)
 	t.Logf("simulate power failure")
 
-	activeFailpoint(t, fpURL, "beforeSyncMetaPage", "panic")
+	if useFailpoint {
+		fpURL = "http://" + fpURL
+		targetFp := panicFailpoints[randomInt(t, math.MaxInt32)%len(panicFailpoints)]
+		t.Logf("random pick failpoint: %s", targetFp)
+		activeFailpoint(t, fpURL, targetFp, "panic")
+	} else {
+		t.Log("kill bbolt")
+		assert.NoError(t, cmd.Process.Kill())
+	}
 
 	select {
 	case <-time.After(10 * time.Second):
@@ -89,10 +158,10 @@ func TestRestartFromPowerFailure(t *testing.T) {
 
 // activeFailpoint actives the failpoint by http.
 func activeFailpoint(t *testing.T, targetUrl string, fpName, fpVal string) {
-	u, err := url.Parse("http://" + path.Join(targetUrl, fpName))
+	u, err := url.JoinPath(targetUrl, fpName)
 	require.NoError(t, err, "parse url %s", targetUrl)
 
-	req, err := http.NewRequest("PUT", u.String(), bytes.NewBuffer([]byte(fpVal)))
+	req, err := http.NewRequest("PUT", u, bytes.NewBuffer([]byte(fpVal)))
 	require.NoError(t, err)
 
 	resp, err := http.DefaultClient.Do(req)
@@ -191,4 +260,10 @@ func unmountAll(target string) error {
 		continue
 	}
 	return fmt.Errorf("failed to umount %s: %w", target, unix.EBUSY)
+}
+
+func randomInt(t *testing.T, max int) int {
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
+	assert.NoError(t, err)
+	return int(n.Int64())
 }
