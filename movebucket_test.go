@@ -248,7 +248,7 @@ func createBucketAndPopulateData(t testing.TB, tx *bbolt.Tx, bk *bbolt.Bucket, b
 
 	newBucket, err := bk.CreateBucket([]byte(bucketName))
 	require.NoError(t, err, "failed to create bucket %s", bucketName)
-	populateSampleDataInBucket(t, bk, rand.Intn(4096))
+	populateSampleDataInBucket(t, newBucket, rand.Intn(4096))
 	return newBucket
 }
 
