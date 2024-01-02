@@ -16,6 +16,7 @@ func dumpBucket(srcBucketName []byte, srcBucket *bolt.Bucket, dstFilename string
 	if err != nil {
 		return err
 	}
+	defer dstDB.Close()
 
 	return dstDB.Update(func(tx *bolt.Tx) error {
 		dstBucket, err := tx.CreateBucket(srcBucketName)

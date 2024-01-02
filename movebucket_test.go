@@ -1,10 +1,10 @@
 package bbolt_test
 
 import (
-	"bytes"
 	crand "crypto/rand"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"go.etcd.io/bbolt"
@@ -16,259 +16,243 @@ import (
 
 func TestTx_MoveBucket(t *testing.T) {
 	testCases := []struct {
-		name                 string
-		srcBucketPath        []string
-		dstBucketPath        []string
-		bucketToMove         string
-		incompatibleKeyInSrc bool
-		incompatibleKeyInDst bool
-		parentSrc            bool
-		parentDst            bool
-		expActErr            error
+		name                    string
+		srcBucketPath           []string
+		dstBucketPath           []string
+		bucketToMove            string
+		bucketExistInSrc        bool
+		bucketExistInDst        bool
+		hasIncompatibleKeyInSrc bool
+		hasIncompatibleKeyInDst bool
+		expectedErr             error
 	}{
+		// normal cases
 		{
-			name:                 "happy path",
-			srcBucketPath:        []string{"sb1", "sb2", "sb3ToMove"},
-			dstBucketPath:        []string{"db1", "db2"},
-			bucketToMove:         "sb3ToMove",
-			incompatibleKeyInSrc: false,
-			incompatibleKeyInDst: false,
-			parentSrc:            true,
-			parentDst:            false,
-			expActErr:            nil,
+			name:                    "normal case",
+			srcBucketPath:           []string{"sb1", "sb2"},
+			dstBucketPath:           []string{"db1", "db2"},
+			bucketToMove:            "bucketToMove",
+			bucketExistInSrc:        true,
+			bucketExistInDst:        false,
+			hasIncompatibleKeyInSrc: false,
+			hasIncompatibleKeyInDst: false,
+			expectedErr:             nil,
 		},
 		{
-			name:                 "bucketToMove not exist in srcBucket",
-			srcBucketPath:        []string{"sb1", "sb2"},
-			dstBucketPath:        []string{"db1", "db2"},
-			bucketToMove:         "sb3ToMove",
-			incompatibleKeyInSrc: false,
-			incompatibleKeyInDst: false,
-			parentSrc:            false,
-			parentDst:            false,
-			expActErr:            errors.ErrBucketNotFound,
+			name:                    "the source and target bucket share the same grandparent",
+			srcBucketPath:           []string{"grandparent", "sb2"},
+			dstBucketPath:           []string{"grandparent", "db2"},
+			bucketToMove:            "bucketToMove",
+			bucketExistInSrc:        true,
+			bucketExistInDst:        false,
+			hasIncompatibleKeyInSrc: false,
+			hasIncompatibleKeyInDst: false,
+			expectedErr:             nil,
 		},
 		{
-			name:                 "bucketToMove exist in dstBucket",
-			srcBucketPath:        []string{"sb1", "sb2", "sb3ToMove"},
-			dstBucketPath:        []string{"db1", "db2", "sb3ToMove"},
-			bucketToMove:         "sb3ToMove",
-			incompatibleKeyInSrc: false,
-			incompatibleKeyInDst: false,
-			parentSrc:            true,
-			parentDst:            true,
-			expActErr:            errors.ErrBucketExists,
+			name:                    "bucketToMove is a top level bucket",
+			srcBucketPath:           []string{},
+			dstBucketPath:           []string{"db1", "db2"},
+			bucketToMove:            "bucketToMove",
+			bucketExistInSrc:        true,
+			bucketExistInDst:        false,
+			hasIncompatibleKeyInSrc: false,
+			hasIncompatibleKeyInDst: false,
+			expectedErr:             nil,
 		},
 		{
-			name:                 "bucketToMove key exist in srcBucket but no subBucket value",
-			srcBucketPath:        []string{"sb1", "sb2"},
-			dstBucketPath:        []string{"db1", "db2"},
-			bucketToMove:         "sb3ToMove",
-			incompatibleKeyInSrc: true,
-			incompatibleKeyInDst: false,
-			parentSrc:            true,
-			parentDst:            false,
-			expActErr:            errors.ErrIncompatibleValue,
+			name:                    "convert bucketToMove to a top level bucket",
+			srcBucketPath:           []string{"sb1", "sb2"},
+			dstBucketPath:           []string{},
+			bucketToMove:            "bucketToMove",
+			bucketExistInSrc:        true,
+			bucketExistInDst:        false,
+			hasIncompatibleKeyInSrc: false,
+			hasIncompatibleKeyInDst: false,
+			expectedErr:             nil,
+		},
+		// negative cases
+		{
+			name:                    "bucketToMove not exist in source bucket",
+			srcBucketPath:           []string{"sb1", "sb2"},
+			dstBucketPath:           []string{"db1", "db2"},
+			bucketToMove:            "bucketToMove",
+			bucketExistInSrc:        false,
+			bucketExistInDst:        false,
+			hasIncompatibleKeyInSrc: false,
+			hasIncompatibleKeyInDst: false,
+			expectedErr:             errors.ErrBucketNotFound,
 		},
 		{
-			name:                 "bucketToMove key exist in dstBucket but no subBucket value",
-			srcBucketPath:        []string{"sb1", "sb2", "sb3ToMove"},
-			dstBucketPath:        []string{"db1", "db2"},
-			bucketToMove:         "sb3ToMove",
-			incompatibleKeyInSrc: false,
-			incompatibleKeyInDst: true,
-			parentSrc:            true,
-			parentDst:            true,
-			expActErr:            errors.ErrIncompatibleValue,
+			name:                    "bucketToMove exist in target bucket",
+			srcBucketPath:           []string{"sb1", "sb2"},
+			dstBucketPath:           []string{"db1", "db2"},
+			bucketToMove:            "bucketToMove",
+			bucketExistInSrc:        true,
+			bucketExistInDst:        true,
+			hasIncompatibleKeyInSrc: false,
+			hasIncompatibleKeyInDst: false,
+			expectedErr:             errors.ErrBucketExists,
 		},
 		{
-			name:                 "srcBucket is rootBucket",
-			srcBucketPath:        []string{"", "sb3ToMove"},
-			dstBucketPath:        []string{"db1", "db2"},
-			bucketToMove:         "sb3ToMove",
-			incompatibleKeyInSrc: false,
-			incompatibleKeyInDst: false,
-			parentSrc:            true,
-			parentDst:            false,
-			expActErr:            nil,
+			name:                    "incompatible key exist in source bucket",
+			srcBucketPath:           []string{"sb1", "sb2"},
+			dstBucketPath:           []string{"db1", "db2"},
+			bucketToMove:            "bucketToMove",
+			bucketExistInSrc:        false,
+			bucketExistInDst:        false,
+			hasIncompatibleKeyInSrc: true,
+			hasIncompatibleKeyInDst: false,
+			expectedErr:             errors.ErrIncompatibleValue,
 		},
 		{
-			name:                 "dstBucket is rootBucket",
-			srcBucketPath:        []string{"sb1", "sb2", "sb3ToMove"},
-			dstBucketPath:        []string{""},
-			bucketToMove:         "sb3ToMove",
-			incompatibleKeyInSrc: false,
-			incompatibleKeyInDst: false,
-			parentSrc:            true,
-			parentDst:            false,
-			expActErr:            nil,
+			name:                    "incompatible key exist in target bucket",
+			srcBucketPath:           []string{"sb1", "sb2"},
+			dstBucketPath:           []string{"db1", "db2"},
+			bucketToMove:            "bucketToMove",
+			bucketExistInSrc:        true,
+			bucketExistInDst:        false,
+			hasIncompatibleKeyInSrc: false,
+			hasIncompatibleKeyInDst: true,
+			expectedErr:             errors.ErrIncompatibleValue,
 		},
 		{
-			name:                 "srcBucket is rootBucket and dstBucket is rootBucket",
-			srcBucketPath:        []string{"", "sb3ToMove"},
-			dstBucketPath:        []string{""},
-			bucketToMove:         "sb3ToMove",
-			incompatibleKeyInSrc: false,
-			incompatibleKeyInDst: false,
-			parentSrc:            false,
-			parentDst:            false,
-			expActErr:            errors.ErrSameBuckets,
+			name:                    "the source and target are the same bucket",
+			srcBucketPath:           []string{"sb1", "sb2"},
+			dstBucketPath:           []string{"sb1", "sb2"},
+			bucketToMove:            "bucketToMove",
+			bucketExistInSrc:        true,
+			bucketExistInDst:        false,
+			hasIncompatibleKeyInSrc: false,
+			hasIncompatibleKeyInDst: false,
+			expectedErr:             errors.ErrSameBuckets,
+		},
+		{
+			name:                    "both the source and target are the root bucket",
+			srcBucketPath:           []string{},
+			dstBucketPath:           []string{},
+			bucketToMove:            "bucketToMove",
+			bucketExistInSrc:        true,
+			bucketExistInDst:        false,
+			hasIncompatibleKeyInSrc: false,
+			hasIncompatibleKeyInDst: false,
+			expectedErr:             errors.ErrSameBuckets,
 		},
 	}
 
 	for _, tc := range testCases {
 
 		t.Run(tc.name, func(*testing.T) {
-			db := btesting.MustCreateDBWithOption(t, &bbolt.Options{PageSize: pageSize})
+			db := btesting.MustCreateDBWithOption(t, &bbolt.Options{PageSize: 4096})
 
-			dumpBucketBeforeMoving := tempfile()
-			dumpBucketAfterMoving := tempfile()
+			dumpBucketBeforeMoving := filepath.Join(t.TempDir(), "dbBeforeMove")
+			dumpBucketAfterMoving := filepath.Join(t.TempDir(), "dbAfterMove")
 
-			// arrange
-			if err := db.Update(func(tx *bbolt.Tx) error {
-				srcBucket := openBuckets(t, tx, tc.incompatibleKeyInSrc, true, false, tc.srcBucketPath...)
-				dstBucket := openBuckets(t, tx, tc.incompatibleKeyInDst, true, false, tc.dstBucketPath...)
+			t.Log("Creating sample db and populate some data")
+			err := db.Update(func(tx *bbolt.Tx) error {
+				srcBucket := prepareBuckets(t, tx, tc.srcBucketPath...)
+				dstBucket := prepareBuckets(t, tx, tc.dstBucketPath...)
 
-				if tc.incompatibleKeyInSrc {
-					if pErr := srcBucket.Put([]byte(tc.bucketToMove), []byte("0")); pErr != nil {
-						t.Fatalf("error inserting key %v, and value %v in bucket %v: %v", tc.bucketToMove, "0", srcBucket, pErr)
-					}
+				if tc.bucketExistInSrc {
+					_ = createBucketAndPopulateData(t, tx, srcBucket, tc.bucketToMove)
 				}
 
-				if tc.incompatibleKeyInDst {
-					if pErr := dstBucket.Put([]byte(tc.bucketToMove), []byte("0")); pErr != nil {
-						t.Fatalf("error inserting key %v, and value %v in bucket %v: %v", tc.bucketToMove, "0", dstBucket, pErr)
-					}
+				if tc.bucketExistInDst {
+					_ = createBucketAndPopulateData(t, tx, dstBucket, tc.bucketToMove)
+				}
+
+				if tc.hasIncompatibleKeyInSrc {
+					putErr := srcBucket.Put([]byte(tc.bucketToMove), []byte("bar"))
+					require.NoError(t, putErr)
+				}
+
+				if tc.hasIncompatibleKeyInDst {
+					putErr := dstBucket.Put([]byte(tc.bucketToMove), []byte("bar"))
+					require.NoError(t, putErr)
 				}
 
 				return nil
-			}); err != nil {
-				t.Fatal(err)
-			}
-			db.MustCheck()
+			})
+			require.NoError(t, err)
 
-			// act
-			if err := db.Update(func(tx *bbolt.Tx) error {
-				srcBucket := openBuckets(t, tx, false, false, tc.parentSrc, tc.srcBucketPath...)
-				dstBucket := openBuckets(t, tx, false, false, tc.parentDst, tc.dstBucketPath...)
+			t.Log("Moving bucket")
+			err = db.Update(func(tx *bbolt.Tx) error {
+				srcBucket := prepareBuckets(t, tx, tc.srcBucketPath...)
+				dstBucket := prepareBuckets(t, tx, tc.dstBucketPath...)
 
-				var bucketToMove *bbolt.Bucket
-				if srcBucket != nil {
-					bucketToMove = srcBucket.Bucket([]byte(tc.bucketToMove))
-				} else {
-					bucketToMove = tx.Bucket([]byte(tc.bucketToMove))
-				}
-
-				if tc.expActErr == nil && bucketToMove != nil {
-					if wErr := dumpBucket([]byte(tc.bucketToMove), bucketToMove, dumpBucketBeforeMoving); wErr != nil {
-						t.Fatalf("error dumping bucket %v to file %v: %v", bucketToMove.String(), dumpBucketBeforeMoving, wErr)
-					}
+				if tc.expectedErr == nil {
+					t.Logf("Dump the bucket to %s before moving it", dumpBucketBeforeMoving)
+					bk := openBucket(tx, srcBucket, tc.bucketToMove)
+					dumpErr := dumpBucket([]byte(tc.bucketToMove), bk, dumpBucketBeforeMoving)
+					require.NoError(t, dumpErr)
 				}
 
 				mErr := tx.MoveBucket([]byte(tc.bucketToMove), srcBucket, dstBucket)
-				require.ErrorIs(t, mErr, tc.expActErr)
+				require.Equal(t, tc.expectedErr, mErr)
+
+				if tc.expectedErr == nil {
+					t.Logf("Dump the bucket to %s after moving it", dumpBucketAfterMoving)
+					bk := openBucket(tx, dstBucket, tc.bucketToMove)
+					dumpErr := dumpBucket([]byte(tc.bucketToMove), bk, dumpBucketAfterMoving)
+					require.NoError(t, dumpErr)
+				}
 
 				return nil
-			}); err != nil {
-				t.Fatal(err)
-			}
-			db.MustCheck()
+			})
+			require.NoError(t, err)
 
 			// skip assertion if failure expected
-			if tc.expActErr != nil {
+			if tc.expectedErr != nil {
 				return
 			}
 
-			// assert
-			if err := db.Update(func(tx *bbolt.Tx) error {
-				var movedBucket *bbolt.Bucket
-				srcBucket := openBuckets(t, tx, false, false, tc.parentSrc, tc.srcBucketPath...)
-
-				if srcBucket != nil {
-					if movedBucket = srcBucket.Bucket([]byte(tc.bucketToMove)); movedBucket != nil {
-						t.Fatalf("expected childBucket %v to be moved from srcBucket %v", tc.bucketToMove, srcBucket)
-					}
-				} else {
-					if movedBucket = tx.Bucket([]byte(tc.bucketToMove)); movedBucket != nil {
-						t.Fatalf("expected childBucket %v to be moved from root bucket %v", tc.bucketToMove, "root bucket")
-					}
-				}
-
-				dstBucket := openBuckets(t, tx, false, false, tc.parentDst, tc.dstBucketPath...)
-				if dstBucket != nil {
-					if movedBucket = dstBucket.Bucket([]byte(tc.bucketToMove)); movedBucket == nil {
-						t.Fatalf("expected childBucket %v to be child of dstBucket %v", tc.bucketToMove, dstBucket)
-					}
-				} else {
-					if movedBucket = tx.Bucket([]byte(tc.bucketToMove)); movedBucket == nil {
-						t.Fatalf("expected childBucket %v to be child of dstBucket %v", tc.bucketToMove, "root bucket")
-					}
-				}
-
-				wErr := dumpBucket([]byte(tc.bucketToMove), movedBucket, dumpBucketAfterMoving)
-				if wErr != nil {
-					t.Fatalf("error dumping bucket %v to file %v", movedBucket.String(), dumpBucketAfterMoving)
-				}
-
-				beforeBucket := readBucketFromFile(t, dumpBucketBeforeMoving)
-				afterBucket := readBucketFromFile(t, dumpBucketAfterMoving)
-
-				if !bytes.Equal(beforeBucket, afterBucket) {
-					t.Fatalf("bucket's content before moving is different than after moving")
-				}
-
-				return nil
-			}); err != nil {
-				t.Fatal(err)
-			}
-			db.MustCheck()
+			t.Log("Verifying the bucket should be identical before and after being moved")
+			dataBeforeMove, err := os.ReadFile(dumpBucketBeforeMoving)
+			require.NoError(t, err)
+			dataAfterMove, err := os.ReadFile(dumpBucketAfterMoving)
+			require.NoError(t, err)
+			require.Equal(t, dataBeforeMove, dataAfterMove)
 		})
 	}
 }
 
-func openBuckets(t testing.TB, tx *bbolt.Tx, incompatibleKey bool, init bool, parent bool, paths ...string) *bbolt.Bucket {
-	t.Helper()
-
+// prepareBuckets opens the bucket chain. For each bucket in the chain,
+// open it if existed, otherwise create it and populate sample data.
+func prepareBuckets(t testing.TB, tx *bbolt.Tx, buckets ...string) *bbolt.Bucket {
 	var bk *bbolt.Bucket
-	var err error
 
-	idx := len(paths) - 1
-	for i, key := range paths {
-		if len(key) == 0 {
-			if !init {
-				break
-			}
-			continue
-		}
-		if (incompatibleKey && i == idx) || (parent && i == idx) {
-			continue
-		}
-		if bk == nil {
-			bk, err = tx.CreateBucketIfNotExists([]byte(key))
+	for _, key := range buckets {
+		if childBucket := openBucket(tx, bk, key); childBucket == nil {
+			bk = createBucketAndPopulateData(t, tx, bk, key)
 		} else {
-			bk, err = bk.CreateBucketIfNotExists([]byte(key))
-		}
-		if err != nil {
-			t.Fatalf("error creating bucket %v: %v", key, err)
-		}
-		if init {
-			insertRandKeysValuesBucket(t, bk, rand.Intn(4096))
+			bk = childBucket
 		}
 	}
-
 	return bk
 }
 
-func readBucketFromFile(t testing.TB, tmpFile string) []byte {
-	data, err := os.ReadFile(tmpFile)
-	if err != nil {
-		t.Fatalf("error reading temp file %v", tmpFile)
+func openBucket(tx *bbolt.Tx, bk *bbolt.Bucket, bucketToOpen string) *bbolt.Bucket {
+	if bk == nil {
+		return tx.Bucket([]byte(bucketToOpen))
 	}
-
-	return data
+	return bk.Bucket([]byte(bucketToOpen))
 }
 
-func insertRandKeysValuesBucket(t testing.TB, bk *bbolt.Bucket, n int) {
+func createBucketAndPopulateData(t testing.TB, tx *bbolt.Tx, bk *bbolt.Bucket, bucketName string) *bbolt.Bucket {
+	if bk == nil {
+		newBucket, err := tx.CreateBucket([]byte(bucketName))
+		require.NoError(t, err, "failed to create bucket %s", bucketName)
+		populateSampleDataInBucket(t, newBucket, rand.Intn(4096))
+		return newBucket
+	}
+
+	newBucket, err := bk.CreateBucket([]byte(bucketName))
+	require.NoError(t, err, "failed to create bucket %s", bucketName)
+	populateSampleDataInBucket(t, bk, rand.Intn(4096))
+	return newBucket
+}
+
+func populateSampleDataInBucket(t testing.TB, bk *bbolt.Bucket, n int) {
 	var min, max = 1, 1024
 
 	for i := 0; i < n; i++ {
