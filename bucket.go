@@ -202,13 +202,18 @@ func (b *Bucket) CreateBucket(key []byte) (rb *Bucket, err error) {
 // Returns an error if the bucket name is blank, or if the bucket name is too long.
 // The bucket instance is only valid for the lifetime of the transaction.
 func (b *Bucket) CreateBucketIfNotExists(key []byte) (rb *Bucket, err error) {
+	// Insert into node.
+	// Tip: Use a new variable `newKey` instead of reusing the existing `key` to prevent
+	// it from being marked as leaking, and accordingly cannot be allocated on stack.
+	newKey := cloneBytes(key)
+
 	lg := b.tx.db.Logger()
-	lg.Debugf("Creating bucket if not exist %q", string(key))
+	lg.Debugf("Creating bucket if not exist %q", string(newKey))
 	defer func() {
 		if err != nil {
-			lg.Errorf("Creating bucket if not exist %q failed: %v", string(key), err)
+			lg.Errorf("Creating bucket if not exist %q failed: %v", string(newKey), err)
 		} else {
-			lg.Debugf("Creating bucket if not exist %q successfully", string(key))
+			lg.Debugf("Creating bucket if not exist %q successfully", string(newKey))
 		}
 	}()
 
@@ -216,14 +221,9 @@ func (b *Bucket) CreateBucketIfNotExists(key []byte) (rb *Bucket, err error) {
 		return nil, errors.ErrTxClosed
 	} else if !b.tx.writable {
 		return nil, errors.ErrTxNotWritable
-	} else if len(key) == 0 {
+	} else if len(newKey) == 0 {
 		return nil, errors.ErrBucketNameRequired
 	}
-
-	// Insert into node.
-	// Tip: Use a new variable `newKey` instead of reusing the existing `key` to prevent
-	// it from being marked as leaking, and accordingly cannot be allocated on stack.
-	newKey := cloneBytes(key)
 
 	if b.buckets != nil {
 		if child := b.buckets[string(newKey)]; child != nil {
@@ -269,13 +269,15 @@ func (b *Bucket) CreateBucketIfNotExists(key []byte) (rb *Bucket, err error) {
 // DeleteBucket deletes a bucket at the given key.
 // Returns an error if the bucket does not exist, or if the key represents a non-bucket value.
 func (b *Bucket) DeleteBucket(key []byte) (err error) {
+	newKey := cloneBytes(key)
+
 	lg := b.tx.db.Logger()
-	lg.Debugf("Deleting bucket %q", string(key))
+	lg.Debugf("Deleting bucket %q", string(newKey))
 	defer func() {
 		if err != nil {
-			lg.Errorf("Deleting bucket %q failed: %v", string(key), err)
+			lg.Errorf("Deleting bucket %q failed: %v", string(newKey), err)
 		} else {
-			lg.Debugf("Deleting bucket %q successfully", string(key))
+			lg.Debugf("Deleting bucket %q successfully", string(newKey))
 		}
 	}()
 
@@ -287,17 +289,17 @@ func (b *Bucket) DeleteBucket(key []byte) (err error) {
 
 	// Move cursor to correct position.
 	c := b.Cursor()
-	k, _, flags := c.seek(key)
+	k, _, flags := c.seek(newKey)
 
 	// Return an error if bucket doesn't exist or is not a bucket.
-	if !bytes.Equal(key, k) {
+	if !bytes.Equal(newKey, k) {
 		return errors.ErrBucketNotFound
 	} else if (flags & common.BucketLeafFlag) == 0 {
 		return errors.ErrIncompatibleValue
 	}
 
 	// Recursively delete all child buckets.
-	child := b.Bucket(key)
+	child := b.Bucket(newKey)
 	err = child.ForEachBucket(func(k []byte) error {
 		if err := child.DeleteBucket(k); err != nil {
 			return fmt.Errorf("delete bucket: %s", err)
@@ -309,7 +311,7 @@ func (b *Bucket) DeleteBucket(key []byte) (err error) {
 	}
 
 	// Remove cached copy.
-	delete(b.buckets, string(key))
+	delete(b.buckets, string(newKey))
 
 	// Release all bucket pages to freelist.
 	child.nodes = nil
@@ -317,7 +319,7 @@ func (b *Bucket) DeleteBucket(key []byte) (err error) {
 	child.free()
 
 	// Delete the node if we have a matching key.
-	c.node().del(key)
+	c.node().del(newKey)
 
 	return nil
 }
