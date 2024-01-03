@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -287,6 +288,10 @@ func createEmptyFSImage(imgPath string, fsType FSType) error {
 
 	if _, err := os.Stat(imgPath); err == nil {
 		return fmt.Errorf("failed to create image because %s already exists", imgPath)
+	}
+
+	if err := os.MkdirAll(path.Dir(imgPath), 0600); err != nil {
+		return fmt.Errorf("failed to ensure parent directory %s: %w", path.Dir(imgPath), err)
 	}
 
 	f, err := os.Create(imgPath)
