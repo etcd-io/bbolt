@@ -8,10 +8,17 @@ on:
   workflow_dispatch:
 
 jobs:
-  main:
+  amd64:
     # GHA has a maximum amount of 6h execution time, we try to get done within 3h
     uses: ./.github/workflows/robustness_template.yaml
     with:
       count: 100
       testTimeout: 200m
       runs-on: "['ubuntu-latest-8-cores']"
+  arm64:
+    # GHA has a maximum amount of 6h execution time, we try to get done within 3h
+    uses: ./.github/workflows/robustness_template.yaml
+    with:
+      count: 100
+      testTimeout: 200m
+      runs-on: "['actuated-arm64-4cpu-8gb']"
