@@ -31,8 +31,4 @@ jobs:
         run: |
           set -euo pipefail
 
-          make gofail-enable
-
-          # build bbolt with failpoint
-          go install ./cmd/bbolt
-          sudo -E PATH=$PATH make ROBUSTNESS_TESTFLAGS="--count ${{ inputs.count }} --timeout ${{ inputs.testTimeout }} -failfast" test-robustness
+          ROBUSTNESS_TESTFLAGS="--count ${{ inputs.count }} --timeout ${{ inputs.testTimeout }} -failfast" make test-robustness
