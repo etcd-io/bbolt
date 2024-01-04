@@ -30,5 +30,6 @@ jobs:
       - name: test-robustness
         run: |
           set -euo pipefail
+          sudo apt-get install -y dmsetup
 
           ROBUSTNESS_TESTFLAGS="--count ${{ inputs.count }} --timeout ${{ inputs.testTimeout }} -failfast" make test-robustness
