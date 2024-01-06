@@ -27,11 +27,15 @@ func (tx *Tx) Check(options ...CheckOption) <-chan error {
 	}
 
 	ch := make(chan error)
-	go tx.check(chkConfig.kvStringer, ch)
+	go func() {
+		// Close the channel to signal completion.
+		defer close(ch)
+		tx.check(chkConfig, ch)
+	}()
 	return ch
 }
 
-func (tx *Tx) check(kvStringer KVStringer, ch chan error) {
+func (tx *Tx) check(cfg checkConfig, ch chan error) {
 	// Force loading free list if opened in ReadOnly mode.
 	tx.db.loadFreelist()
 
@@ -57,7 +61,7 @@ func (tx *Tx) check(kvStringer KVStringer, ch chan error) {
 	}
 
 	// Recursively check buckets.
-	tx.recursivelyCheckBucket(&tx.root, reachable, freed, kvStringer, ch)
+	tx.recursivelyCheckBucket(&tx.root, reachable, freed, cfg.kvStringer, ch)
 
 	// Ensure all pages below high water mark are either reachable or freed.
 	for i := common.Pgid(0); i < tx.meta.Pgid(); i++ {
@@ -66,9 +70,6 @@ func (tx *Tx) check(kvStringer KVStringer, ch chan error) {
 			ch <- fmt.Errorf("page %d: unreachable unfreed", int(i))
 		}
 	}
-
-	// Close the channel to signal completion.
-	close(ch)
 }
 
 func (tx *Tx) recursivelyCheckBucket(b *Bucket, reachable map[common.Pgid]*common.Page, freed map[common.Pgid]bool,
