@@ -32,8 +32,9 @@ func TestInfoCommand_Run(t *testing.T) {
 	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
 
 	// Run the info command.
-	m := NewMain()
-	if err := m.Run("info", db.Path()); err != nil {
+	m := main.NewRootCommand()
+	m.SetArgs([]string{"info", db.Path()})
+	if err := m.Execute(); err != nil {
 		t.Fatal(err)
 	}
 }
