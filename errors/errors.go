@@ -77,4 +77,8 @@ var (
 	// ErrSameBuckets is returned when trying to move a sub-bucket between
 	// source and target buckets, while source and target buckets are the same.
 	ErrSameBuckets = errors.New("the source and target are the same bucket")
+
+	// ErrDifferentDB is returned when trying to move a sub-bucket between
+	// source and target buckets, while source and target buckets are in different database files.
+	ErrDifferentDB = errors.New("the source and target buckets are in different database files")
 )
