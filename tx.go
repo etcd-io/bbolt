@@ -25,14 +25,13 @@ import (
 // are using them. A long running read transaction can cause the database to
 // quickly grow.
 type Tx struct {
-	writable       bool
-	managed        bool
 	db             *DB
 	meta           *common.Meta
-	root           Bucket
 	pages          map[common.Pgid]*common.Page
-	stats          TxStats
+	root           Bucket
 	commitHandlers []func()
+
+	stats TxStats
 
 	// WriteFlag specifies the flag for write-related methods like WriteTo().
 	// Tx opens the database file with the specified flag to copy the data.
@@ -41,6 +40,8 @@ type Tx struct {
 	// workloads. For databases that are much larger than available RAM,
 	// set the flag to syscall.O_DIRECT to avoid trashing the page cache.
 	WriteFlag int
+	writable  bool
+	managed   bool
 }
 
 // init initializes the transaction.

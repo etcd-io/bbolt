@@ -443,10 +443,10 @@ func newPageItemCommand(m *Main) *pageItemCommand {
 }
 
 type pageItemOptions struct {
+	format    string
 	help      bool
 	keyOnly   bool
 	valueOnly bool
-	format    string
 }
 
 // Run executes the command.
@@ -1490,18 +1490,18 @@ type BenchOptions struct {
 	ProfileMode   string
 	WriteMode     string
 	ReadMode      string
+	CPUProfile    string
+	MemProfile    string
+	BlockProfile  string
+	Path          string
 	Iterations    int64
 	BatchSize     int64
 	KeySize       int
 	ValueSize     int
-	CPUProfile    string
-	MemProfile    string
-	BlockProfile  string
 	StatsInterval time.Duration
 	FillPercent   float64
 	NoSync        bool
 	Work          bool
-	Path          string
 }
 
 // BenchResults represents the performance results of the benchmark and is thread-safe.
@@ -1544,8 +1544,8 @@ func (r *BenchResults) OpsPerSecond() int {
 }
 
 type PageError struct {
-	ID  int
 	Err error
+	ID  int
 }
 
 func (e *PageError) Error() string {
