@@ -19,6 +19,7 @@ func NewRootCommand() *cobra.Command {
 	rootCmd.AddCommand(
 		newVersionCobraCommand(),
 		newSurgeryCobraCommand(),
+		newInspectCobraCommand(),
 	)
 
 	return rootCmd

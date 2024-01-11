@@ -1623,6 +1623,111 @@ func TestBucket_Stats_Nested(t *testing.T) {
 	}
 }
 
+func TestBucket_Inspect(t *testing.T) {
+	db := btesting.MustCreateDB(t)
+
+	expectedStructure := bolt.BucketStructure{
+		Name: "root",
+		KeyN: 0,
+		Children: []bolt.BucketStructure{
+			{
+				Name: "b1",
+				KeyN: 3,
+				Children: []bolt.BucketStructure{
+					{
+						Name: "b1_1",
+						KeyN: 6,
+					},
+					{
+						Name: "b1_2",
+						KeyN: 7,
+					},
+					{
+						Name: "b1_3",
+						KeyN: 8,
+					},
+				},
+			},
+			{
+				Name: "b2",
+				KeyN: 4,
+				Children: []bolt.BucketStructure{
+					{
+						Name: "b2_1",
+						KeyN: 10,
+					},
+					{
+						Name: "b2_2",
+						KeyN: 12,
+						Children: []bolt.BucketStructure{
+							{
+								Name: "b2_2_1",
+								KeyN: 2,
+							},
+							{
+								Name: "b2_2_2",
+								KeyN: 3,
+							},
+						},
+					},
+					{
+						Name: "b2_3",
+						KeyN: 11,
+					},
+				},
+			},
+		},
+	}
+
+	type bucketItem struct {
+		b  *bolt.Bucket
+		bs bolt.BucketStructure
+	}
+
+	t.Log("Populating the database")
+	err := db.Update(func(tx *bolt.Tx) error {
+		queue := []bucketItem{
+			{
+				b:  nil,
+				bs: expectedStructure,
+			},
+		}
+
+		for len(queue) > 0 {
+			item := queue[0]
+			queue = queue[1:]
+
+			if item.b != nil {
+				for i := 0; i < item.bs.KeyN; i++ {
+					err := item.b.Put([]byte(fmt.Sprintf("%02d", i)), []byte(fmt.Sprintf("%02d", i)))
+					require.NoError(t, err)
+				}
+
+				for _, child := range item.bs.Children {
+					childBucket, err := item.b.CreateBucket([]byte(child.Name))
+					require.NoError(t, err)
+					queue = append(queue, bucketItem{b: childBucket, bs: child})
+				}
+			} else {
+				for _, child := range item.bs.Children {
+					childBucket, err := tx.CreateBucket([]byte(child.Name))
+					require.NoError(t, err)
+					queue = append(queue, bucketItem{b: childBucket, bs: child})
+				}
+			}
+		}
+		return nil
+	})
+	require.NoError(t, err)
+
+	t.Log("Inspecting the database")
+	_ = db.View(func(tx *bolt.Tx) error {
+		actualStructure := tx.Inspect()
+		assert.Equal(t, expectedStructure, actualStructure)
+		return nil
+	})
+}
+
 // Ensure a large bucket can calculate stats.
 func TestBucket_Stats_Large(t *testing.T) {
 	if testing.Short() {
