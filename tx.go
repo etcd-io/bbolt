@@ -100,6 +100,11 @@ func (tx *Tx) Stats() TxStats {
 	return tx.stats
 }
 
+// Inspect returns the structure of the database.
+func (tx *Tx) Inspect() BucketStructure {
+	return tx.root.Inspect()
+}
+
 // Bucket retrieves a bucket by name.
 // Returns nil if the bucket does not exist.
 // The bucket instance is only valid for the lifetime of the transaction.
