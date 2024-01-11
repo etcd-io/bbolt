@@ -392,6 +392,30 @@ func (b *Bucket) MoveBucket(key []byte, dstBucket *Bucket) (err error) {
 	return nil
 }
 
+// Inspect returns the structure of the bucket.
+func (b *Bucket) Inspect() BucketStructure {
+	return b.recursivelyInspect([]byte("root"))
+}
+
+func (b *Bucket) recursivelyInspect(name []byte) BucketStructure {
+	bs := BucketStructure{Name: string(name)}
+
+	keyN := 0
+	c := b.Cursor()
+	for k, _, flags := c.first(); k != nil; k, _, flags = c.next() {
+		if flags&common.BucketLeafFlag != 0 {
+			childBucket := b.Bucket(k)
+			childBS := childBucket.recursivelyInspect(k)
+			bs.Children = append(bs.Children, childBS)
+		} else {
+			keyN++
+		}
+	}
+	bs.KeyN = keyN
+
+	return bs
+}
+
 // Get retrieves the value for a key in the bucket.
 // Returns a nil value if the key does not exist or if the key is a nested bucket.
 // The returned value is only valid for the life of the transaction.
@@ -954,4 +978,10 @@ func cloneBytes(v []byte) []byte {
 	var clone = make([]byte, len(v))
 	copy(clone, v)
 	return clone
+}
+
+type BucketStructure struct {
+	Name     string            `json:"name"`              // name of the bucket
+	KeyN     int               `json:"keyN"`              // number of key/value pairs
+	Children []BucketStructure `json:"buckets,omitempty"` // child buckets
 }

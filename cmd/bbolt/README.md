@@ -162,6 +162,61 @@
       Bytes used for inlined buckets: 780 (0%)
   ```
 
+### inspect
+- `inspect` inspect the structure of the database.
+- Usage: `bbolt inspect [path to the bbolt database]`
+
+  Example:
+```bash
+$ ./bbolt inspect ~/default.etcd/member/snap/db
+{
+    "name": "root",
+    "keyN": 0,
+    "buckets": [
+        {
+            "name": "alarm",
+            "keyN": 0
+        },
+        {
+            "name": "auth",
+            "keyN": 2
+        },
+        {
+            "name": "authRoles",
+            "keyN": 1
+        },
+        {
+            "name": "authUsers",
+            "keyN": 1
+        },
+        {
+            "name": "cluster",
+            "keyN": 1
+        },
+        {
+            "name": "key",
+            "keyN": 1285
+        },
+        {
+            "name": "lease",
+            "keyN": 2
+        },
+        {
+            "name": "members",
+            "keyN": 1
+        },
+        {
+            "name": "members_removed",
+            "keyN": 0
+        },
+        {
+            "name": "meta",
+            "keyN": 3
+        }
+    ]
+}
+```
+
 ### pages
 
 - Pages prints a table of pages with their type (meta, leaf, branch, freelist).

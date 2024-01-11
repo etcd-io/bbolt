@@ -170,6 +170,7 @@ The commands are:
     pages       print list of pages with their types
     page-item   print the key and value of a page item.
     stats       iterate over all pages and generate usage stats
+    inspect     inspect the structure of the database
     surgery     perform surgery on bbolt database
 
 Use "bbolt [command] -h" for more information about a command.
