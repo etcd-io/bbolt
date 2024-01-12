@@ -69,6 +69,7 @@ New minor versions may add additional features to the API.
     - [LMDB](#lmdb)
   - [Caveats & Limitations](#caveats--limitations)
   - [Reading the Source](#reading-the-source)
+  - [Known Issues](#known-issues)
   - [Other Projects Using Bolt](#other-projects-using-bolt)
 
 ## Getting Started
@@ -933,6 +934,19 @@ The best places to start are the main entry points into Bolt:
 
 If you have additional notes that could be helpful for others, please submit
 them via pull request.
+
+## Known Issues
+
+- bbolt might run into data corruption issue on Linux when the feature
+  [ext4: fast commit](https://lwn.net/Articles/842385/), which was introduced in
+  linux kernel version v5.10, is enabled. The fixes to the issue were included in
+  linux kernel version v5.17, please refer to links below,
+
+  * [ext4: fast commit may miss tracking unwritten range during ftruncate](https://lore.kernel.org/linux-ext4/20211223032337.5198-3-yinxin.x@bytedance.com/)
+  * [ext4: fast commit may not fallback for ineligible commit](https://lore.kernel.org/lkml/202201091544.W5HHEXAp-lkp@intel.com/T/#ma0768815e4b5f671e9e451d578256ef9a76fe30e)
+  * [ext4 updates for 5.17](https://lore.kernel.org/lkml/YdyxjTFaLWif6BCM@mit.edu/)
+
+  Please also refer to the discussion in https://github.com/etcd-io/bbolt/issues/562.
 
 
 ## Other Projects Using Bolt
