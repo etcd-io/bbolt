@@ -216,6 +216,129 @@ func TestTx_MoveBucket(t *testing.T) {
 	}
 }
 
+func TestBucket_MoveBucket_DiffDB(t *testing.T) {
+	srcBucketPath := []string{"sb1", "sb2"}
+	dstBucketPath := []string{"db1", "db2"}
+	bucketToMove := "bucketToMove"
+
+	var srcBucket *bbolt.Bucket
+
+	t.Log("Creating source bucket and populate some data")
+	srcDB := btesting.MustCreateDBWithOption(t, &bbolt.Options{PageSize: 4096})
+	err := srcDB.Update(func(tx *bbolt.Tx) error {
+		srcBucket = prepareBuckets(t, tx, srcBucketPath...)
+		return nil
+	})
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, srcDB.Close())
+	}()
+
+	t.Log("Creating target bucket and populate some data")
+	dstDB := btesting.MustCreateDBWithOption(t, &bbolt.Options{PageSize: 4096})
+	err = dstDB.Update(func(tx *bbolt.Tx) error {
+		prepareBuckets(t, tx, dstBucketPath...)
+		return nil
+	})
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, dstDB.Close())
+	}()
+
+	t.Log("Reading source bucket in a separate RWTx")
+	sTx, sErr := srcDB.Begin(true)
+	require.NoError(t, sErr)
+	defer func() {
+		require.NoError(t, sTx.Rollback())
+	}()
+	srcBucket = prepareBuckets(t, sTx, srcBucketPath...)
+
+	t.Log("Moving the sub-bucket in a separate RWTx")
+	err = dstDB.Update(func(tx *bbolt.Tx) error {
+		dstBucket := prepareBuckets(t, tx, dstBucketPath...)
+		mErr := srcBucket.MoveBucket([]byte(bucketToMove), dstBucket)
+		require.Equal(t, errors.ErrDifferentDB, mErr)
+
+		return nil
+	})
+	require.NoError(t, err)
+}
+
+func TestBucket_MoveBucket_DiffTx(t *testing.T) {
+	testCases := []struct {
+		name            string
+		srcBucketPath   []string
+		dstBucketPath   []string
+		isSrcReadonlyTx bool
+		isDstReadonlyTx bool
+		bucketToMove    string
+		expectedErr     error
+	}{
+		{
+			name:            "src is RWTx and target is RTx",
+			srcBucketPath:   []string{"sb1", "sb2"},
+			dstBucketPath:   []string{"db1", "db2"},
+			isSrcReadonlyTx: true,
+			isDstReadonlyTx: false,
+			bucketToMove:    "bucketToMove",
+			expectedErr:     errors.ErrTxNotWritable,
+		},
+		{
+			name:            "src is RTx and target is RWTx",
+			srcBucketPath:   []string{"sb1", "sb2"},
+			dstBucketPath:   []string{"db1", "db2"},
+			isSrcReadonlyTx: false,
+			isDstReadonlyTx: true,
+			bucketToMove:    "bucketToMove",
+			expectedErr:     errors.ErrTxNotWritable,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var srcBucket *bbolt.Bucket
+			var dstBucket *bbolt.Bucket
+
+			t.Log("Creating source and target buckets and populate some data")
+			db := btesting.MustCreateDBWithOption(t, &bbolt.Options{PageSize: 4096})
+			err := db.Update(func(tx *bbolt.Tx) error {
+				srcBucket = prepareBuckets(t, tx, tc.srcBucketPath...)
+				dstBucket = prepareBuckets(t, tx, tc.dstBucketPath...)
+				return nil
+			})
+			require.NoError(t, err)
+			defer func() {
+				require.NoError(t, db.Close())
+			}()
+
+			t.Log("Opening source bucket in a separate Tx")
+			sTx, sErr := db.Begin(tc.isSrcReadonlyTx)
+			require.NoError(t, sErr)
+			defer func() {
+				require.NoError(t, sTx.Rollback())
+			}()
+			srcBucket = prepareBuckets(t, sTx, tc.srcBucketPath...)
+
+			t.Log("Opening target bucket in a separate Tx")
+			dTx, dErr := db.Begin(tc.isDstReadonlyTx)
+			require.NoError(t, dErr)
+			defer func() {
+				require.NoError(t, dTx.Rollback())
+			}()
+			dstBucket = prepareBuckets(t, dTx, tc.dstBucketPath...)
+
+			t.Log("Moving the sub-bucket")
+			err = db.View(func(tx *bbolt.Tx) error {
+				mErr := srcBucket.MoveBucket([]byte(tc.bucketToMove), dstBucket)
+				require.Equal(t, tc.expectedErr, mErr)
+
+				return nil
+			})
+			require.NoError(t, err)
+		})
+	}
+}
+
 // prepareBuckets opens the bucket chain. For each bucket in the chain,
 // open it if existed, otherwise create it and populate sample data.
 func prepareBuckets(t testing.TB, tx *bbolt.Tx, buckets ...string) *bbolt.Bucket {
