@@ -994,6 +994,7 @@ Below is a list of public, open source projects that use Bolt:
 * [MetricBase](https://github.com/msiebuhr/MetricBase) - Single-binary version of Graphite.
 * [MuLiFS](https://github.com/dankomiocevic/mulifs) - Music Library Filesystem creates a filesystem to organise your music files.
 * [NATS](https://github.com/nats-io/nats-streaming-server) - NATS Streaming uses bbolt for message and metadata storage.
+* [Portainer](https://github.com/portainer/portainer) - A lightweight service delivery platform for containerized applications that can be used to manage Docker, Swarm, Kubernetes and ACI environments.
 * [Prometheus Annotation Server](https://github.com/oliver006/prom_annotation_server) - Annotation server for PromDash & Prometheus service monitoring system.
 * [Rain](https://github.com/cenkalti/rain) - BitTorrent client and library.
 * [reef-pi](https://github.com/reef-pi/reef-pi) - reef-pi is an award winning, modular, DIY reef tank controller using easy to learn electronics based on a Raspberry Pi.
