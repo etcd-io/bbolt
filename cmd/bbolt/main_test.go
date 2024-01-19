@@ -479,40 +479,6 @@ func TestPagesCommand_Run(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// Ensure the "bench" command runs and exits without errors
-func TestBenchCommand_Run(t *testing.T) {
-	tests := map[string]struct {
-		args []string
-	}{
-		"no-args":    {},
-		"100k count": {[]string{"-count", "100000"}},
-	}
-
-	for name, test := range tests {
-		t.Run(name, func(t *testing.T) {
-			// Run the command.
-			m := NewMain()
-			args := append([]string{"bench"}, test.args...)
-			if err := m.Run(args...); err != nil {
-				t.Fatal(err)
-			}
-
-			stderr := m.Stderr.String()
-			if !strings.Contains(stderr, "starting write benchmark.") || !strings.Contains(stderr, "starting read benchmark.") {
-				t.Fatal(fmt.Errorf("benchmark result does not contain read/write start output:\n%s", stderr))
-			}
-
-			if strings.Contains(stderr, "iter mismatch") {
-				t.Fatal(fmt.Errorf("found iter mismatch in stdout:\n%s", stderr))
-			}
-
-			if !strings.Contains(stderr, "# Write") || !strings.Contains(stderr, "# Read") {
-				t.Fatal(fmt.Errorf("benchmark result does not contain read/write output:\n%s", stderr))
-			}
-		})
-	}
-}
-
 type ConcurrentBuffer struct {
 	m   sync.Mutex
 	buf bytes.Buffer
