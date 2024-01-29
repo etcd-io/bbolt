@@ -649,6 +649,33 @@ func TestCompactCommand_Run(t *testing.T) {
 	}
 }
 
+func TestCommands_Run_NoArgs(t *testing.T) {
+	testCases := []struct {
+		name   string
+		cmd    string
+		expErr error
+	}{
+		{
+			name:   "get",
+			cmd:    "get",
+			expErr: main.ErrNotEnoughArgs,
+		},
+		{
+			name:   "keys",
+			cmd:    "keys",
+			expErr: main.ErrNotEnoughArgs,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := NewMain()
+			err := m.Run(tc.cmd)
+			require.ErrorIs(t, err, main.ErrNotEnoughArgs)
+		})
+	}
+}
+
 func fillBucket(b *bolt.Bucket, prefix []byte) error {
 	n := 10 + rand.Intn(50)
 	for i := 0; i < n; i++ {
