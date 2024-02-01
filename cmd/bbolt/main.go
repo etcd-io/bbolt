@@ -60,6 +60,9 @@ var (
 
 	// ErrKeyNotFound is returned when a key is not found.
 	ErrKeyNotFound = errors.New("key not found")
+
+	// ErrNotEnoughArgs is returned with a cmd is being executed with fewer arguments.
+	ErrNotEnoughArgs = errors.New("not enough arguments")
 )
 
 func main() {
@@ -908,6 +911,9 @@ func (cmd *keysCommand) Run(args ...string) error {
 
 	// Require database path and bucket.
 	relevantArgs := fs.Args()
+	if len(relevantArgs) < 2 {
+		return ErrNotEnoughArgs
+	}
 	path, buckets := relevantArgs[0], relevantArgs[1:]
 	if path == "" {
 		return ErrPathRequired
@@ -993,6 +999,9 @@ func (cmd *getCommand) Run(args ...string) error {
 
 	// Require database path, bucket and key.
 	relevantArgs := fs.Args()
+	if len(relevantArgs) < 3 {
+		return ErrNotEnoughArgs
+	}
 	path, buckets := relevantArgs[0], relevantArgs[1:len(relevantArgs)-1]
 	key, err := parseBytes(relevantArgs[len(relevantArgs)-1], parseFormat)
 	if err != nil {
