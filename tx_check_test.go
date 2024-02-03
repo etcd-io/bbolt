@@ -1,12 +1,9 @@
 package bbolt_test
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
 	"math/rand"
 	"testing"
-	"unsafe"
 
 	"github.com/stretchr/testify/require"
 
@@ -17,26 +14,19 @@ import (
 )
 
 func TestTx_Check_CorruptPage(t *testing.T) {
-	bucketKey := "testBucket"
-
 	t.Log("Creating db file.")
-	db := btesting.MustCreateDBWithOption(t, &bbolt.Options{PageSize: pageSize})
-	defer func() {
-		require.NoError(t, db.Close())
-	}()
+	db := btesting.MustCreateDBWithOption(t, &bbolt.Options{PageSize: 4096})
 
-	uErr := db.Update(func(tx *bbolt.Tx) error {
-		t.Logf("Creating bucket '%v'.", bucketKey)
-		b, bErr := tx.CreateBucketIfNotExists([]byte(bucketKey))
-		require.NoError(t, bErr)
-		t.Logf("Generating random data in bucket '%v'.", bucketKey)
-		generateSampleDataInBucket(t, b, pageSize, 3)
-		return nil
-	})
-	require.NoError(t, uErr)
+	// Each page can hold roughly 20 key/values pair, so 100 such
+	// key/value pairs will consume about 5 leaf pages.
+	err := db.Fill([]byte("data"), 1, 100,
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
+		func(tx int, k int) []byte { return make([]byte, 100) },
+	)
+	require.NoError(t, err)
 
-	t.Logf("Corrupting random leaf page in bucket '%v'.", bucketKey)
-	victimPageId, validPageIds := corruptLeafPage(t, db.DB)
+	t.Log("Corrupting random leaf page.")
+	victimPageId, validPageIds := corruptRandomLeafPage(t, db.DB)
 
 	t.Log("Running consistency check.")
 	vErr := db.View(func(tx *bbolt.Tx) error {
@@ -61,45 +51,53 @@ func TestTx_Check_CorruptPage(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, vErr)
+	t.Log("All check passed")
+
+	// Manually close the db, otherwise the PostTestCleanup will
+	// check the db again and accordingly fail the test.
+	db.MustClose()
 }
 
-// corruptLeafPage write an invalid leafPageElement into the victim page.
-func corruptLeafPage(t testing.TB, db *bbolt.DB) (victimPageId common.Pgid, validPageIds []common.Pgid) {
-	t.Helper()
-	victimPageId, validPageIds = findVictimPageId(t, db)
+// corruptRandomLeafPage corrupts one random leaf page.
+func corruptRandomLeafPage(t testing.TB, db *bbolt.DB) (victimPageId common.Pgid, validPageIds []common.Pgid) {
+	victimPageId, validPageIds = pickupRandomLeafPage(t, db)
 	victimPage, victimBuf, err := guts_cli.ReadPage(db.Path(), uint64(victimPageId))
 	require.NoError(t, err)
 	require.True(t, victimPage.IsLeafPage())
-	require.True(t, victimPage.Count() > 0)
-	// Dumping random bytes in victim page for corruption.
-	copy(victimBuf[32:], generateCorruptionBytes(t))
+	require.True(t, victimPage.Count() > 1)
+
+	// intentionally make the second key < the first key.
+	element := victimPage.LeafPageElement(1)
+	key := element.Key()
+	key[0] = 0
+
 	// Write the corrupt page to db file.
 	err = guts_cli.WritePage(db.Path(), victimBuf)
 	require.NoError(t, err)
 	return victimPageId, validPageIds
 }
 
-// findVictimPageId finds all the leaf pages of a bucket and picks a random leaf page as a victim to be corrupted.
-func findVictimPageId(t testing.TB, db *bbolt.DB) (victimPageId common.Pgid, validPageIds []common.Pgid) {
-	t.Helper()
-	// Read DB's RootPage.
+// pickupRandomLeafPage picks up a random leaf page.
+func pickupRandomLeafPage(t testing.TB, db *bbolt.DB) (victimPageId common.Pgid, validPageIds []common.Pgid) {
+	// Read DB's RootPage, which should be a leaf page.
 	rootPageId, _, err := guts_cli.GetRootPage(db.Path())
 	require.NoError(t, err)
 	rootPage, _, err := guts_cli.ReadPage(db.Path(), uint64(rootPageId))
 	require.NoError(t, err)
 	require.True(t, rootPage.IsLeafPage())
-	require.Equal(t, 1, len(rootPage.LeafPageElements()))
-	// Find Bucket's RootPage.
+
+	// The leaf page contains only one item, namely the bucket
+	require.Equal(t, uint16(1), rootPage.Count())
 	lpe := rootPage.LeafPageElement(uint16(0))
-	require.Equal(t, uint32(common.BranchPageFlag), lpe.Flags())
-	k := lpe.Key()
-	require.Equal(t, "testBucket", string(k))
+	require.True(t, lpe.IsBucketEntry())
+
+	// The bucket should be pointing to a branch page
 	bucketRootPageId := lpe.Bucket().RootPage()
-	// Read Bucket's RootPage.
 	bucketRootPage, _, err := guts_cli.ReadPage(db.Path(), uint64(bucketRootPageId))
 	require.NoError(t, err)
-	require.Equal(t, uint16(common.BranchPageFlag), bucketRootPage.Flags())
-	// Retrieve Bucket's PageIds
+	require.True(t, bucketRootPage.IsBranchPage())
+
+	// Retrieve all the leaf pages included in the branch page, and pick up random one from them.
 	var bucketPageIds []common.Pgid
 	for _, bpe := range bucketRootPage.BranchPageElements() {
 		bucketPageIds = append(bucketPageIds, bpe.Pgid())
@@ -108,37 +106,4 @@ func findVictimPageId(t testing.TB, db *bbolt.DB) (victimPageId common.Pgid, val
 	victimPageId = bucketPageIds[randomIdx]
 	validPageIds = append(bucketPageIds[:randomIdx], bucketPageIds[randomIdx+1:]...)
 	return victimPageId, validPageIds
-}
-
-// generateSampleDataInBucket fill in sample data into given bucket to create the given
-// number of leafPages. To control the number of leafPages, sample data are generated in order.
-func generateSampleDataInBucket(t testing.TB, bk *bbolt.Bucket, pageSize int, lPages int) {
-	t.Helper()
-	maxBytesInPage := int(bk.FillPercent * float64(pageSize))
-	currentKey := 1
-	currentVal := 100
-	for i := 0; i < lPages; i++ {
-		currentSize := common.PageHeaderSize
-		for {
-			err := bk.Put([]byte(fmt.Sprintf("key_%d", currentKey)), []byte(fmt.Sprintf("val_%d", currentVal)))
-			require.NoError(t, err)
-			currentSize += common.LeafPageElementSize + unsafe.Sizeof(currentKey) + unsafe.Sizeof(currentVal)
-			if int(currentSize) >= maxBytesInPage {
-				break
-			}
-			currentKey++
-			currentVal++
-		}
-	}
-}
-
-// generateCorruptionBytes returns random bytes to corrupt a page.
-// It inserts a page element which violates the btree key order if no panic is expected.
-func generateCorruptionBytes(t testing.TB) []byte {
-	t.Helper()
-	invalidLPE := common.NewLeafPageElement(0, 0, 0, 0)
-	var buf bytes.Buffer
-	err := binary.Write(&buf, binary.BigEndian, invalidLPE)
-	require.NoError(t, err)
-	return buf.Bytes()
 }
