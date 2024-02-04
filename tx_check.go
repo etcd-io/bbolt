@@ -102,16 +102,16 @@ func (tx *Tx) recursivelyCheckBucketInPage(pageId common.Pgid, reachable map[com
 	case p.IsLeafPage():
 		for i := range p.LeafPageElements() {
 			elem := p.LeafPageElement(uint16(i))
-			if elem.Flags()&common.BucketLeafFlag != 0 {
-
+			if elem.IsBucketEntry() {
 				inBkt := common.NewInBucket(pageId, 0)
 				tmpBucket := Bucket{
 					InBucket:    &inBkt,
 					rootNode:    &node{isLeaf: p.IsLeafPage()},
 					FillPercent: DefaultFillPercent,
+					tx:          tx,
 				}
 				if child := tmpBucket.Bucket(elem.Key()); child != nil {
-					tx.recursivelyCheckBucket(&tmpBucket, reachable, freed, kvStringer, ch)
+					tx.recursivelyCheckBucket(child, reachable, freed, kvStringer, ch)
 				}
 			}
 		}
