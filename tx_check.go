@@ -60,15 +60,63 @@ func (tx *Tx) check(cfg checkConfig, ch chan error) {
 		}
 	}
 
-	// Recursively check buckets.
-	tx.recursivelyCheckBucket(&tx.root, reachable, freed, cfg.kvStringer, ch)
+	if cfg.pageId == 0 {
+		// Check the whole db file, starting from the root bucket and
+		// recursively check all child buckets.
+		tx.recursivelyCheckBucket(&tx.root, reachable, freed, cfg.kvStringer, ch)
 
-	// Ensure all pages below high water mark are either reachable or freed.
-	for i := common.Pgid(0); i < tx.meta.Pgid(); i++ {
-		_, isReachable := reachable[i]
-		if !isReachable && !freed[i] {
-			ch <- fmt.Errorf("page %d: unreachable unfreed", int(i))
+		// Ensure all pages below high water mark are either reachable or freed.
+		for i := common.Pgid(0); i < tx.meta.Pgid(); i++ {
+			_, isReachable := reachable[i]
+			if !isReachable && !freed[i] {
+				ch <- fmt.Errorf("page %d: unreachable unfreed", int(i))
+			}
 		}
+	} else {
+		// Check the db file starting from a specified pageId.
+		if cfg.pageId < 2 || cfg.pageId >= uint(tx.meta.Pgid()) {
+			ch <- fmt.Errorf("page ID (%d) out of range [%d, %d)", cfg.pageId, 2, tx.meta.Pgid())
+			return
+		}
+
+		tx.recursivelyCheckPage(common.Pgid(cfg.pageId), reachable, freed, cfg.kvStringer, ch)
+	}
+}
+
+func (tx *Tx) recursivelyCheckPage(pageId common.Pgid, reachable map[common.Pgid]*common.Page, freed map[common.Pgid]bool,
+	kvStringer KVStringer, ch chan error) {
+	tx.checkInvariantProperties(pageId, reachable, freed, kvStringer, ch)
+	tx.recursivelyCheckBucketInPage(pageId, reachable, freed, kvStringer, ch)
+}
+
+func (tx *Tx) recursivelyCheckBucketInPage(pageId common.Pgid, reachable map[common.Pgid]*common.Page, freed map[common.Pgid]bool,
+	kvStringer KVStringer, ch chan error) {
+	p := tx.page(pageId)
+
+	switch {
+	case p.IsBranchPage():
+		for i := range p.BranchPageElements() {
+			elem := p.BranchPageElement(uint16(i))
+			tx.recursivelyCheckBucketInPage(elem.Pgid(), reachable, freed, kvStringer, ch)
+		}
+	case p.IsLeafPage():
+		for i := range p.LeafPageElements() {
+			elem := p.LeafPageElement(uint16(i))
+			if elem.Flags()&common.BucketLeafFlag != 0 {
+
+				inBkt := common.NewInBucket(pageId, 0)
+				tmpBucket := Bucket{
+					InBucket:    &inBkt,
+					rootNode:    &node{isLeaf: p.IsLeafPage()},
+					FillPercent: DefaultFillPercent,
+				}
+				if child := tmpBucket.Bucket(elem.Key()); child != nil {
+					tx.recursivelyCheckBucket(&tmpBucket, reachable, freed, kvStringer, ch)
+				}
+			}
+		}
+	default:
+		ch <- fmt.Errorf("unexpected page type (flags: %x) for pgId:%d", p.Flags(), pageId)
 	}
 }
 
@@ -167,7 +215,7 @@ func (tx *Tx) recursivelyCheckPageKeyOrderInternal(
 			return p.LeafPageElement(p.Count() - 1).Key()
 		}
 	default:
-		ch <- fmt.Errorf("unexpected page type for pgId:%d", pgId)
+		ch <- fmt.Errorf("unexpected page type (flags: %x) for pgId:%d", p.Flags(), pgId)
 	}
 	return maxKeyInSubtree
 }
@@ -202,6 +250,7 @@ func verifyKeyOrder(pgId common.Pgid, pageType string, index int, key []byte, pr
 
 type checkConfig struct {
 	kvStringer KVStringer
+	pageId     uint
 }
 
 type CheckOption func(options *checkConfig)
@@ -209,6 +258,13 @@ type CheckOption func(options *checkConfig)
 func WithKVStringer(kvStringer KVStringer) CheckOption {
 	return func(c *checkConfig) {
 		c.kvStringer = kvStringer
+	}
+}
+
+// WithPageId sets a page ID from which the check command starts to check
+func WithPageId(pageId uint) CheckOption {
+	return func(c *checkConfig) {
+		c.pageId = pageId
 	}
 }
 
