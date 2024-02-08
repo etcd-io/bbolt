@@ -1,5 +1,6 @@
 BRANCH=`git rev-parse --abbrev-ref HEAD`
 COMMIT=`git rev-parse --short HEAD`
+LATEST_RELEASE_BRANCH := release-$(shell grep -ohE "[0-9]+.[0-9]+" version/version.go)
 GOLDFLAGS="-X main.branch $(BRANCH) -X main.commit $(COMMIT)"
 GOFILES = $(shell find . -name \*.go)
 
@@ -94,3 +95,15 @@ test-failpoint:
 test-robustness: gofail-enable build
 	sudo env PATH=$$PATH go test -v ${TESTFLAGS} ./tests/dmflakey -test.root
 	sudo env PATH=$(PWD)/bin:$$PATH go test -v ${TESTFLAGS} ${ROBUSTNESS_TESTFLAGS} ./tests/robustness -test.root
+
+.PHONY: test-benchmark-compare
+# Runs benchmark tests on the current git ref and the last release and compares
+# the two.
+test-benchmark-compare:
+	@git fetch
+	./tests/compare_benchmarks.sh main
+	./tests/compare_benchmarks.sh ${LATEST_RELEASE_BRANCH}
+
+.PHONY: install-benchstat
+install-benchstat:
+	go install golang.org/x/perf/cmd/benchstat@latest
