@@ -94,3 +94,14 @@ test-failpoint:
 test-robustness: gofail-enable build
 	sudo env PATH=$$PATH go test -v ${TESTFLAGS} ./tests/dmflakey -test.root
 	sudo env PATH=$(PWD)/bin:$$PATH go test -v ${TESTFLAGS} ${ROBUSTNESS_TESTFLAGS} ./tests/robustness -test.root
+
+.PHONY: test-benchmark-compare
+# Runs benchmark tests on the current git ref and the given REF, and compares
+# the two.
+test-benchmark-compare: install-benchstat
+	@git fetch
+	./scripts/compare_benchmarks.sh $(REF)
+
+.PHONY: install-benchstat
+install-benchstat:
+	go install golang.org/x/perf/cmd/benchstat@latest
