@@ -1,0 +1,27 @@
+---
+name: Benchmarks on AMD64
+permissions: read-all
+on: [push, pull_request]
+jobs:
+  ci-benchmark-tests:
+    name: ci-benchmark-tests
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v4
+    - id: goversion
+      run: echo "goversion=$(cat .go-version)" >> "$GITHUB_OUTPUT"
+
+    - name: Set up Go 1.x
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ steps.goversion.outputs.goversion }}
+      id: go
+
+    - name: Install Benchstat
+      run: |
+        make install-benchstat
+
+    - name: Benchmark tests
+      run: |
+        make test-benchmark-compare
