@@ -192,10 +192,17 @@ func newCheckCommand(m *Main) *checkCommand {
 	return c
 }
 
+type checkOptions struct {
+	pageId uint64
+}
+
 // Run executes the command.
 func (cmd *checkCommand) Run(args ...string) error {
+	options := &checkOptions{}
+
 	// Parse flags.
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	fs.Uint64Var(&options.pageId, "page-Id", 0, "pageID to check sub-tree")
 	help := fs.Bool("h", false, "")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -225,7 +232,7 @@ func (cmd *checkCommand) Run(args ...string) error {
 	// Perform consistency check.
 	return db.View(func(tx *bolt.Tx) error {
 		var count int
-		for err := range tx.Check(bolt.WithKVStringer(CmdKvStringer())) {
+		for err := range tx.Check(bolt.WithKVStringer(CmdKvStringer(), options.pageId)) {
 			fmt.Fprintln(cmd.Stdout, err)
 			count++
 		}
@@ -245,11 +252,16 @@ func (cmd *checkCommand) Run(args ...string) error {
 // Usage returns the help message.
 func (cmd *checkCommand) Usage() string {
 	return strings.TrimLeft(`
-usage: bolt check PATH
+usage: bolt check [option] PATH 
 
 Check opens a database at PATH and runs an exhaustive check to verify that
-all pages are accessible or are marked as freed. It also verifies that no
+pages are accessible or are marked as freed. It also verifies that no
 pages are double referenced.
+Note: If no options is provided in "check" then it will run an exhaustive check on all pages.
+
+Additional option include:
+	-page-Id [PageID]
+	  check opens a database at PATH and runs an exhaustive check to verify sub-tree starting from given pageId.
 
 Verification errors will stream out as they are found and the process will
 return after all pages have been checked.

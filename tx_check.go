@@ -255,9 +255,10 @@ type checkConfig struct {
 
 type CheckOption func(options *checkConfig)
 
-func WithKVStringer(kvStringer KVStringer) CheckOption {
+func WithKVStringer(kvStringer KVStringer, pageID uint64) CheckOption {
 	return func(c *checkConfig) {
 		c.kvStringer = kvStringer
+		c.pageId = pageID
 	}
 }
 

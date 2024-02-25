@@ -120,12 +120,19 @@
 
 - `check` opens a database at a given `[PATH]` and runs an exhaustive check to verify that all pages are accessible or are marked as freed. It also verifies that no pages are double referenced.
 - usage:
-  `bbolt check [path to the bbolt database]`
+
+  ```bash
+  bbolt check [options] [path to the bbolt database]
+  
+  Additional option include:
+   -page-Id [PageID]
+    check opens a database at PATH and runs an exhaustive check to verify sub-tree starting from given pageId.
+  ```
 
     Example:
 
     ```bash
-    $bbolt check ~/default.etcd/member/snap/db
+    $bbolt check -page-Id 0 ~/default.etcd/member/snap/db
     ok
     ```
 
