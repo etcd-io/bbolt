@@ -1,6 +1,8 @@
 Note that we start to track changes starting from v1.3.7.
 
-## v1.3.9(TBD)
+<hr>
+
+## v1.3.9(2024-02-24)
 
 ### BoltDB
 - [Clone the key before operating data in bucket against the key](https://github.com/etcd-io/bbolt/pull/639)
