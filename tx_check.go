@@ -74,7 +74,7 @@ func (tx *Tx) check(cfg checkConfig, ch chan error) {
 		}
 	} else {
 		// Check the db file starting from a specified pageId.
-		if cfg.pageId < 2 || cfg.pageId >= uint(tx.meta.Pgid()) {
+		if cfg.pageId < 2 || cfg.pageId >= uint64(tx.meta.Pgid()) {
 			ch <- fmt.Errorf("page ID (%d) out of range [%d, %d)", cfg.pageId, 2, tx.meta.Pgid())
 			return
 		}
@@ -250,7 +250,7 @@ func verifyKeyOrder(pgId common.Pgid, pageType string, index int, key []byte, pr
 
 type checkConfig struct {
 	kvStringer KVStringer
-	pageId     uint
+	pageId     uint64
 }
 
 type CheckOption func(options *checkConfig)
@@ -262,7 +262,7 @@ func WithKVStringer(kvStringer KVStringer) CheckOption {
 }
 
 // WithPageId sets a page ID from which the check command starts to check
-func WithPageId(pageId uint) CheckOption {
+func WithPageId(pageId uint64) CheckOption {
 	return func(c *checkConfig) {
 		c.pageId = pageId
 	}

@@ -35,7 +35,7 @@ func TestTx_Check_CorruptPage(t *testing.T) {
 		var cErrs []error
 
 		t.Log("Check corrupted page.")
-		errChan := tx.Check(bbolt.WithPageId(uint(victimPageId)))
+		errChan := tx.Check(bbolt.WithPageId(uint64(victimPageId)))
 		for cErr := range errChan {
 			cErrs = append(cErrs, cErr)
 		}
@@ -44,7 +44,7 @@ func TestTx_Check_CorruptPage(t *testing.T) {
 		t.Log("Check valid pages.")
 		cErrs = cErrs[:0]
 		for _, pgId := range validPageIds {
-			errChan = tx.Check(bbolt.WithPageId(uint(pgId)))
+			errChan = tx.Check(bbolt.WithPageId(uint64(pgId)))
 			for cErr := range errChan {
 				cErrs = append(cErrs, cErr)
 			}
@@ -104,7 +104,7 @@ func TestTx_Check_WithNestBucket(t *testing.T) {
 	vErr := db.View(func(tx *bbolt.Tx) error {
 		var cErrs []error
 
-		errChan := tx.Check(bbolt.WithPageId(uint(bucketRootPageId)))
+		errChan := tx.Check(bbolt.WithPageId(uint64(bucketRootPageId)))
 		for cErr := range errChan {
 			cErrs = append(cErrs, cErr)
 		}
