@@ -91,11 +91,11 @@ var allowedMetaUpdateFields = map[string]struct{}{
 }
 
 // AddFlags sets the flags for `meta update` command.
-// Example: --fields root:16,freelist:8 --fields pgid:128 --fields txid:1234
-// Result: []string{"root:16", "freelist:8", "pgid:128", "txid:1234"}
+// Example: --fields root:16,freelist:8 --fields pgid:128
+// Result: []string{"root:16", "freelist:8", "pgid:128"}
 func (o *surgeryMetaUpdateOptions) AddFlags(fs *pflag.FlagSet) {
 	o.surgeryBaseOptions.AddFlags(fs)
-	fs.StringSliceVarP(&o.fields, "fields", "", o.fields, "comma separated list of fields (supported fields: pageSize, root, freelist, pgid and txid) to be updated, and each item is a colon-separated key-value pair")
+	fs.StringSliceVarP(&o.fields, "fields", "", o.fields, "comma separated list of fields (supported fields: pageSize, root, freelist and pgid) to be updated, and each item is a colon-separated key-value pair")
 	fs.Uint32VarP(&o.metaPageId, "meta-page", "", o.metaPageId, "the meta page ID to operate on, valid values are 0 and 1")
 }
 
