@@ -160,7 +160,7 @@ func surgeryCopyPageFunc(srcDBPath string, cfg surgeryCopyPageOptions) error {
 	}
 	if meta.IsFreelistPersisted() {
 		fmt.Fprintf(os.Stdout, "WARNING: the free list might have changed.\n")
-		fmt.Fprintf(os.Stdout, "Please consider executing `./bbolt surgery abandon-freelist ...`\n")
+		fmt.Fprintf(os.Stdout, "Please consider executing `./bbolt surgery freelist abandon ...`\n")
 	}
 
 	fmt.Fprintf(os.Stdout, "The page %d was successfully copied to page %d\n", cfg.sourcePageId, cfg.destinationPageId)
@@ -229,7 +229,7 @@ func surgeryClearPageFunc(srcDBPath string, cfg surgeryClearPageOptions) error {
 
 	if needAbandonFreelist {
 		fmt.Fprintf(os.Stdout, "WARNING: The clearing has abandoned some pages that are not yet referenced from free list.\n")
-		fmt.Fprintf(os.Stdout, "Please consider executing `./bbolt surgery abandon-freelist ...`\n")
+		fmt.Fprintf(os.Stdout, "Please consider executing `./bbolt surgery freelist abandon ...`\n")
 	}
 
 	fmt.Fprintf(os.Stdout, "The page (%d) was cleared\n", cfg.pageId)
@@ -304,7 +304,7 @@ func surgeryClearPageElementFunc(srcDBPath string, cfg surgeryClearPageElementsO
 
 	if needAbandonFreelist {
 		fmt.Fprintf(os.Stdout, "WARNING: The clearing has abandoned some pages that are not yet referenced from free list.\n")
-		fmt.Fprintf(os.Stdout, "Please consider executing `./bbolt surgery abandon-freelist ...`\n")
+		fmt.Fprintf(os.Stdout, "Please consider executing `./bbolt surgery freelist abandon ...`\n")
 	}
 
 	fmt.Fprintf(os.Stdout, "All elements in [%d, %d) in page %d were cleared\n", cfg.startElementIdx, cfg.endElementIdx, cfg.pageId)
