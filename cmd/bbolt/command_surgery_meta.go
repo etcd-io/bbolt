@@ -19,6 +19,7 @@ const (
 	metaFieldRoot     = "root"
 	metaFieldFreelist = "freelist"
 	metaFieldPgid     = "pgid"
+	metaFieldTxid     = "txid"
 )
 
 func newSurgeryMetaCommand() *cobra.Command {
@@ -88,6 +89,7 @@ var allowedMetaUpdateFields = map[string]struct{}{
 	metaFieldRoot:     {},
 	metaFieldFreelist: {},
 	metaFieldPgid:     {},
+	metaFieldTxid:     {},
 }
 
 // AddFlags sets the flags for `meta update` command.
@@ -220,6 +222,8 @@ func updateMetaField(m *common.Meta, fields map[string]uint64) bool {
 			m.SetFreelist(common.Pgid(val))
 		case metaFieldPgid:
 			m.SetPgid(common.Pgid(val))
+		case metaFieldTxid:
+			m.SetTxid(common.Txid(val))
 		}
 
 		changed = true

@@ -40,6 +40,7 @@ func TestSurgery_Meta_Update(t *testing.T) {
 		root     common.Pgid
 		freelist common.Pgid
 		pgid     common.Pgid
+		txid     common.Txid
 	}{
 		{
 			name: "root changed",
@@ -52,6 +53,10 @@ func TestSurgery_Meta_Update(t *testing.T) {
 		{
 			name: "pgid changed",
 			pgid: 600,
+		},
+		{
+			name: "txid changed",
+			txid: 42,
 		},
 		{
 			name:     "both root and freelist changed",
@@ -68,6 +73,7 @@ func TestSurgery_Meta_Update(t *testing.T) {
 			root:     43,
 			freelist: 62,
 			pgid:     256,
+			txid:     22,
 		},
 	}
 
@@ -92,6 +98,9 @@ func TestSurgery_Meta_Update(t *testing.T) {
 				}
 				if tc.pgid != 0 {
 					fields = append(fields, fmt.Sprintf("pgid:%d", tc.pgid))
+				}
+				if tc.txid != 0 {
+					fields = append(fields, fmt.Sprintf("txid:%d", tc.txid))
 				}
 
 				rootCmd := main.NewRootCommand()
@@ -119,6 +128,9 @@ func TestSurgery_Meta_Update(t *testing.T) {
 				}
 				if tc.pgid != 0 {
 					require.Equal(t, tc.pgid, m.Pgid())
+				}
+				if tc.txid != 0 {
+					require.Equal(t, tc.txid, m.Txid())
 				}
 			})
 		}
