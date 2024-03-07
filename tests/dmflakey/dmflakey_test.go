@@ -26,31 +26,35 @@ func TestMain(m *testing.M) {
 }
 
 func TestBasic(t *testing.T) {
-	tmpDir := t.TempDir()
+	for _, fsType := range []FSType{FSTypeEXT4, FSTypeXFS} {
+		t.Run(string(fsType), func(t *testing.T) {
+			tmpDir := t.TempDir()
 
-	flakey, err := InitFlakey("go-dmflakey", tmpDir, FSTypeEXT4)
-	require.NoError(t, err, "init flakey")
-	defer func() {
-		assert.NoError(t, flakey.Teardown())
-	}()
+			flakey, err := InitFlakey("go-dmflakey", tmpDir, fsType, "")
+			require.NoError(t, err, "init flakey")
+			defer func() {
+				assert.NoError(t, flakey.Teardown())
+			}()
 
-	target := filepath.Join(tmpDir, "root")
-	require.NoError(t, os.MkdirAll(target, 0600))
+			target := filepath.Join(tmpDir, "root")
+			require.NoError(t, os.MkdirAll(target, 0600))
 
-	require.NoError(t, mount(target, flakey.DevicePath(), ""))
-	defer func() {
-		assert.NoError(t, unmount(target))
-	}()
+			require.NoError(t, mount(target, flakey.DevicePath(), ""))
+			defer func() {
+				assert.NoError(t, unmount(target))
+			}()
 
-	file := filepath.Join(target, "test")
-	assert.NoError(t, writeFile(file, []byte("hello, world"), 0600, true))
+			file := filepath.Join(target, "test")
+			assert.NoError(t, writeFile(file, []byte("hello, world"), 0600, true))
 
-	assert.NoError(t, unmount(target))
+			assert.NoError(t, unmount(target))
 
-	assert.NoError(t, flakey.Teardown())
+			assert.NoError(t, flakey.Teardown())
+		})
+	}
 }
 
-func TestDropWrites(t *testing.T) {
+func TestDropWritesExt4(t *testing.T) {
 	flakey, root := initFlakey(t, FSTypeEXT4)
 
 	// commit=1000 is to delay commit triggered by writeback thread
@@ -82,7 +86,7 @@ func TestDropWrites(t *testing.T) {
 	assert.True(t, errors.Is(err, os.ErrNotExist))
 }
 
-func TestErrorWrites(t *testing.T) {
+func TestErrorWritesExt4(t *testing.T) {
 	flakey, root := initFlakey(t, FSTypeEXT4)
 
 	// commit=1000 is to delay commit triggered by writeback thread
@@ -114,7 +118,7 @@ func initFlakey(t *testing.T, fsType FSType) (_ Flakey, root string) {
 	target := filepath.Join(tmpDir, "root")
 	require.NoError(t, os.MkdirAll(target, 0600))
 
-	flakey, err := InitFlakey("go-dmflakey", tmpDir, FSTypeEXT4)
+	flakey, err := InitFlakey("go-dmflakey", tmpDir, fsType, "")
 	require.NoError(t, err, "init flakey")
 
 	t.Cleanup(func() {
