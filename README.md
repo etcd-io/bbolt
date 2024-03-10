@@ -906,7 +906,7 @@ The best places to start are the main entry points into Bolt:
 
 - `Bucket.Put()` - Writes a key/value pair into a bucket. After validating the
   arguments, a cursor is used to traverse the B+tree to the page and position
-  where they key & value will be written. Once the position is found, the bucket
+  where the key & value will be written. Once the position is found, the bucket
   materializes the underlying page and the page's parent pages into memory as
   "nodes". These nodes are where mutations occur during read-write transactions.
   These changes get flushed to disk during commit.
