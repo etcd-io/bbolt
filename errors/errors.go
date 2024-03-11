@@ -21,7 +21,7 @@ var (
 	// different version of Bolt.
 	ErrVersionMismatch = errors.New("version mismatch")
 
-	// ErrChecksum is returned when either meta page checksum does not match.
+	// ErrChecksum is returned when a checksum mismatch occurs on either of the two meta pages.
 	ErrChecksum = errors.New("checksum error")
 
 	// ErrTimeout is returned when a database cannot obtain an exclusive lock

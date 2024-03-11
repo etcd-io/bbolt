@@ -27,7 +27,7 @@ var (
 	// Deprecated: Use the error variables defined in the bbolt/errors package.
 	ErrVersionMismatch = errors.ErrVersionMismatch
 
-	// ErrChecksum is returned when either meta page checksum does not match.
+	// ErrChecksum is returned when a checksum mismatch occurs on either of the two meta pages.
 	//
 	// Deprecated: Use the error variables defined in the bbolt/errors package.
 	ErrChecksum = errors.ErrChecksum
