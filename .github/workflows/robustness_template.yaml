@@ -30,6 +30,6 @@ jobs:
       - name: test-robustness
         run: |
           set -euo pipefail
-          sudo apt-get install -y dmsetup
+          sudo apt-get install -y dmsetup xfsprogs
 
           ROBUSTNESS_TESTFLAGS="--count ${{ inputs.count }} --timeout ${{ inputs.testTimeout }} -failfast" make test-robustness
