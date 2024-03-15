@@ -11,14 +11,14 @@ import (
 // node represents an in-memory, deserialized page.
 type node struct {
 	bucket     *Bucket
+	parent     *node
+	key        []byte
+	children   nodes
+	inodes     common.Inodes
+	pgid       common.Pgid
 	isLeaf     bool
 	unbalanced bool
 	spilled    bool
-	key        []byte
-	pgid       common.Pgid
-	parent     *node
-	children   nodes
-	inodes     common.Inodes
 }
 
 // root returns the top-level node this node is attached to.

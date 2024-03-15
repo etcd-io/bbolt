@@ -133,10 +133,10 @@ func InitFlakey(flakeyDevice, dataStorePath string, fsType FSType, mkfsOpt strin
 type flakey struct {
 	fsType  FSType
 	imgPath string
-	imgSize int64
 
 	loopDevice   string
 	flakeyDevice string
+	imgSize      int64
 }
 
 // DevicePath returns the flakey device path.
