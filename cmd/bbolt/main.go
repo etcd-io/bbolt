@@ -1103,17 +1103,19 @@ func (cmd *benchCommand) Run(args ...string) error {
 	db.NoSync = options.NoSync
 	defer db.Close()
 
+	r := rand.New(rand.NewSource(42))
+
 	// Write to the database.
 	var writeResults BenchResults
 	fmt.Fprintf(cmd.Stderr, "starting write benchmark.\n")
-	if err := cmd.runWrites(db, options, &writeResults); err != nil {
+	if err := cmd.runWrites(db, options, &writeResults, r); err != nil {
 		return fmt.Errorf("write: %v", err)
 	}
 
 	var readResults BenchResults
 	fmt.Fprintf(cmd.Stderr, "starting read benchmark.\n")
 	// Read from the database.
-	if err := cmd.runReads(db, options, &readResults); err != nil {
+	if err := cmd.runReads(db, options, &readResults, r); err != nil {
 		return fmt.Errorf("bench: read: %s", err)
 	}
 
@@ -1172,7 +1174,7 @@ func (cmd *benchCommand) ParseFlags(args []string) (*BenchOptions, error) {
 }
 
 // Writes to the database.
-func (cmd *benchCommand) runWrites(db *bolt.DB, options *BenchOptions, results *BenchResults) error {
+func (cmd *benchCommand) runWrites(db *bolt.DB, options *BenchOptions, results *BenchResults, r *rand.Rand) error {
 	// Start profiling for writes.
 	if options.ProfileMode == "rw" || options.ProfileMode == "w" {
 		cmd.startProfiling(options)
@@ -1189,11 +1191,11 @@ func (cmd *benchCommand) runWrites(db *bolt.DB, options *BenchOptions, results *
 	case "seq":
 		err = cmd.runWritesSequential(db, options, results)
 	case "rnd":
-		err = cmd.runWritesRandom(db, options, results)
+		err = cmd.runWritesRandom(db, options, results, r)
 	case "seq-nest":
 		err = cmd.runWritesSequentialNested(db, options, results)
 	case "rnd-nest":
-		err = cmd.runWritesRandomNested(db, options, results)
+		err = cmd.runWritesRandomNested(db, options, results, r)
 	default:
 		return fmt.Errorf("invalid write mode: %s", options.WriteMode)
 	}
@@ -1214,8 +1216,7 @@ func (cmd *benchCommand) runWritesSequential(db *bolt.DB, options *BenchOptions,
 	return cmd.runWritesWithSource(db, options, results, func() uint32 { i++; return i })
 }
 
-func (cmd *benchCommand) runWritesRandom(db *bolt.DB, options *BenchOptions, results *BenchResults) error {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+func (cmd *benchCommand) runWritesRandom(db *bolt.DB, options *BenchOptions, results *BenchResults, r *rand.Rand) error {
 	return cmd.runWritesWithSource(db, options, results, func() uint32 { return r.Uint32() })
 }
 
@@ -1224,8 +1225,7 @@ func (cmd *benchCommand) runWritesSequentialNested(db *bolt.DB, options *BenchOp
 	return cmd.runWritesNestedWithSource(db, options, results, func() uint32 { i++; return i })
 }
 
-func (cmd *benchCommand) runWritesRandomNested(db *bolt.DB, options *BenchOptions, results *BenchResults) error {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+func (cmd *benchCommand) runWritesRandomNested(db *bolt.DB, options *BenchOptions, results *BenchResults, r *rand.Rand) error {
 	return cmd.runWritesNestedWithSource(db, options, results, func() uint32 { return r.Uint32() })
 }
 
@@ -1306,7 +1306,7 @@ func (cmd *benchCommand) runWritesNestedWithSource(db *bolt.DB, options *BenchOp
 }
 
 // Reads from the database.
-func (cmd *benchCommand) runReads(db *bolt.DB, options *BenchOptions, results *BenchResults) error {
+func (cmd *benchCommand) runReads(db *bolt.DB, options *BenchOptions, results *BenchResults, r *rand.Rand) error {
 	// Start profiling for reads.
 	if options.ProfileMode == "r" {
 		cmd.startProfiling(options)
@@ -1327,6 +1327,29 @@ func (cmd *benchCommand) runReads(db *bolt.DB, options *BenchOptions, results *B
 		default:
 			err = cmd.runReadsSequential(db, options, results)
 		}
+	case "rnd":
+		switch options.WriteMode {
+		case "seq-nest", "rnd-nest":
+			var nestedKeys []NestedKey
+			nestedKeys, err = cmd.collectNestedKeys(db, options)
+			if err != nil {
+				return err
+			}
+			r.Shuffle(len(nestedKeys), func(i, j int) {
+				nestedKeys[i], nestedKeys[j] = nestedKeys[j], nestedKeys[i]
+			})
+			err = cmd.runReadsRandomNested(db, options, nestedKeys, results)
+		default:
+			var keys [][]byte
+			keys, err = cmd.collectKeys(db, options)
+			if err != nil {
+				return err
+			}
+			r.Shuffle(len(keys), func(i, j int) {
+				keys[i], keys[j] = keys[j], keys[i]
+			})
+			err = cmd.runReadsRandom(db, options, keys, results)
+		}
 	default:
 		return fmt.Errorf("invalid read mode: %s", options.ReadMode)
 	}
@@ -1342,6 +1365,46 @@ func (cmd *benchCommand) runReads(db *bolt.DB, options *BenchOptions, results *B
 	return err
 }
 
+type NestedKey struct{ bucket, key []byte }
+
+func (cmd *benchCommand) collectKeys(db *bolt.DB, options *BenchOptions) ([][]byte, error) {
+	keys := make([][]byte, 0, options.Iterations)
+	err := db.View(func(tx *bolt.Tx) error {
+		c := tx.Bucket(benchBucketName).Cursor()
+		for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			key := make([]byte, len(k))
+			copy(key, k)
+			keys = append(keys, key)
+		}
+		return nil
+	})
+	return keys, err
+}
+
+func (cmd *benchCommand) collectNestedKeys(db *bolt.DB, options *BenchOptions) ([]NestedKey, error) {
+	nestedKeys := make([]NestedKey, 0, options.Iterations)
+	err := db.View(func(tx *bolt.Tx) error {
+		top := tx.Bucket(benchBucketName)
+
+		err := top.ForEachBucket(func(name []byte) error {
+			b := top.Bucket(name)
+			bucket := make([]byte, len(name))
+			copy(bucket, name)
+
+			c := b.Cursor()
+			for k, _ := c.First(); k != nil; k, _ = c.Next() {
+				key := make([]byte, len(k))
+				copy(key, k)
+				nestedKeys = append(nestedKeys, NestedKey{bucket, key})
+			}
+			return nil
+		})
+		return err
+	})
+
+	return nestedKeys, err
+}
+
 func (cmd *benchCommand) runReadsSequential(db *bolt.DB, options *BenchOptions, results *BenchResults) error {
 	return db.View(func(tx *bolt.Tx) error {
 		t := time.Now()
@@ -1353,7 +1416,37 @@ func (cmd *benchCommand) runReadsSequential(db *bolt.DB, options *BenchOptions, 
 				numReads++
 				results.AddCompletedOps(1)
 				if v == nil {
-					return errors.New("invalid value")
+					return ErrInvalidValue
+				}
+			}
+
+			if options.WriteMode == "seq" && numReads != options.Iterations {
+				return fmt.Errorf("read seq: iter mismatch: expected %d, got %d", options.Iterations, numReads)
+			}
+
+			// Make sure we do this for at least a second.
+			if time.Since(t) >= time.Second {
+				break
+			}
+		}
+
+		return nil
+	})
+}
+
+func (cmd *benchCommand) runReadsRandom(db *bolt.DB, options *BenchOptions, keys [][]byte, results *BenchResults) error {
+	return db.View(func(tx *bolt.Tx) error {
+		t := time.Now()
+
+		for {
+			numReads := int64(0)
+			b := tx.Bucket(benchBucketName)
+			for _, key := range keys {
+				v := b.Get(key)
+				numReads++
+				results.AddCompletedOps(1)
+				if v == nil {
+					return ErrInvalidValue
 				}
 			}
 
@@ -1392,6 +1485,38 @@ func (cmd *benchCommand) runReadsSequentialNested(db *bolt.DB, options *BenchOpt
 				return nil
 			}); err != nil {
 				return err
+			}
+
+			if options.WriteMode == "seq-nest" && numReads != options.Iterations {
+				return fmt.Errorf("read seq-nest: iter mismatch: expected %d, got %d", options.Iterations, numReads)
+			}
+
+			// Make sure we do this for at least a second.
+			if time.Since(t) >= time.Second {
+				break
+			}
+		}
+
+		return nil
+	})
+}
+
+func (cmd *benchCommand) runReadsRandomNested(db *bolt.DB, options *BenchOptions, nestedKeys []NestedKey, results *BenchResults) error {
+	return db.View(func(tx *bolt.Tx) error {
+		t := time.Now()
+
+		for {
+			numReads := int64(0)
+			var top = tx.Bucket(benchBucketName)
+			for _, nestedKey := range nestedKeys {
+				if b := top.Bucket(nestedKey.bucket); b != nil {
+					v := b.Get(nestedKey.key)
+					numReads++
+					results.AddCompletedOps(1)
+					if v == nil {
+						return ErrInvalidValue
+					}
+				}
 			}
 
 			if options.WriteMode == "seq-nest" && numReads != options.Iterations {
