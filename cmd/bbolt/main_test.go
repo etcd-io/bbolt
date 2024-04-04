@@ -557,11 +557,6 @@ func NewMain() *Main {
 }
 
 func TestCompactCommand_Run(t *testing.T) {
-	var s int64
-	if err := binary.Read(crypto.Reader, binary.BigEndian, &s); err != nil {
-		t.Fatal(err)
-	}
-
 	dstdb := btesting.MustCreateDB(t)
 	dstdb.Close()
 
