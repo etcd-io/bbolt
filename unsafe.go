@@ -32,7 +32,7 @@ func unsafeByteSlice(base unsafe.Pointer, offset uintptr, i, j int) []byte {
 // manipulation of reflect.SliceHeader to prevent misuse, namely, converting
 // from reflect.SliceHeader to a Go slice type.
 func unsafeSlice(slice, data unsafe.Pointer, len int) {
-	s := (*reflect.SliceHeader)(slice)
+	s := (*reflect.SliceHeader)(slice) //nolint:staticcheck
 	s.Data = uintptr(data)
 	s.Cap = len
 	s.Len = len

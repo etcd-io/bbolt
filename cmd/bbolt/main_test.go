@@ -3,7 +3,6 @@ package main_test
 import (
 	"bytes"
 	crypto "crypto/rand"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"math/rand"
@@ -304,12 +303,6 @@ func NewMain() *Main {
 }
 
 func TestCompactCommand_Run(t *testing.T) {
-	var s int64
-	if err := binary.Read(crypto.Reader, binary.BigEndian, &s); err != nil {
-		t.Fatal(err)
-	}
-	rand.Seed(s)
-
 	dstdb := btesting.MustCreateDB(t)
 	dstdb.Close()
 

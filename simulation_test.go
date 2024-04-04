@@ -35,8 +35,6 @@ func testSimulate(t *testing.T, openOption *bolt.Options, round, threadCount, pa
 		t.Skip("skipping test in short mode.")
 	}
 
-	rand.Seed(int64(qseed))
-
 	// A list of operations that readers and writers can perform.
 	var readerHandlers = []simulateHandler{simulateGetHandler}
 	var writerHandlers = []simulateHandler{simulateGetHandler, simulatePutHandler}
