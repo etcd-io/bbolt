@@ -1,8 +1,8 @@
 package bbolt
 
 import (
+	"crypto/rand"
 	"fmt"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"testing"
@@ -46,7 +46,9 @@ func createAndPutKeys(t *testing.T) {
 			}
 
 			var key [16]byte
-			rand.Read(key[:])
+			if _, err := rand.Read(key[:]); err != nil {
+				return err
+			}
 			if err := nodes.Put(key[:], nil); err != nil {
 				return err
 			}

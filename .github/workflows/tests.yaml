@@ -102,4 +102,3 @@ jobs:
       with:
         go-version: ${{ steps.goversion.outputs.goversion }}
     - run: make coverage
-
