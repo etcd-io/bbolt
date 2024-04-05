@@ -9,9 +9,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
+      - id: goversion
+        run: echo "goversion=$(cat .go-version)" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-go@v3
         with:
-          go-version: "1.17.13"
+          go-version: ${{ steps.goversion.outputs.goversion }}
       - run: |
           make gofail-enable
           make test-failpoint
