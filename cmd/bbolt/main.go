@@ -1302,13 +1302,22 @@ func (cmd *benchCommand) runReadsSequential(db *bolt.DB, options *BenchOptions, 
 
 		for {
 			numReads := int64(0)
-			c := tx.Bucket(benchBucketName).Cursor()
-			for k, v := c.First(); k != nil; k, v = c.Next() {
-				numReads++
-				results.AddCompletedOps(1)
-				if v == nil {
-					return ErrInvalidValue
+			err := func() error {
+				defer func() { results.AddCompletedOps(numReads) }()
+
+				c := tx.Bucket(benchBucketName).Cursor()
+				for k, v := c.First(); k != nil; k, v = c.Next() {
+					numReads++
+					if v == nil {
+						return ErrInvalidValue
+					}
 				}
+
+				return nil
+			}()
+
+			if err != nil {
+				return err
 			}
 
 			if options.WriteMode == "seq" && numReads != options.Iterations {
@@ -1331,14 +1340,23 @@ func (cmd *benchCommand) runReadsRandom(db *bolt.DB, options *BenchOptions, keys
 
 		for {
 			numReads := int64(0)
-			b := tx.Bucket(benchBucketName)
-			for _, key := range keys {
-				v := b.Get(key.key)
-				numReads++
-				results.AddCompletedOps(1)
-				if v == nil {
-					return ErrInvalidValue
+			err := func() error {
+				defer func() { results.AddCompletedOps(numReads) }()
+
+				b := tx.Bucket(benchBucketName)
+				for _, key := range keys {
+					v := b.Get(key.key)
+					numReads++
+					if v == nil {
+						return ErrInvalidValue
+					}
 				}
+
+				return nil
+			}()
+
+			if err != nil {
+				return err
 			}
 
 			if options.WriteMode == "seq" && numReads != options.Iterations {
@@ -1363,11 +1381,11 @@ func (cmd *benchCommand) runReadsSequentialNested(db *bolt.DB, options *BenchOpt
 			numReads := int64(0)
 			var top = tx.Bucket(benchBucketName)
 			if err := top.ForEach(func(name, _ []byte) error {
+				defer func() { results.AddCompletedOps(numReads) }()
 				if b := top.Bucket(name); b != nil {
 					c := b.Cursor()
 					for k, v := c.First(); k != nil; k, v = c.Next() {
 						numReads++
-						results.AddCompletedOps(1)
 						if v == nil {
 							return ErrInvalidValue
 						}
@@ -1398,16 +1416,25 @@ func (cmd *benchCommand) runReadsRandomNested(db *bolt.DB, options *BenchOptions
 
 		for {
 			numReads := int64(0)
-			var top = tx.Bucket(benchBucketName)
-			for _, nestedKey := range nestedKeys {
-				if b := top.Bucket(nestedKey.bucket); b != nil {
-					v := b.Get(nestedKey.key)
-					numReads++
-					results.AddCompletedOps(1)
-					if v == nil {
-						return ErrInvalidValue
+			err := func() error {
+				defer func() { results.AddCompletedOps(numReads) }()
+
+				var top = tx.Bucket(benchBucketName)
+				for _, nestedKey := range nestedKeys {
+					if b := top.Bucket(nestedKey.bucket); b != nil {
+						v := b.Get(nestedKey.key)
+						numReads++
+						if v == nil {
+							return ErrInvalidValue
+						}
 					}
 				}
+
+				return nil
+			}()
+
+			if err != nil {
+				return err
 			}
 
 			if options.WriteMode == "seq-nest" && numReads != options.Iterations {
