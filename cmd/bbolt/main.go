@@ -123,8 +123,6 @@ func (m *Main) Run(args ...string) error {
 		return newBenchCommand(m).Run(args[1:]...)
 	case "buckets":
 		return newBucketsCommand(m).Run(args[1:]...)
-	case "check":
-		return newCheckCommand(m).Run(args[1:]...)
 	case "compact":
 		return newCompactCommand(m).Run(args[1:]...)
 	case "dump":
@@ -177,82 +175,6 @@ The commands are:
     surgery     perform surgery on bbolt database
 
 Use "bbolt [command] -h" for more information about a command.
-`, "\n")
-}
-
-// checkCommand represents the "check" command execution.
-type checkCommand struct {
-	baseCommand
-}
-
-// newCheckCommand returns a checkCommand.
-func newCheckCommand(m *Main) *checkCommand {
-	c := &checkCommand{}
-	c.baseCommand = m.baseCommand
-	return c
-}
-
-// Run executes the command.
-func (cmd *checkCommand) Run(args ...string) error {
-	// Parse flags.
-	fs := flag.NewFlagSet("", flag.ContinueOnError)
-	help := fs.Bool("h", false, "")
-	if err := fs.Parse(args); err != nil {
-		return err
-	} else if *help {
-		fmt.Fprintln(cmd.Stderr, cmd.Usage())
-		return ErrUsage
-	}
-
-	// Require database path.
-	path := fs.Arg(0)
-	if path == "" {
-		return ErrPathRequired
-	} else if _, err := os.Stat(path); os.IsNotExist(err) {
-		return ErrFileNotFound
-	}
-
-	// Open database.
-	db, err := bolt.Open(path, 0600, &bolt.Options{
-		ReadOnly:        true,
-		PreLoadFreelist: true,
-	})
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
-	// Perform consistency check.
-	return db.View(func(tx *bolt.Tx) error {
-		var count int
-		for err := range tx.Check(bolt.WithKVStringer(CmdKvStringer())) {
-			fmt.Fprintln(cmd.Stdout, err)
-			count++
-		}
-
-		// Print summary of errors.
-		if count > 0 {
-			fmt.Fprintf(cmd.Stdout, "%d errors found\n", count)
-			return guts_cli.ErrCorrupt
-		}
-
-		// Notify user that database is valid.
-		fmt.Fprintln(cmd.Stdout, "OK")
-		return nil
-	})
-}
-
-// Usage returns the help message.
-func (cmd *checkCommand) Usage() string {
-	return strings.TrimLeft(`
-usage: bolt check PATH
-
-Check opens a database at PATH and runs an exhaustive check to verify that
-all pages are accessible or are marked as freed. It also verifies that no
-pages are double referenced.
-
-Verification errors will stream out as they are found and the process will
-return after all pages have been checked.
 `, "\n")
 }
 
