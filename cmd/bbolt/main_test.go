@@ -79,20 +79,6 @@ func TestStatsCommand_Run_EmptyDatabase(t *testing.T) {
 	}
 }
 
-func TestCheckCommand_Run(t *testing.T) {
-	db := btesting.MustCreateDB(t)
-	db.Close()
-
-	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
-
-	m := NewMain()
-	err := m.Run("check", db.Path())
-	require.NoError(t, err)
-	if m.Stdout.String() != "OK\n" {
-		t.Fatalf("unexpected stdout:\n\n%s", m.Stdout.String())
-	}
-}
-
 func TestDumpCommand_Run(t *testing.T) {
 	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
 	db.Close()
