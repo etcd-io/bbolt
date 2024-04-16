@@ -73,7 +73,7 @@ func detachLoopDevice(loopDevice string) error {
 	return unix.IoctlSetInt(int(loopFd.Fd()), unix.LOOP_CLR_FD, 0)
 }
 
-// getFreeLoopbackDevice allocates or finds a free loop device for use.
+// getFreeLoopDevice allocates or finds a free loop device for use.
 //
 // REF: https://man7.org/linux/man-pages/man4/loop.4.html
 func getFreeLoopDevice() (string, error) {
