@@ -948,6 +948,8 @@ them via pull request.
 
   Please also refer to the discussion in https://github.com/etcd-io/bbolt/issues/562.
 
+- Writing a value with a length of 0 will always result in reading back an empty `[]byte{}` value.
+  Please refer to [issues/726#issuecomment-2061694802](https://github.com/etcd-io/bbolt/issues/726#issuecomment-2061694802).
 
 ## Other Projects Using Bolt
 
