@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 
@@ -15,15 +14,7 @@ func newInspectCobraCommand() *cobra.Command {
 	inspectCmd := &cobra.Command{
 		Use:   "inspect",
 		Short: "inspect the structure of the database",
-		Args: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
-				return errors.New("db file path not provided")
-			}
-			if len(args) > 1 {
-				return errors.New("too many arguments")
-			}
-			return nil
-		},
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return inspectFunc(args[0])
 		},
