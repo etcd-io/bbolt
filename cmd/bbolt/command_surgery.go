@@ -17,7 +17,7 @@ var (
 	ErrSurgeryFreelistAlreadyExist = errors.New("the file already has freelist, please consider to abandon the freelist to forcibly rebuild it")
 )
 
-func newSurgeryCobraCommand() *cobra.Command {
+func newSurgeryCommand() *cobra.Command {
 	surgeryCmd := &cobra.Command{
 		Use:   "surgery <subcommand>",
 		Short: "surgery related commands",
@@ -52,7 +52,7 @@ func (o *surgeryBaseOptions) Validate() error {
 func newSurgeryRevertMetaPageCommand() *cobra.Command {
 	var o surgeryBaseOptions
 	revertMetaPageCmd := &cobra.Command{
-		Use:   "revert-meta-page <bbolt-file> [options]",
+		Use:   "revert-meta-page <bbolt-file>",
 		Short: "Revert the meta page to revert the changes performed by the latest transaction",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -111,7 +111,7 @@ func (o *surgeryCopyPageOptions) Validate() error {
 func newSurgeryCopyPageCommand() *cobra.Command {
 	var o surgeryCopyPageOptions
 	copyPageCmd := &cobra.Command{
-		Use:   "copy-page <bbolt-file> [options]",
+		Use:   "copy-page <bbolt-file>",
 		Short: "Copy page from the source page Id to the destination page Id",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -175,7 +175,7 @@ func (o *surgeryClearPageOptions) Validate() error {
 func newSurgeryClearPageCommand() *cobra.Command {
 	var o surgeryClearPageOptions
 	clearPageCmd := &cobra.Command{
-		Use:   "clear-page <bbolt-file> [options]",
+		Use:   "clear-page <bbolt-file>",
 		Short: "Clears all elements from the given page, which can be a branch or leaf page",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -242,7 +242,7 @@ func (o *surgeryClearPageElementsOptions) Validate() error {
 func newSurgeryClearPageElementsCommand() *cobra.Command {
 	var o surgeryClearPageElementsOptions
 	clearElementCmd := &cobra.Command{
-		Use:   "clear-page-elements <bbolt-file> [options]",
+		Use:   "clear-page-elements <bbolt-file>",
 		Short: "Clears elements from the given page, which can be a branch or leaf page",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

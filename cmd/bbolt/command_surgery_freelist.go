@@ -26,7 +26,7 @@ func newSurgeryFreelistCommand() *cobra.Command {
 func newSurgeryFreelistAbandonCommand() *cobra.Command {
 	var o surgeryBaseOptions
 	abandonFreelistCmd := &cobra.Command{
-		Use:   "abandon <bbolt-file> [options]",
+		Use:   "abandon <bbolt-file>",
 		Short: "Abandon the freelist from both meta pages",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -61,7 +61,7 @@ func surgeryFreelistAbandonFunc(srcDBPath string, cfg surgeryBaseOptions) error 
 func newSurgeryFreelistRebuildCommand() *cobra.Command {
 	var o surgeryBaseOptions
 	rebuildFreelistCmd := &cobra.Command{
-		Use:   "rebuild <bbolt-file> [options]",
+		Use:   "rebuild <bbolt-file>",
 		Short: "Rebuild the freelist",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
