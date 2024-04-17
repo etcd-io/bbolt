@@ -20,6 +20,7 @@ func NewRootCommand() *cobra.Command {
 		newVersionCobraCommand(),
 		newSurgeryCobraCommand(),
 		newInspectCobraCommand(),
+		newCheckCommand(),
 	)
 
 	return rootCmd
