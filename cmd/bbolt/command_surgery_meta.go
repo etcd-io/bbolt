@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -37,15 +36,7 @@ func newSurgeryMetaValidateCommand() *cobra.Command {
 	metaValidateCmd := &cobra.Command{
 		Use:   "validate <bbolt-file> [options]",
 		Short: "Validate both meta pages",
-		Args: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
-				return errors.New("db file path not provided")
-			}
-			if len(args) > 1 {
-				return errors.New("too many arguments")
-			}
-			return nil
-		},
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return surgeryMetaValidateFunc(args[0])
 		},
@@ -131,15 +122,7 @@ func newSurgeryMetaUpdateCommand() *cobra.Command {
 	metaUpdateCmd := &cobra.Command{
 		Use:   "update <bbolt-file> [options]",
 		Short: "Update fields in meta pages",
-		Args: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
-				return errors.New("db file path not provided")
-			}
-			if len(args) > 1 {
-				return errors.New("too many arguments")
-			}
-			return nil
-		},
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := o.Validate(); err != nil {
 				return err

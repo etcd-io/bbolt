@@ -54,15 +54,7 @@ func newSurgeryRevertMetaPageCommand() *cobra.Command {
 	revertMetaPageCmd := &cobra.Command{
 		Use:   "revert-meta-page <bbolt-file> [options]",
 		Short: "Revert the meta page to revert the changes performed by the latest transaction",
-		Args: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
-				return errors.New("db file path not provided")
-			}
-			if len(args) > 1 {
-				return errors.New("too many arguments")
-			}
-			return nil
-		},
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := o.Validate(); err != nil {
 				return err
@@ -121,15 +113,7 @@ func newSurgeryCopyPageCommand() *cobra.Command {
 	copyPageCmd := &cobra.Command{
 		Use:   "copy-page <bbolt-file> [options]",
 		Short: "Copy page from the source page Id to the destination page Id",
-		Args: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
-				return errors.New("db file path not provided")
-			}
-			if len(args) > 1 {
-				return errors.New("too many arguments")
-			}
-			return nil
-		},
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := o.Validate(); err != nil {
 				return err
@@ -193,15 +177,7 @@ func newSurgeryClearPageCommand() *cobra.Command {
 	clearPageCmd := &cobra.Command{
 		Use:   "clear-page <bbolt-file> [options]",
 		Short: "Clears all elements from the given page, which can be a branch or leaf page",
-		Args: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
-				return errors.New("db file path not provided")
-			}
-			if len(args) > 1 {
-				return errors.New("too many arguments")
-			}
-			return nil
-		},
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := o.Validate(); err != nil {
 				return err
@@ -268,15 +244,7 @@ func newSurgeryClearPageElementsCommand() *cobra.Command {
 	clearElementCmd := &cobra.Command{
 		Use:   "clear-page-elements <bbolt-file> [options]",
 		Short: "Clears elements from the given page, which can be a branch or leaf page",
-		Args: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
-				return errors.New("db file path not provided")
-			}
-			if len(args) > 1 {
-				return errors.New("too many arguments")
-			}
-			return nil
-		},
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := o.Validate(); err != nil {
 				return err
