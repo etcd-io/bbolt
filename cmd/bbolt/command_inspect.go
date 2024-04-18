@@ -10,7 +10,7 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-func newInspectCobraCommand() *cobra.Command {
+func newInspectCommand() *cobra.Command {
 	inspectCmd := &cobra.Command{
 		Use:   "inspect",
 		Short: "inspect the structure of the database",
