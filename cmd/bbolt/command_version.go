@@ -8,7 +8,7 @@ import (
 	"go.etcd.io/bbolt/version"
 )
 
-func newVersionCobraCommand() *cobra.Command {
+func newVersionCommand() *cobra.Command {
 	versionCmd := &cobra.Command{
 		Use:   "version",
 		Short: "print the current version of bbolt",
