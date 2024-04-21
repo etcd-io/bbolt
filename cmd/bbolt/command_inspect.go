@@ -12,7 +12,7 @@ import (
 
 func newInspectCommand() *cobra.Command {
 	inspectCmd := &cobra.Command{
-		Use:   "inspect",
+		Use:   "inspect <bbolt-file>",
 		Short: "inspect the structure of the database",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
