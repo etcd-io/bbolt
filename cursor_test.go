@@ -11,10 +11,143 @@ import (
 	"testing"
 	"testing/quick"
 
+	"github.com/stretchr/testify/require"
+
 	bolt "go.etcd.io/bbolt"
 	"go.etcd.io/bbolt/errors"
 	"go.etcd.io/bbolt/internal/btesting"
 )
+
+// TestCursor_RepeatOperations verifies that a cursor can continue to
+// iterate over all elements in reverse direction when it has already
+// reached to the end or beginning.
+// Refer to https://github.com/etcd-io/bbolt/issues/733
+func TestCursor_RepeatOperations(t *testing.T) {
+	testCases := []struct {
+		name     string
+		testFunc func(t2 *testing.T, bucket *bolt.Bucket)
+	}{
+		{
+			name:     "Repeat NextPrevNext",
+			testFunc: testRepeatCursorOperations_NextPrevNext,
+		},
+		{
+			name:     "Repeat PrevNextPrev",
+			testFunc: testRepeatCursorOperations_PrevNextPrev,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
+
+			bucketName := []byte("data")
+
+			_ = db.Update(func(tx *bolt.Tx) error {
+				b, _ := tx.CreateBucketIfNotExists(bucketName)
+				testCursorRepeatOperations_PrepareData(t, b)
+				return nil
+			})
+
+			_ = db.View(func(tx *bolt.Tx) error {
+				b := tx.Bucket(bucketName)
+				tc.testFunc(t, b)
+				return nil
+			})
+		})
+	}
+}
+
+func testCursorRepeatOperations_PrepareData(t *testing.T, b *bolt.Bucket) {
+	// ensure we have at least one branch page.
+	for i := 0; i < 1000; i++ {
+		k := []byte(fmt.Sprintf("%05d", i))
+		err := b.Put(k, k)
+		require.NoError(t, err)
+	}
+}
+
+func testRepeatCursorOperations_NextPrevNext(t *testing.T, b *bolt.Bucket) {
+	c := b.Cursor()
+	c.First()
+	startKey := []byte(fmt.Sprintf("%05d", 2))
+	returnedKey, _ := c.Seek(startKey)
+	require.Equal(t, startKey, returnedKey)
+
+	// Step 1: verify next
+	for i := 3; i < 1000; i++ {
+		expectedKey := []byte(fmt.Sprintf("%05d", i))
+		actualKey, _ := c.Next()
+		require.Equal(t, expectedKey, actualKey)
+	}
+
+	// Once we've reached the end, it should always return nil no matter how many times we call `Next`.
+	for i := 0; i < 10; i++ {
+		k, _ := c.Next()
+		require.Equal(t, []byte(nil), k)
+	}
+
+	// Step 2: verify prev
+	for i := 998; i >= 0; i-- {
+		expectedKey := []byte(fmt.Sprintf("%05d", i))
+		actualKey, _ := c.Prev()
+		require.Equal(t, expectedKey, actualKey)
+	}
+
+	// Once we've reached the beginning, it should always return nil no matter how many times we call `Prev`.
+	for i := 0; i < 10; i++ {
+		k, _ := c.Prev()
+		require.Equal(t, []byte(nil), k)
+	}
+
+	// Step 3: verify next again
+	for i := 1; i < 1000; i++ {
+		expectedKey := []byte(fmt.Sprintf("%05d", i))
+		actualKey, _ := c.Next()
+		require.Equal(t, expectedKey, actualKey)
+	}
+}
+
+func testRepeatCursorOperations_PrevNextPrev(t *testing.T, b *bolt.Bucket) {
+	c := b.Cursor()
+
+	startKey := []byte(fmt.Sprintf("%05d", 998))
+	returnedKey, _ := c.Seek(startKey)
+	require.Equal(t, startKey, returnedKey)
+
+	// Step 1: verify prev
+	for i := 997; i >= 0; i-- {
+		expectedKey := []byte(fmt.Sprintf("%05d", i))
+		actualKey, _ := c.Prev()
+		require.Equal(t, expectedKey, actualKey)
+	}
+
+	// Once we've reached the beginning, it should always return nil no matter how many times we call `Prev`.
+	for i := 0; i < 10; i++ {
+		k, _ := c.Prev()
+		require.Equal(t, []byte(nil), k)
+	}
+
+	// Step 2: verify next
+	for i := 1; i < 1000; i++ {
+		expectedKey := []byte(fmt.Sprintf("%05d", i))
+		actualKey, _ := c.Next()
+		require.Equal(t, expectedKey, actualKey)
+	}
+
+	// Once we've reached the end, it should always return nil no matter how many times we call `Next`.
+	for i := 0; i < 10; i++ {
+		k, _ := c.Next()
+		require.Equal(t, []byte(nil), k)
+	}
+
+	// Step 3: verify prev again
+	for i := 998; i >= 0; i-- {
+		expectedKey := []byte(fmt.Sprintf("%05d", i))
+		actualKey, _ := c.Prev()
+		require.Equal(t, expectedKey, actualKey)
+	}
+}
 
 // Ensure that a cursor can return a reference to the bucket that created it.
 func TestCursor_Bucket(t *testing.T) {
