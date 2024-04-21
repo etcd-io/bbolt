@@ -302,7 +302,7 @@ You can retrieve an existing bucket using the `Tx.Bucket()` function:
 db.Update(func(tx *bolt.Tx) error {
 	b := tx.Bucket([]byte("MyBucket"))
 	if b == nil {
-		return fmt.Errorf("bucket does not exist")
+		return errors.New("bucket does not exist")
 	}
 	return nil
 })

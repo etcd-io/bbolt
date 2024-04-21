@@ -392,7 +392,7 @@ func (cmd *pageItemCommand) Run(args ...string) error {
 	}
 
 	if options.keyOnly && options.valueOnly {
-		return fmt.Errorf("The --key-only or --value-only flag may be set, but not both.")
+		return errors.New("The --key-only or --value-only flag may be set, but not both.")
 	}
 
 	// Require database path and page id.
@@ -1675,7 +1675,7 @@ func (cmd *compactCommand) Run(args ...string) (err error) {
 	} else if err != nil {
 		return err
 	} else if cmd.DstPath == "" {
-		return fmt.Errorf("output file required")
+		return errors.New("output file required")
 	}
 
 	// Require database paths.

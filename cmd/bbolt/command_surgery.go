@@ -44,7 +44,7 @@ func (o *surgeryBaseOptions) AddFlags(fs *pflag.FlagSet) {
 
 func (o *surgeryBaseOptions) Validate() error {
 	if o.outputDBFilePath == "" {
-		return fmt.Errorf("output database path wasn't given, specify output database file path with --output option")
+		return errors.New("output database path wasn't given, specify output database file path with --output option")
 	}
 	return nil
 }
