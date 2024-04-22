@@ -562,7 +562,7 @@ func (db *DB) mmapSize(size int) (int, error) {
 
 	// Verify the requested size is not above the maximum allowed.
 	if size > maxMapSize {
-		return 0, fmt.Errorf("mmap too large")
+		return 0, errors.New("mmap too large")
 	}
 
 	// If larger than 1GB then grow by 1GB at a time.
