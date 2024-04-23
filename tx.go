@@ -170,14 +170,16 @@ func (tx *Tx) OnCommit(fn func()) {
 func (tx *Tx) Commit() (err error) {
 	txId := tx.ID()
 	lg := tx.db.Logger()
-	lg.Debugf("Committing transaction %d", txId)
-	defer func() {
-		if err != nil {
-			lg.Errorf("Committing transaction failed: %v", err)
-		} else {
-			lg.Debugf("Committing transaction %d successfully", txId)
-		}
-	}()
+	if lg != nil {
+		lg.Debugf("Committing transaction %d", txId)
+		defer func() {
+			if err != nil {
+				lg.Errorf("Committing transaction failed: %v", err)
+			} else {
+				lg.Debugf("Committing transaction %d successfully", txId)
+			}
+		}()
+	}
 
 	common.Assert(!tx.managed, "managed tx commit not allowed")
 	if tx.db == nil {
@@ -200,7 +202,9 @@ func (tx *Tx) Commit() (err error) {
 	// spill data onto dirty pages.
 	startTime = time.Now()
 	if err = tx.root.spill(); err != nil {
-		lg.Errorf("spilling data onto dirty pages failed: %v", err)
+		if lg != nil {
+			lg.Errorf("spilling data onto dirty pages failed: %v", err)
+		}
 		tx.rollback()
 		return err
 	}
@@ -217,7 +221,9 @@ func (tx *Tx) Commit() (err error) {
 	if !tx.db.NoFreelistSync {
 		err = tx.commitFreelist()
 		if err != nil {
-			lg.Errorf("committing freelist failed: %v", err)
+			if lg != nil {
+				lg.Errorf("committing freelist failed: %v", err)
+			}
 			return err
 		}
 	} else {
@@ -231,7 +237,9 @@ func (tx *Tx) Commit() (err error) {
 		// tx.rollback()
 		// return errors.New(lackOfDiskSpace)
 		if err = tx.db.grow(int(tx.meta.Pgid()+1) * tx.db.pageSize); err != nil {
-			lg.Errorf("growing db size failed, pgid: %d, pagesize: %d, error: %v", tx.meta.Pgid(), tx.db.pageSize, err)
+			if lg != nil {
+				lg.Errorf("growing db size failed, pgid: %d, pagesize: %d, error: %v", tx.meta.Pgid(), tx.db.pageSize, err)
+			}
 			tx.rollback()
 			return err
 		}
@@ -240,7 +248,9 @@ func (tx *Tx) Commit() (err error) {
 	// Write dirty pages to disk.
 	startTime = time.Now()
 	if err = tx.write(); err != nil {
-		lg.Errorf("writing data failed: %v", err)
+		if lg != nil {
+			lg.Errorf("writing data failed: %v", err)
+		}
 		tx.rollback()
 		return err
 	}
@@ -263,7 +273,9 @@ func (tx *Tx) Commit() (err error) {
 
 	// Write meta to disk.
 	if err = tx.writeMeta(); err != nil {
-		lg.Errorf("writeMeta failed: %v", err)
+		if lg != nil {
+			lg.Errorf("writeMeta failed: %v", err)
+		}
 		tx.rollback()
 		return err
 	}
@@ -457,10 +469,11 @@ func (tx *Tx) CopyFile(path string, mode os.FileMode) error {
 
 // allocate returns a contiguous block of memory starting at a given page.
 func (tx *Tx) allocate(count int) (*common.Page, error) {
-	lg := tx.db.Logger()
 	p, err := tx.db.allocate(tx.meta.Txid(), count)
 	if err != nil {
-		lg.Errorf("allocating failed, txid: %d, count: %d, error: %v", tx.meta.Txid(), count, err)
+		if lg := tx.db.Logger(); lg != nil {
+			lg.Errorf("allocating failed, txid: %d, count: %d, error: %v", tx.meta.Txid(), count, err)
+		}
 		return nil, err
 	}
 
@@ -501,7 +514,9 @@ func (tx *Tx) write() error {
 			buf := common.UnsafeByteSlice(unsafe.Pointer(p), written, 0, int(sz))
 
 			if _, err := tx.db.ops.writeAt(buf, offset); err != nil {
-				lg.Errorf("writeAt failed, offset: %d: %w", offset, err)
+				if lg != nil {
+					lg.Errorf("writeAt failed, offset: %d: %w", offset, err)
+				}
 				return err
 			}
 
@@ -524,7 +539,9 @@ func (tx *Tx) write() error {
 	if !tx.db.NoSync || common.IgnoreNoSync {
 		// gofail: var beforeSyncDataPages struct{}
 		if err := fdatasync(tx.db); err != nil {
-			lg.Errorf("[GOOS: %s, GOARCH: %s] fdatasync failed: %w", runtime.GOOS, runtime.GOARCH, err)
+			if lg != nil {
+				lg.Errorf("[GOOS: %s, GOARCH: %s] fdatasync failed: %w", runtime.GOOS, runtime.GOARCH, err)
+			}
 			return err
 		}
 	}
@@ -559,13 +576,17 @@ func (tx *Tx) writeMeta() error {
 
 	// Write the meta page to file.
 	if _, err := tx.db.ops.writeAt(buf, int64(p.Id())*int64(tx.db.pageSize)); err != nil {
-		lg.Errorf("writeAt failed, pgid: %d, pageSize: %d, error: %v", p.Id(), tx.db.pageSize, err)
+		if lg != nil {
+			lg.Errorf("writeAt failed, pgid: %d, pageSize: %d, error: %v", p.Id(), tx.db.pageSize, err)
+		}
 		return err
 	}
 	if !tx.db.NoSync || common.IgnoreNoSync {
 		// gofail: var beforeSyncMetaPage struct{}
 		if err := fdatasync(tx.db); err != nil {
-			lg.Errorf("[GOOS: %s, GOARCH: %s] fdatasync failed: %w", runtime.GOOS, runtime.GOARCH, err)
+			if lg != nil {
+				lg.Errorf("[GOOS: %s, GOARCH: %s] fdatasync failed: %w", runtime.GOOS, runtime.GOARCH, err)
+			}
 			return err
 		}
 	}

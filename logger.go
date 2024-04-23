@@ -3,7 +3,6 @@ package bbolt
 // See https://github.com/etcd-io/raft/blob/main/logger.go
 import (
 	"fmt"
-	"io"
 	"log"
 	"os"
 )
@@ -27,14 +26,6 @@ type Logger interface {
 	Panic(v ...interface{})
 	Panicf(format string, v ...interface{})
 }
-
-func getDiscardLogger() Logger {
-	return discardLogger
-}
-
-var (
-	discardLogger = &DefaultLogger{Logger: log.New(io.Discard, "", 0)}
-)
 
 const (
 	calldepth = 2

@@ -146,15 +146,16 @@ func (b *Bucket) openBucket(value []byte) *Bucket {
 // Returns an error if the key already exists, if the bucket name is blank, or if the bucket name is too long.
 // The bucket instance is only valid for the lifetime of the transaction.
 func (b *Bucket) CreateBucket(key []byte) (rb *Bucket, err error) {
-	lg := b.tx.db.Logger()
-	lg.Debugf("Creating bucket %q", string(key))
-	defer func() {
-		if err != nil {
-			lg.Errorf("Creating bucket %q failed: %v", string(key), err)
-		} else {
-			lg.Debugf("Creating bucket %q successfully", string(key))
-		}
-	}()
+	if lg := b.tx.db.Logger(); lg != nil {
+		lg.Debugf("Creating bucket %q", string(key))
+		defer func() {
+			if err != nil {
+				lg.Errorf("Creating bucket %q failed: %v", string(key), err)
+			} else {
+				lg.Debugf("Creating bucket %q successfully", string(key))
+			}
+		}()
+	}
 	if b.tx.db == nil {
 		return nil, errors.ErrTxClosed
 	} else if !b.tx.writable {
@@ -202,15 +203,16 @@ func (b *Bucket) CreateBucket(key []byte) (rb *Bucket, err error) {
 // Returns an error if the bucket name is blank, or if the bucket name is too long.
 // The bucket instance is only valid for the lifetime of the transaction.
 func (b *Bucket) CreateBucketIfNotExists(key []byte) (rb *Bucket, err error) {
-	lg := b.tx.db.Logger()
-	lg.Debugf("Creating bucket if not exist %q", string(key))
-	defer func() {
-		if err != nil {
-			lg.Errorf("Creating bucket if not exist %q failed: %v", string(key), err)
-		} else {
-			lg.Debugf("Creating bucket if not exist %q successfully", string(key))
-		}
-	}()
+	if lg := b.tx.db.Logger(); lg != nil {
+		lg.Debugf("Creating bucket if not exist %q", string(key))
+		defer func() {
+			if err != nil {
+				lg.Errorf("Creating bucket if not exist %q failed: %v", string(key), err)
+			} else {
+				lg.Debugf("Creating bucket if not exist %q successfully", string(key))
+			}
+		}()
+	}
 
 	if b.tx.db == nil {
 		return nil, errors.ErrTxClosed
@@ -269,15 +271,16 @@ func (b *Bucket) CreateBucketIfNotExists(key []byte) (rb *Bucket, err error) {
 // DeleteBucket deletes a bucket at the given key.
 // Returns an error if the bucket does not exist, or if the key represents a non-bucket value.
 func (b *Bucket) DeleteBucket(key []byte) (err error) {
-	lg := b.tx.db.Logger()
-	lg.Debugf("Deleting bucket %q", string(key))
-	defer func() {
-		if err != nil {
-			lg.Errorf("Deleting bucket %q failed: %v", string(key), err)
-		} else {
-			lg.Debugf("Deleting bucket %q successfully", string(key))
-		}
-	}()
+	if lg := b.tx.db.Logger(); lg != nil {
+		lg.Debugf("Deleting bucket %q", string(key))
+		defer func() {
+			if err != nil {
+				lg.Errorf("Deleting bucket %q failed: %v", string(key), err)
+			} else {
+				lg.Debugf("Deleting bucket %q successfully", string(key))
+			}
+		}()
+	}
 
 	if b.tx.db == nil {
 		return errors.ErrTxClosed
@@ -332,14 +335,16 @@ func (b *Bucket) DeleteBucket(key []byte) (err error) {
 //  4. the source and destination buckets are the same.
 func (b *Bucket) MoveBucket(key []byte, dstBucket *Bucket) (err error) {
 	lg := b.tx.db.Logger()
-	lg.Debugf("Moving bucket %q", string(key))
-	defer func() {
-		if err != nil {
-			lg.Errorf("Moving bucket %q failed: %v", string(key), err)
-		} else {
-			lg.Debugf("Moving bucket %q successfully", string(key))
-		}
-	}()
+	if lg != nil {
+		lg.Debugf("Moving bucket %q", string(key))
+		defer func() {
+			if err != nil {
+				lg.Errorf("Moving bucket %q failed: %v", string(key), err)
+			} else {
+				lg.Debugf("Moving bucket %q successfully", string(key))
+			}
+		}()
+	}
 
 	if b.tx.db == nil || dstBucket.tx.db == nil {
 		return errors.ErrTxClosed
@@ -348,7 +353,9 @@ func (b *Bucket) MoveBucket(key []byte, dstBucket *Bucket) (err error) {
 	}
 
 	if b.tx.db.Path() != dstBucket.tx.db.Path() || b.tx != dstBucket.tx {
-		lg.Errorf("The source and target buckets are not in the same db file, source bucket in %s and target bucket in %s", b.tx.db.Path(), dstBucket.tx.db.Path())
+		if lg != nil {
+			lg.Errorf("The source and target buckets are not in the same db file, source bucket in %s and target bucket in %s", b.tx.db.Path(), dstBucket.tx.db.Path())
+		}
 		return errors.ErrDifferentDB
 	}
 
@@ -362,14 +369,18 @@ func (b *Bucket) MoveBucket(key []byte, dstBucket *Bucket) (err error) {
 	if !bytes.Equal(newKey, k) {
 		return errors.ErrBucketNotFound
 	} else if (flags & common.BucketLeafFlag) == 0 {
-		lg.Errorf("An incompatible key %s exists in the source bucket", string(newKey))
+		if lg != nil {
+			lg.Errorf("An incompatible key %s exists in the source bucket", string(newKey))
+		}
 		return errors.ErrIncompatibleValue
 	}
 
 	// Do nothing (return true directly) if the source bucket and the
 	// destination bucket are actually the same bucket.
 	if b == dstBucket || (b.RootPage() == dstBucket.RootPage() && b.RootPage() != 0) {
-		lg.Errorf("The source bucket (%s) and the target bucket (%s) are the same bucket", b.String(), dstBucket.String())
+		if lg != nil {
+			lg.Errorf("The source bucket (%s) and the target bucket (%s) are the same bucket", b.String(), dstBucket.String())
+		}
 		return errors.ErrSameBuckets
 	}
 
@@ -382,7 +393,9 @@ func (b *Bucket) MoveBucket(key []byte, dstBucket *Bucket) (err error) {
 		if (flags & common.BucketLeafFlag) != 0 {
 			return errors.ErrBucketExists
 		}
-		lg.Errorf("An incompatible key %s exists in the target bucket", string(newKey))
+		if lg != nil {
+			lg.Errorf("An incompatible key %s exists in the target bucket", string(newKey))
+		}
 		return errors.ErrIncompatibleValue
 	}
 
@@ -445,15 +458,16 @@ func (b *Bucket) Get(key []byte) []byte {
 // Supplied value must remain valid for the life of the transaction.
 // Returns an error if the bucket was created from a read-only transaction, if the key is blank, if the key is too large, or if the value is too large.
 func (b *Bucket) Put(key []byte, value []byte) (err error) {
-	lg := b.tx.db.Logger()
-	lg.Debugf("Putting key %q", string(key))
-	defer func() {
-		if err != nil {
-			lg.Errorf("Putting key %q failed: %v", string(key), err)
-		} else {
-			lg.Debugf("Putting key %q successfully", string(key))
-		}
-	}()
+	if lg := b.tx.db.Logger(); lg != nil {
+		lg.Debugf("Putting key %q", string(key))
+		defer func() {
+			if err != nil {
+				lg.Errorf("Putting key %q failed: %v", string(key), err)
+			} else {
+				lg.Debugf("Putting key %q successfully", string(key))
+			}
+		}()
+	}
 	if b.tx.db == nil {
 		return errors.ErrTxClosed
 	} else if !b.Writable() {
@@ -491,15 +505,16 @@ func (b *Bucket) Put(key []byte, value []byte) (err error) {
 // If the key does not exist then nothing is done and a nil error is returned.
 // Returns an error if the bucket was created from a read-only transaction.
 func (b *Bucket) Delete(key []byte) (err error) {
-	lg := b.tx.db.Logger()
-	lg.Debugf("Deleting key %q", string(key))
-	defer func() {
-		if err != nil {
-			lg.Errorf("Deleting key %q failed: %v", string(key), err)
-		} else {
-			lg.Debugf("Deleting key %q successfully", string(key))
-		}
-	}()
+	if lg := b.tx.db.Logger(); lg != nil {
+		lg.Debugf("Deleting key %q", string(key))
+		defer func() {
+			if err != nil {
+				lg.Errorf("Deleting key %q failed: %v", string(key), err)
+			} else {
+				lg.Debugf("Deleting key %q successfully", string(key))
+			}
+		}()
+	}
 
 	if b.tx.db == nil {
 		return errors.ErrTxClosed

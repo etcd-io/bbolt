@@ -197,21 +197,21 @@ func Open(path string, mode os.FileMode, options *Options) (db *DB, err error) {
 	db.MaxBatchDelay = common.DefaultMaxBatchDelay
 	db.AllocSize = common.DefaultAllocSize
 
-	if options.Logger == nil {
-		db.logger = getDiscardLogger()
-	} else {
+	if options.Logger != nil {
 		db.logger = options.Logger
 	}
 
 	lg := db.Logger()
-	lg.Infof("Opening db file (%s) with mode %x and with options: %s", path, mode, options)
-	defer func() {
-		if err != nil {
-			lg.Errorf("Opening bbolt db (%s) failed: %v", path, err)
-		} else {
-			lg.Infof("Opening bbolt db (%s) successfully", path)
-		}
-	}()
+	if lg != nil {
+		lg.Infof("Opening db file (%s) with mode %x and with options: %s", path, mode, options)
+		defer func() {
+			if err != nil {
+				lg.Errorf("Opening bbolt db (%s) failed: %v", path, err)
+			} else {
+				lg.Infof("Opening bbolt db (%s) successfully", path)
+			}
+		}()
+	}
 
 	flag := os.O_RDWR
 	if options.ReadOnly {
@@ -231,7 +231,9 @@ func Open(path string, mode os.FileMode, options *Options) (db *DB, err error) {
 	// Open data file and separate sync handler for metadata writes.
 	if db.file, err = db.openFile(path, flag, mode); err != nil {
 		_ = db.close()
-		lg.Errorf("failed to open db file (%s): %v", path, err)
+		if lg != nil {
+			lg.Errorf("failed to open db file (%s): %v", path, err)
+		}
 		return nil, err
 	}
 	db.path = db.file.Name()
@@ -245,7 +247,9 @@ func Open(path string, mode os.FileMode, options *Options) (db *DB, err error) {
 	// hold a lock at the same time) otherwise (options.ReadOnly is set).
 	if err = flock(db, !db.readOnly, options.Timeout); err != nil {
 		_ = db.close()
-		lg.Errorf("failed to lock db file (%s), readonly: %t, error: %v", path, db.readOnly, err)
+		if lg != nil {
+			lg.Errorf("failed to lock db file (%s), readonly: %t, error: %v", path, db.readOnly, err)
+		}
 		return nil, err
 	}
 
@@ -260,7 +264,9 @@ func Open(path string, mode os.FileMode, options *Options) (db *DB, err error) {
 	// Initialize the database if it doesn't exist.
 	if info, statErr := db.file.Stat(); statErr != nil {
 		_ = db.close()
-		lg.Errorf("failed to get db file's stats (%s): %v", path, err)
+		if lg != nil {
+			lg.Errorf("failed to get db file's stats (%s): %v", path, err)
+		}
 		return nil, statErr
 	} else if info.Size() == 0 {
 		// Initialize new files with meta pages.
@@ -274,7 +280,9 @@ func Open(path string, mode os.FileMode, options *Options) (db *DB, err error) {
 		// try to get the page size from the metadata pages
 		if db.pageSize, err = db.getPageSize(); err != nil {
 			_ = db.close()
-			lg.Errorf("failed to get page size from db file (%s): %v", path, err)
+			if lg != nil {
+				lg.Errorf("failed to get page size from db file (%s): %v", path, err)
+			}
 			return nil, err
 		}
 	}
@@ -289,7 +297,9 @@ func Open(path string, mode os.FileMode, options *Options) (db *DB, err error) {
 	// Memory map the data file.
 	if err = db.mmap(options.InitialMmapSize); err != nil {
 		_ = db.close()
-		lg.Errorf("failed to map db file (%s): %v", path, err)
+		if lg != nil {
+			lg.Errorf("failed to map db file (%s): %v", path, err)
+		}
 		return nil, err
 	}
 
@@ -309,7 +319,9 @@ func Open(path string, mode os.FileMode, options *Options) (db *DB, err error) {
 			txErr = tx.Commit()
 		}
 		if txErr != nil {
-			lg.Errorf("starting readwrite transaction failed: %v", txErr)
+			if lg != nil {
+				lg.Errorf("starting readwrite transaction failed: %v", txErr)
+			}
 			_ = db.close()
 			return nil, txErr
 		}
@@ -454,7 +466,9 @@ func (db *DB) mmap(minsz int) (err error) {
 	var fileSize int
 	fileSize, err = db.fileSize()
 	if err != nil {
-		lg.Errorf("getting file size failed: %w", err)
+		if lg != nil {
+			lg.Errorf("getting file size failed: %w", err)
+		}
 		return err
 	}
 	var size = fileSize
@@ -463,7 +477,9 @@ func (db *DB) mmap(minsz int) (err error) {
 	}
 	size, err = db.mmapSize(size)
 	if err != nil {
-		lg.Errorf("getting map size failed: %w", err)
+		if lg != nil {
+			lg.Errorf("getting map size failed: %w", err)
+		}
 		return err
 	}
 
@@ -488,7 +504,9 @@ func (db *DB) mmap(minsz int) (err error) {
 	// gofail: var mapError string
 	// return errors.New(mapError)
 	if err = mmap(db, size); err != nil {
-		lg.Errorf("[GOOS: %s, GOARCH: %s] mmap failed, size: %d, error: %v", runtime.GOOS, runtime.GOARCH, size, err)
+		if lg != nil {
+			lg.Errorf("[GOOS: %s, GOARCH: %s] mmap failed, size: %d, error: %v", runtime.GOOS, runtime.GOARCH, size, err)
+		}
 		return err
 	}
 
@@ -519,7 +537,9 @@ func (db *DB) mmap(minsz int) (err error) {
 	err0 := db.meta0.Validate()
 	err1 := db.meta1.Validate()
 	if err0 != nil && err1 != nil {
-		lg.Errorf("both meta pages are invalid, meta0: %v, meta1: %v", err0, err1)
+		if lg != nil {
+			lg.Errorf("both meta pages are invalid, meta0: %v, meta1: %v", err0, err1)
+		}
 		return err0
 	}
 
@@ -542,7 +562,9 @@ func (db *DB) munmap() error {
 	// gofail: var unmapError string
 	// return errors.New(unmapError)
 	if err := munmap(db); err != nil {
-		db.Logger().Errorf("[GOOS: %s, GOARCH: %s] munmap failed, db.datasz: %d, error: %v", runtime.GOOS, runtime.GOARCH, db.datasz, err)
+		if lg := db.Logger(); lg != nil {
+			lg.Errorf("[GOOS: %s, GOARCH: %s] munmap failed, db.datasz: %d, error: %v", runtime.GOOS, runtime.GOARCH, db.datasz, err)
+		}
 		return fmt.Errorf("unmap error: " + err.Error())
 	}
 
@@ -590,7 +612,9 @@ func (db *DB) munlock(fileSize int) error {
 	// gofail: var munlockError string
 	// return errors.New(munlockError)
 	if err := munlock(db, fileSize); err != nil {
-		db.Logger().Errorf("[GOOS: %s, GOARCH: %s] munlock failed, fileSize: %d, db.datasz: %d, error: %v", runtime.GOOS, runtime.GOARCH, fileSize, db.datasz, err)
+		if lg := db.Logger(); lg != nil {
+			lg.Errorf("[GOOS: %s, GOARCH: %s] munlock failed, fileSize: %d, db.datasz: %d, error: %v", runtime.GOOS, runtime.GOARCH, fileSize, db.datasz, err)
+		}
 		return fmt.Errorf("munlock error: " + err.Error())
 	}
 	return nil
@@ -600,7 +624,9 @@ func (db *DB) mlock(fileSize int) error {
 	// gofail: var mlockError string
 	// return errors.New(mlockError)
 	if err := mlock(db, fileSize); err != nil {
-		db.Logger().Errorf("[GOOS: %s, GOARCH: %s] mlock failed, fileSize: %d, db.datasz: %d, error: %v", runtime.GOOS, runtime.GOARCH, fileSize, db.datasz, err)
+		if lg := db.Logger(); lg != nil {
+			lg.Errorf("[GOOS: %s, GOARCH: %s] mlock failed, fileSize: %d, db.datasz: %d, error: %v", runtime.GOOS, runtime.GOARCH, fileSize, db.datasz, err)
+		}
 		return fmt.Errorf("mlock error: " + err.Error())
 	}
 	return nil
@@ -649,13 +675,19 @@ func (db *DB) init() error {
 	p.SetFlags(common.LeafPageFlag)
 	p.SetCount(0)
 
+	lg := db.Logger()
+
 	// Write the buffer to our data file.
 	if _, err := db.ops.writeAt(buf, 0); err != nil {
-		db.Logger().Errorf("writeAt failed: %w", err)
+		if lg != nil {
+			lg.Errorf("writeAt failed: %w", err)
+		}
 		return err
 	}
 	if err := fdatasync(db); err != nil {
-		db.Logger().Errorf("[GOOS: %s, GOARCH: %s] fdatasync failed: %w", runtime.GOOS, runtime.GOARCH, err)
+		if lg != nil {
+			lg.Errorf("[GOOS: %s, GOARCH: %s] fdatasync failed: %w", runtime.GOOS, runtime.GOARCH, err)
+		}
 		return err
 	}
 
@@ -739,14 +771,16 @@ func (db *DB) close() error {
 // IMPORTANT: You must close read-only transactions after you are finished or
 // else the database will not reclaim old pages.
 func (db *DB) Begin(writable bool) (t *Tx, err error) {
-	db.Logger().Debugf("Starting a new transaction [writable: %t]", writable)
-	defer func() {
-		if err != nil {
-			db.Logger().Errorf("Starting a new transaction [writable: %t] failed: %v", writable, err)
-		} else {
-			db.Logger().Debugf("Starting a new transaction [writable: %t] successfully", writable)
-		}
-	}()
+	if lg := db.Logger(); lg != nil {
+		lg.Debugf("Starting a new transaction [writable: %t]", writable)
+		defer func() {
+			if err != nil {
+				lg.Errorf("Starting a new transaction [writable: %t] failed: %v", writable, err)
+			} else {
+				lg.Debugf("Starting a new transaction [writable: %t] successfully", writable)
+			}
+		}()
+	}
 
 	if writable {
 		return db.beginRWTx()
@@ -755,8 +789,8 @@ func (db *DB) Begin(writable bool) (t *Tx, err error) {
 }
 
 func (db *DB) Logger() Logger {
-	if db == nil || db.logger == nil {
-		return getDiscardLogger()
+	if db == nil {
+		return nil
 	}
 	return db.logger
 }
