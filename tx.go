@@ -170,14 +170,16 @@ func (tx *Tx) OnCommit(fn func()) {
 func (tx *Tx) Commit() (err error) {
 	txId := tx.ID()
 	lg := tx.db.Logger()
-	lg.Debugf("Committing transaction %d", txId)
-	defer func() {
-		if err != nil {
-			lg.Errorf("Committing transaction failed: %v", err)
-		} else {
-			lg.Debugf("Committing transaction %d successfully", txId)
-		}
-	}()
+	if lg != discardLogger {
+		lg.Debugf("Committing transaction %d", txId)
+		defer func() {
+			if err != nil {
+				lg.Errorf("Committing transaction failed: %v", err)
+			} else {
+				lg.Debugf("Committing transaction %d successfully", txId)
+			}
+		}()
+	}
 
 	common.Assert(!tx.managed, "managed tx commit not allowed")
 	if tx.db == nil {
