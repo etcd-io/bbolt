@@ -204,14 +204,16 @@ func Open(path string, mode os.FileMode, options *Options) (db *DB, err error) {
 	}
 
 	lg := db.Logger()
-	lg.Infof("Opening db file (%s) with mode %x and with options: %s", path, mode, options)
-	defer func() {
-		if err != nil {
-			lg.Errorf("Opening bbolt db (%s) failed: %v", path, err)
-		} else {
-			lg.Infof("Opening bbolt db (%s) successfully", path)
-		}
-	}()
+	if lg != discardLogger {
+		lg.Infof("Opening db file (%s) with mode %x and with options: %s", path, mode, options)
+		defer func() {
+			if err != nil {
+				lg.Errorf("Opening bbolt db (%s) failed: %v", path, err)
+			} else {
+				lg.Infof("Opening bbolt db (%s) successfully", path)
+			}
+		}()
+	}
 
 	flag := os.O_RDWR
 	if options.ReadOnly {
@@ -739,14 +741,16 @@ func (db *DB) close() error {
 // IMPORTANT: You must close read-only transactions after you are finished or
 // else the database will not reclaim old pages.
 func (db *DB) Begin(writable bool) (t *Tx, err error) {
-	db.Logger().Debugf("Starting a new transaction [writable: %t]", writable)
-	defer func() {
-		if err != nil {
-			db.Logger().Errorf("Starting a new transaction [writable: %t] failed: %v", writable, err)
-		} else {
-			db.Logger().Debugf("Starting a new transaction [writable: %t] successfully", writable)
-		}
-	}()
+	if lg := db.Logger(); lg != discardLogger {
+		lg.Debugf("Starting a new transaction [writable: %t]", writable)
+		defer func() {
+			if err != nil {
+				lg.Errorf("Starting a new transaction [writable: %t] failed: %v", writable, err)
+			} else {
+				lg.Debugf("Starting a new transaction [writable: %t] successfully", writable)
+			}
+		}()
+	}
 
 	if writable {
 		return db.beginRWTx()
@@ -1095,14 +1099,16 @@ func safelyCall(fn func(*Tx) error, tx *Tx) (err error) {
 // This is not necessary under normal operation, however, if you use NoSync
 // then it allows you to force the database file to sync against the disk.
 func (db *DB) Sync() (err error) {
-	db.Logger().Debug("Syncing bbolt db (%s)", db.path)
-	defer func() {
-		if err != nil {
-			db.Logger().Errorf("[GOOS: %s, GOARCH: %s] syncing bbolt db (%s) failed: %v", runtime.GOOS, runtime.GOARCH, db.path, err)
-		} else {
-			db.Logger().Debugf("Syncing bbolt db (%s) successfully", db.path)
-		}
-	}()
+	if lg := db.Logger(); lg != discardLogger {
+		lg.Debug("Syncing bbolt db (%s)", db.path)
+		defer func() {
+			if err != nil {
+				lg.Errorf("[GOOS: %s, GOARCH: %s] syncing bbolt db (%s) failed: %v", runtime.GOOS, runtime.GOARCH, db.path, err)
+			} else {
+				lg.Debugf("Syncing bbolt db (%s) successfully", db.path)
+			}
+		}()
+	}
 
 	return fdatasync(db)
 }
