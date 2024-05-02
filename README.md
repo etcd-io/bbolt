@@ -441,10 +441,14 @@ Prev()   Move to the previous key.
 ```
 
 Each of those functions has a return signature of `(key []byte, value []byte)`.
-When you have iterated to the end of the cursor then `Next()` will return a
-`nil` key.  You must seek to a position using `First()`, `Last()`, or `Seek()`
-before calling `Next()` or `Prev()`. If you do not seek to a position then
-these functions will return a `nil` key.
+You must seek to a position using `First()`, `Last()`, or `Seek()` before calling
+`Next()` or `Prev()`. If you do not seek to a position then these functions will
+return a `nil` key.
+
+When you have iterated to the end of the cursor, then `Next()` will return a
+`nil` key and the cursor still points to the last element if present. When you
+have iterated to the beginning of the cursor, then `Prev()` will return a `nil`
+key and the cursor still points to the first element if present.
 
 If you remove key/value pairs during iteration, the cursor may automatically
 move to the next position if present in current node each time removing a key.
