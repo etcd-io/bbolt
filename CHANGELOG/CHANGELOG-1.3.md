@@ -2,6 +2,17 @@ Note that we start to track changes starting from v1.3.7.
 
 <hr>
 
+## v1.3.10(TBD)
+
+### BoltDB
+- [Remove deprecated `UnsafeSlice` and use `unsafe.Slice`](https://github.com/etcd-io/bbolt/pull/717)
+- [Stabilize the behaviour of Prev when the cursor already points to the first element](https://github.com/etcd-io/bbolt/pull/744)
+
+### Other
+- [Bump go version to 1.21.9](https://github.com/etcd-io/bbolt/pull/713)
+
+<hr>
+
 ## v1.3.9(2024-02-24)
 
 ### BoltDB
