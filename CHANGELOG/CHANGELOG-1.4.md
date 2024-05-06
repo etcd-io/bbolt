@@ -1,7 +1,7 @@
 
 <hr>
 
-## v1.4.0-alpha.1(TBD)
+## v1.4.0-alpha.1(2024-05-06)
 
 ### BoltDB
 - [Enhance check functionality to support checking starting from a pageId](https://github.com/etcd-io/bbolt/pull/659)
