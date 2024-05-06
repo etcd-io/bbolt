@@ -39,7 +39,7 @@ jobs:
           esac
         shell: bash
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@82d40c283aeb1f2b6595839195e95c2d6a49081b # v5.0.0
+        uses: golangci/golangci-lint-action@38e1018663fa5173f3968ea0777460d3de38f256 # v5.3.0
 
   coverage:
     needs: ["test-windows"]
