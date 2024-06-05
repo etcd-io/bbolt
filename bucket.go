@@ -876,6 +876,12 @@ func (b *Bucket) node(pgId common.Pgid, parent *node) *node {
 	var p = b.page
 	if p == nil {
 		p = b.tx.page(pgId)
+	} else {
+		// if p isn't nil, then it's an inline bucket.
+		// The pgId must be 0 in this case.
+		common.Verify(func() {
+			common.Assert(pgId == 0, "The page ID (%d) isn't 0 for an inline bucket", pgId)
+		})
 	}
 
 	// Read the page into the node and cache it.
