@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"testing"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -1050,10 +1051,27 @@ func (cmd *benchCommand) Run(args ...string) error {
 	}
 
 	// Print results.
-	fmt.Fprintf(cmd.Stderr, "# Write\t%v(ops)\t%v\t(%v/op)\t(%v op/sec)\n", writeResults.CompletedOps(), writeResults.Duration(), writeResults.OpDuration(), writeResults.OpsPerSecond())
-	fmt.Fprintf(cmd.Stderr, "# Read\t%v(ops)\t%v\t(%v/op)\t(%v op/sec)\n", readResults.CompletedOps(), readResults.Duration(), readResults.OpDuration(), readResults.OpsPerSecond())
+	if options.GoBenchOutput {
+		// below replicates the output of testing.B benchmarks, e.g. for external tooling
+		benchWriteName := "BenchmarkWrite"
+		benchReadName := "BenchmarkRead"
+		maxLen := max(len(benchReadName), len(benchWriteName))
+		printGoBenchResult(cmd.Stderr, writeResults, maxLen, benchWriteName)
+		printGoBenchResult(cmd.Stderr, readResults, maxLen, benchReadName)
+	} else {
+		fmt.Fprintf(cmd.Stderr, "# Write\t%v(ops)\t%v\t(%v/op)\t(%v op/sec)\n", writeResults.CompletedOps(), writeResults.Duration(), writeResults.OpDuration(), writeResults.OpsPerSecond())
+		fmt.Fprintf(cmd.Stderr, "# Read\t%v(ops)\t%v\t(%v/op)\t(%v op/sec)\n", readResults.CompletedOps(), readResults.Duration(), readResults.OpDuration(), readResults.OpsPerSecond())
+	}
 	fmt.Fprintln(cmd.Stderr, "")
+
 	return nil
+}
+
+func printGoBenchResult(w io.Writer, r BenchResults, maxLen int, benchName string) {
+	gobenchResult := testing.BenchmarkResult{}
+	gobenchResult.T = r.Duration()
+	gobenchResult.N = int(r.CompletedOps())
+	fmt.Fprintf(w, "%-*s\t%s\n", maxLen, benchName, gobenchResult.String())
 }
 
 // ParseFlags parses the command line flags.
@@ -1076,6 +1094,7 @@ func (cmd *benchCommand) ParseFlags(args []string) (*BenchOptions, error) {
 	fs.BoolVar(&options.NoSync, "no-sync", false, "")
 	fs.BoolVar(&options.Work, "work", false, "")
 	fs.StringVar(&options.Path, "path", "", "")
+	fs.BoolVar(&options.GoBenchOutput, "gobench-output", false, "")
 	fs.SetOutput(cmd.Stderr)
 	if err := fs.Parse(args); err != nil {
 		return nil, err
@@ -1555,6 +1574,7 @@ type BenchOptions struct {
 	NoSync        bool
 	Work          bool
 	Path          string
+	GoBenchOutput bool
 }
 
 // BenchResults represents the performance results of the benchmark and is thread-safe.
