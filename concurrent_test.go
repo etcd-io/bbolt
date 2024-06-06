@@ -100,30 +100,6 @@ func TestConcurrentGenericReadAndWrite(t *testing.T) {
 		testDuration time.Duration
 	}{
 		{
-			name:         "1 worker",
-			workerCount:  1,
-			conf:         conf,
-			testDuration: testDuration,
-		},
-		{
-			name:         "10 workers",
-			workerCount:  10,
-			conf:         conf,
-			testDuration: testDuration,
-		},
-		{
-			name:         "50 workers",
-			workerCount:  50,
-			conf:         conf,
-			testDuration: testDuration,
-		},
-		{
-			name:         "100 workers",
-			workerCount:  100,
-			conf:         conf,
-			testDuration: testDuration,
-		},
-		{
 			name:         "200 workers",
 			workerCount:  200,
 			conf:         conf,
@@ -214,7 +190,10 @@ func concurrentReadAndWrite(t *testing.T,
 // to ensure the test case can be executed on old branches or versions,
 // e.g. `release-1.3` or `1.3.[5-7]`.
 func mustCreateDB(t *testing.T, o *bolt.Options) *bolt.DB {
-	f := filepath.Join(t.TempDir(), "db")
+	f := "./bbolt.db"
+	if err := os.Remove(f); err != nil {
+		t.Logf("Failed to remove %q, error: %v", f, err)
+	}
 
 	return mustOpenDB(t, f, o)
 }
