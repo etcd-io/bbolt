@@ -369,10 +369,10 @@ func newPageItemCommand(m *Main) *pageItemCommand {
 }
 
 type pageItemOptions struct {
+	format    string
 	help      bool
 	keyOnly   bool
 	valueOnly bool
-	format    string
 }
 
 // Run executes the command.
@@ -1597,8 +1597,8 @@ func (r *BenchResults) OpsPerSecond() int {
 }
 
 type PageError struct {
-	ID  int
 	Err error
+	ID  int
 }
 
 func (e *PageError) Error() string {
