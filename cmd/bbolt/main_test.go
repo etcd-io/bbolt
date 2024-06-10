@@ -484,6 +484,7 @@ func TestBenchCommand_Run(t *testing.T) {
 			}
 
 			stderr := m.Stderr.String()
+			stdout := m.Stdout.String()
 			if !strings.Contains(stderr, "starting write benchmark.") || !strings.Contains(stderr, "starting read benchmark.") {
 				t.Fatal(fmt.Errorf("benchmark result does not contain read/write start output:\n%s", stderr))
 			}
@@ -492,8 +493,8 @@ func TestBenchCommand_Run(t *testing.T) {
 				t.Fatal(fmt.Errorf("found iter mismatch in stdout:\n%s", stderr))
 			}
 
-			if !strings.Contains(stderr, "# Write") || !strings.Contains(stderr, "# Read") {
-				t.Fatal(fmt.Errorf("benchmark result does not contain read/write output:\n%s", stderr))
+			if !strings.Contains(stdout, "# Write") || !strings.Contains(stdout, "# Read") {
+				t.Fatal(fmt.Errorf("benchmark result does not contain read/write output:\n%s", stdout))
 			}
 		})
 	}
