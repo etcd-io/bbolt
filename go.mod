@@ -5,7 +5,7 @@ go 1.22
 toolchain go1.22.4
 
 require (
-	github.com/spf13/cobra v1.8.0
+	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.9.0
 	go.etcd.io/gofail v0.1.0
