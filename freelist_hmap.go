@@ -1,6 +1,8 @@
 package bbolt
 
 import (
+	"fmt"
+	"reflect"
 	"sort"
 
 	"go.etcd.io/bbolt/internal/common"
@@ -108,6 +110,33 @@ func (f *freelist) hashmapGetFreePageIDs() []common.Pgid {
 
 // hashmapMergeSpans try to merge list of pages(represented by pgids) with existing spans
 func (f *freelist) hashmapMergeSpans(ids common.Pgids) {
+	common.Verify(func() {
+		ids1Freemap := f.idsFromFreemaps()
+		ids2Forward := f.idsFromForwardMap()
+		ids3Backward := f.idsFromBackwardMap()
+
+		if !reflect.DeepEqual(ids1Freemap, ids2Forward) {
+			panic(fmt.Sprintf("Detected mismatch, f.freemaps: %v, f.forwardMap: %v", f.freemaps, f.forwardMap))
+		}
+		if !reflect.DeepEqual(ids1Freemap, ids3Backward) {
+			panic(fmt.Sprintf("Detected mismatch, f.freemaps: %v, f.backwardMap: %v", f.freemaps, f.backwardMap))
+		}
+
+		sort.Sort(ids)
+		prev := common.Pgid(0)
+		for _, id := range ids {
+			// The ids shouldn't have duplicated free ID.
+			if prev == id {
+				panic(fmt.Sprintf("detected duplicated free ID: %d in ids: %v", id, ids))
+			}
+			prev = id
+
+			// The ids shouldn't have any overlap with the existing f.freemaps.
+			if _, ok := ids1Freemap[id]; ok {
+				panic(fmt.Sprintf("detected overlapped free page ID: %d between ids: %v and existing f.freemaps: %v", id, ids, f.freemaps))
+			}
+		}
+	})
 	for _, id := range ids {
 		// try to see if we can merge and update
 		f.mergeWithExistingSpan(id)
@@ -199,4 +228,54 @@ func (f *freelist) init(pgids []common.Pgid) {
 	if size != 0 && start != 0 {
 		f.addSpan(start, size)
 	}
+}
+
+// idsFromFreemaps get all free page IDs from f.freemaps.
+// used by test only.
+func (f *freelist) idsFromFreemaps() map[common.Pgid]struct{} {
+	ids := make(map[common.Pgid]struct{})
+	for size, idSet := range f.freemaps {
+		for start := range idSet {
+			for i := 0; i < int(size); i++ {
+				id := start + common.Pgid(i)
+				if _, ok := ids[id]; ok {
+					panic(fmt.Sprintf("detected duplicated free page ID: %d in f.freemaps: %v", id, f.freemaps))
+				}
+				ids[id] = struct{}{}
+			}
+		}
+	}
+	return ids
+}
+
+// idsFromForwardMap get all free page IDs from f.forwardMap.
+// used by test only.
+func (f *freelist) idsFromForwardMap() map[common.Pgid]struct{} {
+	ids := make(map[common.Pgid]struct{})
+	for start, size := range f.forwardMap {
+		for i := 0; i < int(size); i++ {
+			id := start + common.Pgid(i)
+			if _, ok := ids[id]; ok {
+				panic(fmt.Sprintf("detected duplicated free page ID: %d in f.forwardMap: %v", id, f.forwardMap))
+			}
+			ids[id] = struct{}{}
+		}
+	}
+	return ids
+}
+
+// idsFromBackwardMap get all free page IDs from f.backwardMap.
+// used by test only.
+func (f *freelist) idsFromBackwardMap() map[common.Pgid]struct{} {
+	ids := make(map[common.Pgid]struct{})
+	for end, size := range f.backwardMap {
+		for i := 0; i < int(size); i++ {
+			id := end - common.Pgid(i)
+			if _, ok := ids[id]; ok {
+				panic(fmt.Sprintf("detected duplicated free page ID: %d in f.backwardMap: %v", id, f.backwardMap))
+			}
+			ids[id] = struct{}{}
+		}
+	}
+	return ids
 }
