@@ -389,5 +389,30 @@ func (f *freelist) reindex() {
 // arrayMergeSpans try to merge list of pages(represented by pgids) with existing spans but using array
 func (f *freelist) arrayMergeSpans(ids common.Pgids) {
 	sort.Sort(ids)
+	common.Verify(func() {
+		idsIdx := make(map[common.Pgid]struct{})
+		for _, id := range f.ids {
+			// The existing f.ids shouldn't have duplicated free ID.
+			if _, ok := idsIdx[id]; ok {
+				panic(fmt.Sprintf("detected duplicated free page ID: %d in existing f.ids: %v", id, f.ids))
+			}
+			idsIdx[id] = struct{}{}
+		}
+
+		prev := common.Pgid(0)
+		for _, id := range ids {
+			// The ids shouldn't have duplicated free ID. Note page 0 and 1
+			// are reserved for meta pages, so they can never be free page IDs.
+			if prev == id {
+				panic(fmt.Sprintf("detected duplicated free ID: %d in ids: %v", id, ids))
+			}
+			prev = id
+
+			// The ids shouldn't have any overlap with the existing f.ids.
+			if _, ok := idsIdx[id]; ok {
+				panic(fmt.Sprintf("detected overlapped free page ID: %d between ids: %v and existing f.ids: %v", id, ids, f.ids))
+			}
+		}
+	})
 	f.ids = common.Pgids(f.ids).Merge(ids)
 }
