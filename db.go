@@ -205,7 +205,7 @@ func Open(path string, mode os.FileMode, options *Options) (db *DB, err error) {
 
 	lg := db.Logger()
 	if lg != discardLogger {
-		lg.Infof("Opening db file (%s) with mode %x and with options: %s", path, mode, options)
+		lg.Infof("Opening db file (%s) with mode %s and with options: %s", path, mode, options)
 		defer func() {
 			if err != nil {
 				lg.Errorf("Opening bbolt db (%s) failed: %v", path, err)
