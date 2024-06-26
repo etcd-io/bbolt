@@ -165,7 +165,9 @@ func concurrentReadAndWrite(t *testing.T,
 	testDuration time.Duration) {
 
 	t.Log("Preparing db.")
-	db := mustCreateDB(t, nil)
+	db := mustCreateDB(t, &bolt.Options{
+		PageSize: 4096,
+	})
 	defer db.Close()
 	err := db.Update(func(tx *bolt.Tx) error {
 		for i := 0; i < conf.bucketCount; i++ {
