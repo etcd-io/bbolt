@@ -2,6 +2,7 @@ package bbolt
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"unsafe"
 
@@ -24,6 +25,7 @@ type pidSet map[common.Pgid]struct{}
 type freelist struct {
 	freelistType   FreelistType                              // freelist type
 	ids            []common.Pgid                             // all free and available free page ids.
+	readonlyTXIDs  []common.Txid                             // all readonly transaction IDs.
 	allocs         map[common.Pgid]common.Txid               // mapping of Txid that allocated a pgid.
 	pending        map[common.Txid]*txPending                // mapping of soon-to-be free page ids by tx.
 	cache          map[common.Pgid]struct{}                  // fast lookup of all free and pending page ids.
@@ -325,4 +327,45 @@ func (f *freelist) reindex() {
 			f.cache[pendingID] = struct{}{}
 		}
 	}
+}
+
+func (f *freelist) addReadonlyTXID(tid common.Txid) {
+	f.readonlyTXIDs = append(f.readonlyTXIDs, tid)
+}
+
+func (f *freelist) removeReadonlyTXID(tid common.Txid) {
+	for i := range f.readonlyTXIDs {
+		if f.readonlyTXIDs[i] == tid {
+			last := len(f.readonlyTXIDs) - 1
+			f.readonlyTXIDs[i] = f.readonlyTXIDs[last]
+			f.readonlyTXIDs = f.readonlyTXIDs[:last]
+			break
+		}
+	}
+}
+
+type txIDx []common.Txid
+
+func (t txIDx) Len() int           { return len(t) }
+func (t txIDx) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
+func (t txIDx) Less(i, j int) bool { return t[i] < t[j] }
+
+// freePages releases any pages associated with closed read-only transactions.
+func (f *freelist) freePages() {
+	// Free all pending pages prior to the earliest open transaction.
+	sort.Sort(txIDx(f.readonlyTXIDs))
+	minid := common.Txid(math.MaxUint64)
+	if len(f.readonlyTXIDs) > 0 {
+		minid = f.readonlyTXIDs[0]
+	}
+	if minid > 0 {
+		f.release(minid - 1)
+	}
+	// Release unused txid extents.
+	for _, tid := range f.readonlyTXIDs {
+		f.releaseRange(minid, tid-1)
+		minid = tid + 1
+	}
+	f.releaseRange(minid, common.Txid(math.MaxUint64))
+	// Any page both allocated and freed in an extent is safe to release.
 }
