@@ -1,4 +1,4 @@
-package bbolt
+package freelist
 
 import (
 	"fmt"
@@ -7,14 +7,18 @@ import (
 	"go.etcd.io/bbolt/internal/common"
 )
 
-// arrayFreeCount returns count of free pages(array version)
-func (f *freelist) arrayFreeCount() int {
-	return len(f.ids)
+type array struct {
+	*shared
+
+	ids []common.Pgid // all free and available free page ids.
 }
 
-// arrayAllocate returns the starting page id of a contiguous list of pages of a given size.
-// If a contiguous block cannot be found then 0 is returned.
-func (f *freelist) arrayAllocate(txid common.Txid, n int) common.Pgid {
+func (f *array) Init(ids common.Pgids) {
+	f.ids = ids
+	f.reindex()
+}
+
+func (f *array) Allocate(txid common.Txid, n int) common.Pgid {
 	if len(f.ids) == 0 {
 		return 0
 	}
@@ -56,18 +60,15 @@ func (f *freelist) arrayAllocate(txid common.Txid, n int) common.Pgid {
 	return 0
 }
 
-// arrayReadIDs initializes the freelist from a given list of ids.
-func (f *freelist) arrayReadIDs(ids []common.Pgid) {
-	f.ids = ids
-	f.reindex()
+func (f *array) FreeCount() int {
+	return len(f.ids)
 }
 
-func (f *freelist) arrayGetFreePageIDs() []common.Pgid {
+func (f *array) freePageIds() common.Pgids {
 	return f.ids
 }
 
-// arrayMergeSpans try to merge list of pages(represented by pgids) with existing spans but using array
-func (f *freelist) arrayMergeSpans(ids common.Pgids) {
+func (f *array) mergeSpans(ids common.Pgids) {
 	sort.Sort(ids)
 	common.Verify(func() {
 		idsIdx := make(map[common.Pgid]struct{})
@@ -95,4 +96,12 @@ func (f *freelist) arrayMergeSpans(ids common.Pgids) {
 		}
 	})
 	f.ids = common.Pgids(f.ids).Merge(ids)
+}
+
+func NewArrayFreelist() Interface {
+	a := &array{
+		shared: newShared(),
+	}
+	a.Interface = a
+	return a
 }

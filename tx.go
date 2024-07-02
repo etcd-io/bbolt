@@ -213,7 +213,7 @@ func (tx *Tx) Commit() (err error) {
 
 	// Free the old freelist because commit writes out a fresh freelist.
 	if tx.meta.Freelist() != common.PgidNoFreelist {
-		tx.db.freelist.free(tx.meta.Txid(), tx.db.page(tx.meta.Freelist()))
+		tx.db.freelist.Free(tx.meta.Txid(), tx.db.page(tx.meta.Freelist()))
 	}
 
 	if !tx.db.NoFreelistSync {
@@ -285,15 +285,13 @@ func (tx *Tx) Commit() (err error) {
 func (tx *Tx) commitFreelist() error {
 	// Allocate new pages for the new free list. This will overestimate
 	// the size of the freelist but not underestimate the size (which would be bad).
-	p, err := tx.allocate((tx.db.freelist.size() / tx.db.pageSize) + 1)
+	p, err := tx.allocate((tx.db.freelist.EstimatedWritePageSize() / tx.db.pageSize) + 1)
 	if err != nil {
 		tx.rollback()
 		return err
 	}
-	if err := tx.db.freelist.write(p); err != nil {
-		tx.rollback()
-		return err
-	}
+
+	tx.db.freelist.Write(p)
 	tx.meta.SetFreelist(p.Id())
 
 	return nil
@@ -316,7 +314,7 @@ func (tx *Tx) nonPhysicalRollback() {
 		return
 	}
 	if tx.writable {
-		tx.db.freelist.rollback(tx.meta.Txid())
+		tx.db.freelist.Rollback(tx.meta.Txid())
 	}
 	tx.close()
 }
@@ -327,17 +325,17 @@ func (tx *Tx) rollback() {
 		return
 	}
 	if tx.writable {
-		tx.db.freelist.rollback(tx.meta.Txid())
+		tx.db.freelist.Rollback(tx.meta.Txid())
 		// When mmap fails, the `data`, `dataref` and `datasz` may be reset to
 		// zero values, and there is no way to reload free page IDs in this case.
 		if tx.db.data != nil {
 			if !tx.db.hasSyncedFreelist() {
 				// Reconstruct free page list by scanning the DB to get the whole free page list.
-				// Note: scaning the whole db is heavy if your db size is large in NoSyncFreeList mode.
-				tx.db.freelist.noSyncReload(tx.db.freepages())
+				// Note: scanning the whole db is heavy if your db size is large in NoSyncFreeList mode.
+				tx.db.freelist.NoSyncReload(tx.db.freepages())
 			} else {
 				// Read free page list from freelist page.
-				tx.db.freelist.reload(tx.db.page(tx.db.meta().Freelist()))
+				tx.db.freelist.Reload(tx.db.page(tx.db.meta().Freelist()))
 			}
 		}
 	}
@@ -350,9 +348,9 @@ func (tx *Tx) close() {
 	}
 	if tx.writable {
 		// Grab freelist stats.
-		var freelistFreeN = tx.db.freelist.free_count()
-		var freelistPendingN = tx.db.freelist.pending_count()
-		var freelistAlloc = tx.db.freelist.size()
+		var freelistFreeN = tx.db.freelist.FreeCount()
+		var freelistPendingN = tx.db.freelist.PendingCount()
+		var freelistAlloc = tx.db.freelist.EstimatedWritePageSize()
 
 		// Remove transaction ref & writer lock.
 		tx.db.rwtx = nil
@@ -639,7 +637,7 @@ func (tx *Tx) Page(id int) (*common.PageInfo, error) {
 	}
 
 	// Determine the type (or if it's free).
-	if tx.db.freelist.freed(common.Pgid(id)) {
+	if tx.db.freelist.Freed(common.Pgid(id)) {
 		info.Type = "free"
 	} else {
 		info.Type = p.Typ()
