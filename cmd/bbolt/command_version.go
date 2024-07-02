@@ -5,6 +5,7 @@ import (
 	"runtime"
 
 	"github.com/spf13/cobra"
+
 	"go.etcd.io/bbolt/version"
 )
 

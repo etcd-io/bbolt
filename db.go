@@ -12,6 +12,7 @@ import (
 
 	berrors "go.etcd.io/bbolt/errors"
 	"go.etcd.io/bbolt/internal/common"
+	fl "go.etcd.io/bbolt/internal/freelist"
 )
 
 // The time elapsed between consecutive file locking attempts.
@@ -133,7 +134,7 @@ type DB struct {
 	rwtx     *Tx
 	txs      []*Tx
 
-	freelist     *freelist
+	freelist     fl.Interface
 	freelistLoad sync.Once
 
 	pagePool sync.Pool
@@ -418,12 +419,12 @@ func (db *DB) loadFreelist() {
 		db.freelist = newFreelist(db.FreelistType)
 		if !db.hasSyncedFreelist() {
 			// Reconstruct free list by scanning the DB.
-			db.freelist.readIDs(db.freepages())
+			db.freelist.Init(db.freepages())
 		} else {
 			// Read free list from freelist page.
-			db.freelist.read(db.page(db.meta().Freelist()))
+			db.freelist.Read(db.page(db.meta().Freelist()))
 		}
-		db.stats.FreePageN = db.freelist.free_count()
+		db.stats.FreePageN = db.freelist.FreeCount()
 	})
 }
 
@@ -797,7 +798,7 @@ func (db *DB) beginTx() (*Tx, error) {
 	db.txs = append(db.txs, t)
 	n := len(db.txs)
 	if db.freelist != nil {
-		db.freelist.addReadonlyTXID(t.meta.Txid())
+		db.freelist.AddReadonlyTXID(t.meta.Txid())
 	}
 
 	// Unlock the meta pages.
@@ -843,7 +844,7 @@ func (db *DB) beginRWTx() (*Tx, error) {
 	t := &Tx{writable: true}
 	t.init(db)
 	db.rwtx = t
-	db.freelist.freePages()
+	db.freelist.ReleasePendingPages()
 	return t, nil
 }
 
@@ -867,7 +868,7 @@ func (db *DB) removeTx(tx *Tx) {
 	}
 	n := len(db.txs)
 	if db.freelist != nil {
-		db.freelist.removeReadonlyTXID(tx.meta.Txid())
+		db.freelist.RemoveReadonlyTXID(tx.meta.Txid())
 	}
 
 	// Unlock the meta pages.
@@ -1155,7 +1156,7 @@ func (db *DB) allocate(txid common.Txid, count int) (*common.Page, error) {
 	p.SetOverflow(uint32(count - 1))
 
 	// Use pages from the freelist if they are available.
-	p.SetId(db.freelist.allocate(txid, count))
+	p.SetId(db.freelist.Allocate(txid, count))
 	if p.Id() != 0 {
 		return p, nil
 	}
@@ -1259,6 +1260,13 @@ func (db *DB) freepages() []common.Pgid {
 		}
 	}
 	return fids
+}
+
+func newFreelist(freelistType FreelistType) fl.Interface {
+	if freelistType == FreelistMapType {
+		return fl.NewHashMapFreelist()
+	}
+	return fl.NewArrayFreelist()
 }
 
 // Options represents the options that can be set when opening a database.
