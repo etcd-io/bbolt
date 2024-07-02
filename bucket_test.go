@@ -430,6 +430,9 @@ func TestBucket_Delete_FreelistOverflow(t *testing.T) {
 	if reopenFreePages := db.Stats().FreePageN; freePages != reopenFreePages {
 		t.Fatalf("expected %d free pages, got %+v", freePages, db.Stats())
 	}
+	if reopenPendingPages := db.Stats().PendingPageN; reopenPendingPages != 0 {
+		t.Fatalf("expected no pending pages, got %+v", db.Stats())
+	}
 }
 
 // Ensure that deleting of non-existing key is a no-op.
