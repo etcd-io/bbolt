@@ -1,6 +1,7 @@
 package bbolt
 
 import (
+	"github.com/stretchr/testify/require"
 	"math/rand"
 	"os"
 	"reflect"
@@ -13,6 +14,65 @@ import (
 
 // TestFreelistType is used as a env variable for test to indicate the backend type
 const TestFreelistType = "TEST_FREELIST_TYPE"
+
+func TestFreelist_E2E_SerDe(t *testing.T) {
+	f := newTestFreelist()
+	f.free(common.Txid(2), common.NewPage(5, common.LeafPageFlag, 0, 1))
+	f.free(common.Txid(2), common.NewPage(8, common.LeafPageFlag, 0, 0))
+	f.freePages()
+
+	requirePages(t, f, []common.Pgid{5, 6, 8}, []common.Pgid{})
+
+	f.free(common.Txid(3), common.NewPage(3, common.LeafPageFlag, 0, 1))
+	f.free(common.Txid(3), common.NewPage(10, common.LeafPageFlag, 0, 2))
+	requirePages(t, f, []common.Pgid{5, 6, 8}, []common.Pgid{3, 4, 10, 11, 12})
+
+	buf := make([]byte, 4096)
+	p := pageFromBuf(buf)
+	require.Equal(t, 80, f.size())
+	require.NoError(t, f.write(p))
+	f.reload(p)
+	// Unlike Read, Reload will keep the existing pending pages
+	// TODO the filtering needs to be tested (somehow)
+	requirePages(t, f, []common.Pgid{5, 6, 8}, []common.Pgid{3, 4, 10, 11, 12})
+
+	loadFreeList := newTestFreelist()
+	loadFreeList.read(p)
+	requirePages(t, loadFreeList, []common.Pgid{3, 4, 5, 6, 8, 10, 11, 12}, []common.Pgid{})
+}
+
+func requirePages(t *testing.T, f *freelist, freePageIds []common.Pgid, pendingPageIds []common.Pgid) {
+	require.Equal(t, f.free_count()+f.pending_count(), f.count())
+	require.Equal(t, freePageIds, f.getFreePageIDs())
+	require.Equal(t, len(freePageIds), f.free_count())
+
+	pp := allPendingPages(f.pending)
+	require.Equal(t, pendingPageIds, pp)
+	require.Equal(t, len(pp), f.pending_count())
+
+	for _, pgid := range f.getFreePageIDs() {
+		require.Truef(t, f.freed(pgid), "expected free page to return true on Freed")
+	}
+	for _, pgid := range pp {
+		require.Truef(t, f.freed(pgid), "expected pending page to return true on Freed")
+	}
+}
+
+func allPendingPages(p map[common.Txid]*txPending) []common.Pgid {
+	pgids := common.Pgids{}
+	for _, pending := range p {
+		pgids = append(pgids, pending.ids...)
+	}
+	sort.Sort(pgids)
+	return pgids
+}
+
+func pageFromBuf(buf []byte) *common.Page {
+	p := (*common.Page)(unsafe.Pointer(&buf))
+	p.SetId(1)
+	p.SetFlags(common.FreelistPageFlag)
+	return p
+}
 
 // Ensure that a page is added to a transaction's freelist.
 func TestFreelist_free(t *testing.T) {
