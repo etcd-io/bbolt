@@ -1,13 +1,14 @@
 package bbolt
 
 import (
-	"github.com/stretchr/testify/require"
 	"math/rand"
 	"os"
 	"reflect"
 	"sort"
 	"testing"
 	"unsafe"
+
+	"github.com/stretchr/testify/require"
 
 	"go.etcd.io/bbolt/internal/common"
 )
