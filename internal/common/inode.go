@@ -6,10 +6,10 @@ import "unsafe"
 // It can be used to point to elements in a page or point
 // to an element which hasn't been added to a page yet.
 type Inode struct {
-	flags uint32
-	pgid  Pgid
 	key   []byte
 	value []byte
+	pgid  Pgid
+	flags uint32
 }
 
 type Inodes []Inode

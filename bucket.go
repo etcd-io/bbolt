@@ -1000,6 +1000,6 @@ func cloneBytes(v []byte) []byte {
 
 type BucketStructure struct {
 	Name     string            `json:"name"`              // name of the bucket
-	KeyN     int               `json:"keyN"`              // number of key/value pairs
 	Children []BucketStructure `json:"buckets,omitempty"` // child buckets
+	KeyN     int               `json:"keyN"`              // number of key/value pairs
 }

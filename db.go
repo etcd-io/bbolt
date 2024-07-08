@@ -41,28 +41,23 @@ type DB struct {
 	// refer to discussion in https://github.com/etcd-io/bbolt/issues/577.
 	stats Stats
 
-	// When enabled, the database will perform a Check() after every commit.
-	// A panic is issued if the database is in an inconsistent state. This
-	// flag has a large performance impact so it should only be used for
-	// debugging purposes.
-	StrictMode bool
+	pagePool sync.Pool
 
-	// Setting the NoSync flag will cause the database to skip fsync()
-	// calls after each commit. This can be useful when bulk loading data
-	// into a database and you can restart the bulk load in the event of
-	// a system failure or database corruption. Do not set this flag for
-	// normal use.
-	//
-	// If the package global IgnoreNoSync constant is true, this value is
-	// ignored.  See the comment on that constant for more details.
-	//
-	// THIS IS UNSAFE. PLEASE USE WITH CAUTION.
-	NoSync bool
+	logger Logger
 
-	// When true, skips syncing freelist to disk. This improves the database
-	// write performance under normal operation, but requires a full database
-	// re-sync during recovery.
-	NoFreelistSync bool
+	openFile func(string, int, os.FileMode) (*os.File, error)
+	file     *os.File
+	data     *[maxMapSize]byte
+	meta0    *common.Meta
+	meta1    *common.Meta
+	rwtx     *Tx
+
+	freelist *freelist
+	batch    *batch
+
+	ops struct {
+		writeAt func(b []byte, off int64) (n int, err error)
+	}
 
 	// FreelistType sets the backend freelist type. There are two options. Array which is simple but endures
 	// dramatic performance degradation if database is large and fragmentation in freelist is common.
@@ -71,18 +66,12 @@ type DB struct {
 	// The default type is array
 	FreelistType FreelistType
 
-	// When true, skips the truncate call when growing the database.
-	// Setting this to true is only safe on non-ext3/ext4 systems.
-	// Skipping truncation avoids preallocation of hard drive space and
-	// bypasses a truncate() and fsync() syscall on remapping.
-	//
-	// https://github.com/boltdb/bolt/issues/284
-	NoGrowSync bool
-
-	// When `true`, bbolt will always load the free pages when opening the DB.
-	// When opening db in write mode, this flag will always automatically
-	// set to `true`.
-	PreLoadFreelist bool
+	path string
+	// `dataref` isn't used at all on Windows, and the golangci-lint
+	// always fails on Windows platform.
+	//nolint
+	dataref []byte // mmap'ed readonly, write throws SEGV
+	txs     []*Tx
 
 	// If you want to read the entire database fast, you can set MmapFlag to
 	// syscall.MAP_POPULATE on Linux 2.6.23+ for sequential read-ahead.
@@ -109,46 +98,61 @@ type DB struct {
 	// of truncate() and fsync() when growing the data file.
 	AllocSize int
 
+	datasz   int
+	pageSize int
+	mmaplock sync.RWMutex // Protects mmap access during remapping.
+	statlock sync.RWMutex // Protects stats access.
+
+	freelistLoad sync.Once
+
+	batchMu sync.Mutex
+
+	rwlock   sync.Mutex // Allows only one writer at a time.
+	metalock sync.Mutex // Protects meta page access.
+
+	// When enabled, the database will perform a Check() after every commit.
+	// A panic is issued if the database is in an inconsistent state. This
+	// flag has a large performance impact so it should only be used for
+	// debugging purposes.
+	StrictMode bool
+
+	// Setting the NoSync flag will cause the database to skip fsync()
+	// calls after each commit. This can be useful when bulk loading data
+	// into a database and you can restart the bulk load in the event of
+	// a system failure or database corruption. Do not set this flag for
+	// normal use.
+	//
+	// If the package global IgnoreNoSync constant is true, this value is
+	// ignored.  See the comment on that constant for more details.
+	//
+	// THIS IS UNSAFE. PLEASE USE WITH CAUTION.
+	NoSync bool
+
+	// When true, skips syncing freelist to disk. This improves the database
+	// write performance under normal operation, but requires a full database
+	// re-sync during recovery.
+	NoFreelistSync bool
+
+	// When true, skips the truncate call when growing the database.
+	// Setting this to true is only safe on non-ext3/ext4 systems.
+	// Skipping truncation avoids preallocation of hard drive space and
+	// bypasses a truncate() and fsync() syscall on remapping.
+	//
+	// https://github.com/boltdb/bolt/issues/284
+	NoGrowSync bool
+
+	// When `true`, bbolt will always load the free pages when opening the DB.
+	// When opening db in write mode, this flag will always automatically
+	// set to `true`.
+	PreLoadFreelist bool
+
 	// Mlock locks database file in memory when set to true.
 	// It prevents major page faults, however used memory can't be reclaimed.
 	//
 	// Supported only on Unix via mlock/munlock syscalls.
 	Mlock bool
 
-	logger Logger
-
-	path     string
-	openFile func(string, int, os.FileMode) (*os.File, error)
-	file     *os.File
-	// `dataref` isn't used at all on Windows, and the golangci-lint
-	// always fails on Windows platform.
-	//nolint
-	dataref  []byte // mmap'ed readonly, write throws SEGV
-	data     *[maxMapSize]byte
-	datasz   int
-	meta0    *common.Meta
-	meta1    *common.Meta
-	pageSize int
-	opened   bool
-	rwtx     *Tx
-	txs      []*Tx
-
-	freelist     *freelist
-	freelistLoad sync.Once
-
-	pagePool sync.Pool
-
-	batchMu sync.Mutex
-	batch   *batch
-
-	rwlock   sync.Mutex   // Allows only one writer at a time.
-	metalock sync.Mutex   // Protects meta page access.
-	mmaplock sync.RWMutex // Protects mmap access during remapping.
-	statlock sync.RWMutex // Protects stats access.
-
-	ops struct {
-		writeAt func(b []byte, off int64) (n int, err error)
-	}
+	opened bool
 
 	// Read only mode.
 	// When true, Update() and Begin(true) return ErrDatabaseReadOnly immediately.
@@ -995,8 +999,8 @@ type call struct {
 type batch struct {
 	db    *DB
 	timer *time.Timer
-	start sync.Once
 	calls []call
+	start sync.Once
 }
 
 // trigger runs the batch if it hasn't already been run.
@@ -1263,21 +1267,13 @@ func (db *DB) freepages() []common.Pgid {
 
 // Options represents the options that can be set when opening a database.
 type Options struct {
-	// Timeout is the amount of time to wait to obtain a file lock.
-	// When set to zero it will wait indefinitely.
-	Timeout time.Duration
 
-	// Sets the DB.NoGrowSync flag before memory mapping the file.
-	NoGrowSync bool
+	// Logger is the logger used for bbolt.
+	Logger Logger
 
-	// Do not sync freelist to disk. This improves the database write performance
-	// under normal operation, but requires a full database re-sync during recovery.
-	NoFreelistSync bool
-
-	// PreLoadFreelist sets whether to load the free pages when opening
-	// the db file. Note when opening db in write mode, bbolt will always
-	// load the free pages.
-	PreLoadFreelist bool
+	// OpenFile is used to open files. It defaults to os.OpenFile. This option
+	// is useful for writing hermetic tests.
+	OpenFile func(string, int, os.FileMode) (*os.File, error)
 
 	// FreelistType sets the backend freelist type. There are two options. Array which is simple but endures
 	// dramatic performance degradation if database is large and fragmentation in freelist is common.
@@ -1286,9 +1282,9 @@ type Options struct {
 	// The default type is array
 	FreelistType FreelistType
 
-	// Open database in read-only mode. Uses flock(..., LOCK_SH |LOCK_NB) to
-	// grab a shared lock (UNIX).
-	ReadOnly bool
+	// Timeout is the amount of time to wait to obtain a file lock.
+	// When set to zero it will wait indefinitely.
+	Timeout time.Duration
 
 	// Sets the DB.MmapFlags flag before memory mapping the file.
 	MmapFlags int
@@ -1306,22 +1302,31 @@ type Options struct {
 	// PageSize overrides the default OS page size.
 	PageSize int
 
+	// Sets the DB.NoGrowSync flag before memory mapping the file.
+	NoGrowSync bool
+
+	// Do not sync freelist to disk. This improves the database write performance
+	// under normal operation, but requires a full database re-sync during recovery.
+	NoFreelistSync bool
+
+	// PreLoadFreelist sets whether to load the free pages when opening
+	// the db file. Note when opening db in write mode, bbolt will always
+	// load the free pages.
+	PreLoadFreelist bool
+
+	// Open database in read-only mode. Uses flock(..., LOCK_SH |LOCK_NB) to
+	// grab a shared lock (UNIX).
+	ReadOnly bool
+
 	// NoSync sets the initial value of DB.NoSync. Normally this can just be
 	// set directly on the DB itself when returned from Open(), but this option
 	// is useful in APIs which expose Options but not the underlying DB.
 	NoSync bool
 
-	// OpenFile is used to open files. It defaults to os.OpenFile. This option
-	// is useful for writing hermetic tests.
-	OpenFile func(string, int, os.FileMode) (*os.File, error)
-
 	// Mlock locks database file in memory when set to true.
 	// It prevents potential page faults, however
 	// used memory can't be reclaimed. (UNIX only)
 	Mlock bool
-
-	// Logger is the logger used for bbolt.
-	Logger Logger
 }
 
 func (o *Options) String() string {
