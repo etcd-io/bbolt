@@ -26,10 +26,10 @@ const (
 
 // DB is a test wrapper for bolt.DB.
 type DB struct {
-	*bolt.DB
-	f string
-	o *bolt.Options
 	t testing.TB
+	*bolt.DB
+	o *bolt.Options
+	f string
 }
 
 // MustCreateDB returns a new, open DB at a temporary location.
