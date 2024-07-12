@@ -17,10 +17,12 @@ jobs:
       - test-linux-amd64-race
     runs-on: ubuntu-latest-8-cores
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
       - id: goversion
         run: echo "goversion=$(cat .go-version)" >> "$GITHUB_OUTPUT"
-      - uses: actions/setup-go@v5
+      - name: Setup Go  
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ steps.goversion.outputs.goversion }}
       - run: make coverage
