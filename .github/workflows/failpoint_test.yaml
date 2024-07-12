@@ -1,4 +1,3 @@
----
 name: Failpoint test
 on: [push, pull_request]
 permissions: read-all
@@ -9,10 +8,12 @@ jobs:
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
       - id: goversion
         run: echo "goversion=$(cat .go-version)" >> "$GITHUB_OUTPUT"
-      - uses: actions/setup-go@v5
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ steps.goversion.outputs.goversion }}
       - run: |
