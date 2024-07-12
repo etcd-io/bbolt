@@ -1,4 +1,3 @@
----
 name: Reusable unit test Workflow
 on:
   workflow_call:
@@ -15,7 +14,7 @@ permissions: read-all
 
 jobs:
   test-linux:
-    # this is to prevent arm64 jobs from running at forked projects
+    # This is to prevent arm64 jobs from running at forked projects
     if: ${{ github.repository == 'etcd-io/bbolt' || inputs.runs-on == 'ubuntu-latest' }}
     strategy:
       fail-fast: false
@@ -23,10 +22,12 @@ jobs:
         target: ${{ fromJSON(inputs.targets) }}
     runs-on: ${{ inputs.runs-on }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
       - id: goversion
         run: echo "goversion=$(cat .go-version)" >> "$GITHUB_OUTPUT"
-      - uses: actions/setup-go@v5
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ steps.goversion.outputs.goversion }}
       - run: make fmt
@@ -51,5 +52,5 @@ jobs:
               exit 1
               ;;
           esac
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@a4f60bb28d35aeee14e6880718e0c85ff1882e64 # v6.0.1
+      - name: Lint Go
+        uses: golangci/golangci-lint-action@v6
