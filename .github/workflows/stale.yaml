@@ -1,7 +1,7 @@
-name: 'Close stale issues and PRs'
+name: Close stale issues and PRs
 on:
   schedule:
-    - cron: '0 0 * * *'  # every day at 00:00 UTC
+    - cron: '0 0 * * *'  # Run every day at 00:00 UTC
 
 permissions:
   issues: write
@@ -11,7 +11,8 @@ jobs:
   stale:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/stale@v9
+      - name: Close stale issues and PRs
+        uses: actions/stale@v9
         with:
           days-before-stale: 90
           days-before-close: 21
