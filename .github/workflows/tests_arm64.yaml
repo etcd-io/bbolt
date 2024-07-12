@@ -1,7 +1,8 @@
----
-name: Tests ARM64
+name: Test ARM64
+
 permissions: read-all
 on: [push, pull_request]
+
 jobs:
   test-linux-arm64:
     uses: ./.github/workflows/tests-template.yml
