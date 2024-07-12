@@ -1,5 +1,7 @@
 name: Test Windows
+
 on: [push, pull_request]
+
 jobs:
   test-windows:
     strategy:
@@ -7,13 +9,14 @@ jobs:
       matrix:
         target:
           - windows-amd64-unit-test-4-cpu
-        # FIXME(fuweid):
+        # FIXME:
         #
-        # The windows will throws the following error when enable race.
-        # We skip it until we have solution.
+        # The Windows version will throws the following error when enable race.
+        # We skip testing it until we have solution.
         #
         #   ThreadSanitizer failed to allocate 0x000200000000 (8589934592) bytes at 0x0400c0000000 (error code: 1455)
         #
+        # Uncomment the following line when gets fixed:
         # - windows-amd64-unit-test-4-cpu-race
     runs-on: windows-latest
     steps:
@@ -34,7 +37,7 @@ jobs:
               CPU=4 make test
               ;;
             *)
-              echo "Failed to find target"
+              echo "Failed to find target."
               exit 1
               ;;
           esac
