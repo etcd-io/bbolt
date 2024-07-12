@@ -1,6 +1,8 @@
 name: Robustness Test
+
 on: [push, pull_request]
 permissions: read-all
+
 jobs:
   amd64:
     uses: ./.github/workflows/robustness_template.yaml
