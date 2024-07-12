@@ -1,4 +1,3 @@
----
 name: Reusable Robustness Workflow
 on:
   workflow_call:
@@ -18,18 +17,20 @@ permissions: read-all
 
 jobs:
   test:
-    # this is to prevent the job to run at forked projects
+    # This is to prevent the job to run at forked projects
     if: github.repository == 'etcd-io/bbolt'
     timeout-minutes: 210
     runs-on: ${{ fromJson(inputs.runs-on) }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
       - id: goversion
         run: echo "goversion=$(cat .go-version)" >> "$GITHUB_OUTPUT"
-      - uses: actions/setup-go@v5
+      - name: Checkout Repository
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ steps.goversion.outputs.goversion }}
-      - name: test-robustness
+      - name: Test Rebustness
         run: |
           set -euo pipefail
           sudo apt-get install -y dmsetup xfsprogs
