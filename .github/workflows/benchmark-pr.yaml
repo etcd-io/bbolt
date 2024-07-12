@@ -1,4 +1,3 @@
----
 name: Benchmarks on AMD64
 permissions: read-all
 on: [pull_request]
@@ -6,12 +5,13 @@ jobs:
   benchmark-pull-request:
     runs-on: ubuntu-latest-8-cores
     steps:
-    - uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
+    - name: Checkout repository
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
     - id: goversion
       run: echo "goversion=$(cat .go-version)" >> "$GITHUB_OUTPUT"
-    - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+    - uses: actions/setup-go@v5
       with:
         go-version: ${{ steps.goversion.outputs.goversion }}
     - name: Run Benchmarks
