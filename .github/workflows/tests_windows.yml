@@ -1,5 +1,4 @@
----
-name: Tests
+name: Test Windows
 on: [push, pull_request]
 jobs:
   test-windows:
@@ -18,10 +17,12 @@ jobs:
         # - windows-amd64-unit-test-4-cpu-race
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
       - id: goversion
         run: echo "goversion=$(cat .go-version)" >> "$GITHUB_OUTPUT"
-      - uses: actions/setup-go@v5
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ steps.goversion.outputs.goversion }}
       - run: make fmt
@@ -38,17 +39,19 @@ jobs:
               ;;
           esac
         shell: bash
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@a4f60bb28d35aeee14e6880718e0c85ff1882e64 # v6.0.1
+      - name: Lint Go
+        uses: golangci/golangci-lint-action@v6
 
   coverage:
     needs: ["test-windows"]
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
       - id: goversion
         run: echo "goversion=$(cat .go-version)" >> "$GITHUB_OUTPUT"
-      - uses: actions/setup-go@v5
+      - name: Setup Go  
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ steps.goversion.outputs.goversion }}
       - run: make coverage
