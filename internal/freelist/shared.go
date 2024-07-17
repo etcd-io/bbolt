@@ -67,9 +67,6 @@ func (t *shared) Free(txid common.Txid, p *common.Page) {
 	allocTxid, ok := t.allocs[p.Id()]
 	if ok {
 		delete(t.allocs, p.Id())
-	} else if p.IsFreelistPage() {
-		// Freelist is always allocated by prior tx.
-		allocTxid = txid - 1
 	}
 
 	for id := p.Id(); id <= p.Id()+common.Pgid(p.Overflow()); id++ {
