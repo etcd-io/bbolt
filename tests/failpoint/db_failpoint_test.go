@@ -1,6 +1,7 @@
 package failpoint
 
 import (
+	crand "crypto/rand"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -11,6 +12,8 @@ import (
 	bolt "go.etcd.io/bbolt"
 	"go.etcd.io/bbolt/errors"
 	"go.etcd.io/bbolt/internal/btesting"
+	"go.etcd.io/bbolt/internal/common"
+	"go.etcd.io/bbolt/internal/guts_cli"
 	gofail "go.etcd.io/gofail/runtime"
 )
 
@@ -267,6 +270,99 @@ func TestIssue72(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestTx_Rollback_Freelist(t *testing.T) {
+	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
+
+	bucketName := []byte("data")
+
+	t.Log("Populate some data to have at least 5 leaf pages.")
+	var keys []string
+	err := db.Update(func(tx *bolt.Tx) error {
+		b, terr := tx.CreateBucket(bucketName)
+		if terr != nil {
+			return terr
+		}
+		for i := 0; i <= 10; i++ {
+			k := fmt.Sprintf("t1_k%02d", i)
+			keys = append(keys, k)
+
+			v := make([]byte, 1500)
+			if _, terr := crand.Read(v); terr != nil {
+				return terr
+			}
+
+			if terr := b.Put([]byte(k), v); terr != nil {
+				return terr
+			}
+		}
+		return nil
+	})
+	require.NoError(t, err)
+
+	t.Log("Remove some keys to have at least 3 more free pages.")
+	err = db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bucketName)
+		for i := 0; i < 6; i++ {
+			if terr := b.Delete([]byte(keys[i])); terr != nil {
+				return terr
+			}
+		}
+		return nil
+	})
+	require.NoError(t, err)
+
+	t.Log("Close and then reopen the db to release all pending free pages.")
+	db.MustClose()
+	db.MustReopen()
+
+	t.Log("Enable the `beforeWriteMetaError` failpoint.")
+	require.NoError(t, gofail.Enable("beforeWriteMetaError", `return("writeMeta somehow failed")`))
+	defer func() {
+		t.Log("Disable the `beforeWriteMetaError` failpoint.")
+		require.NoError(t, gofail.Disable("beforeWriteMetaError"))
+	}()
+
+	beforeFreelistPgids, err := readFreelistPageIds(db.Path())
+	require.NoError(t, err)
+	require.Greater(t, len(beforeFreelistPgids), 0)
+
+	t.Log("Simulate TXN rollback")
+	err = db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bucketName)
+		for i := 6; i < len(keys); i++ {
+			v := make([]byte, 1500)
+			if _, terr := crand.Read(v); terr != nil {
+				return terr
+			}
+			// update the keys
+			if terr := b.Put([]byte(keys[i]), v); terr != nil {
+				return terr
+			}
+		}
+		return nil
+	})
+	require.Error(t, err)
+
+	afterFreelistPgids, err := readFreelistPageIds(db.Path())
+	require.NoError(t, err)
+
+	require.Equal(t, beforeFreelistPgids, afterFreelistPgids)
+}
+
 func idToBytes(id int) []byte {
 	return []byte(fmt.Sprintf("%010d", id))
+}
+
+func readFreelistPageIds(path string) ([]common.Pgid, error) {
+	m, _, err := guts_cli.GetActiveMetaPage(path)
+	if err != nil {
+		return nil, err
+	}
+
+	p, _, err := guts_cli.ReadPage(path, uint64(m.Freelist()))
+	if err != nil {
+		return nil, err
+	}
+
+	return p.FreelistPageIds(), nil
 }
