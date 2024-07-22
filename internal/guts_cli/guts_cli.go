@@ -114,19 +114,28 @@ func ReadPageAndHWMSize(path string) (uint64, common.Pgid, error) {
 
 // GetRootPage returns the root-page (according to the most recent transaction).
 func GetRootPage(path string) (root common.Pgid, activeMeta common.Pgid, err error) {
+	m, id, err := GetActiveMetaPage(path)
+	if err != nil {
+		return 0, id, err
+	}
+	return m.RootBucket().RootPage(), id, nil
+}
+
+// GetActiveMetaPage returns the active meta page and its page ID (0 or 1).
+func GetActiveMetaPage(path string) (*common.Meta, common.Pgid, error) {
 	_, buf0, err0 := ReadPage(path, 0)
 	if err0 != nil {
-		return 0, 0, err0
+		return nil, 0, err0
 	}
 	m0 := common.LoadPageMeta(buf0)
 	_, buf1, err1 := ReadPage(path, 1)
 	if err1 != nil {
-		return 0, 1, err1
+		return nil, 1, err1
 	}
 	m1 := common.LoadPageMeta(buf1)
 	if m0.Txid() < m1.Txid() {
-		return m1.RootBucket().RootPage(), 1, nil
+		return m1, 1, nil
 	} else {
-		return m0.RootBucket().RootPage(), 0, nil
+		return m0, 0, nil
 	}
 }

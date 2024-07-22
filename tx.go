@@ -551,6 +551,9 @@ func (tx *Tx) write() error {
 
 // writeMeta writes the meta to the disk.
 func (tx *Tx) writeMeta() error {
+	// gofail: var beforeWriteMetaError string
+	// return errors.New(beforeWriteMetaError)
+
 	// Create a temporary buffer for the meta page.
 	lg := tx.db.Logger()
 	buf := make([]byte, tx.db.pageSize)
