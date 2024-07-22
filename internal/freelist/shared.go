@@ -65,6 +65,11 @@ func (t *shared) Free(txid common.Txid, p *common.Page) {
 		t.pending[txid] = txp
 	}
 	allocTxid, ok := t.allocs[p.Id()]
+	common.Verify(func() {
+		if allocTxid == txid {
+			panic(fmt.Sprintf("free: freed page (%d) was allocated by the same transaction (%d)", p.Id(), txid))
+		}
+	})
 	if ok {
 		delete(t.allocs, p.Id())
 	}
@@ -87,7 +92,6 @@ func (t *shared) Rollback(txid common.Txid) {
 	if txp == nil {
 		return
 	}
-	var m common.Pgids
 	for i, pgid := range txp.ids {
 		delete(t.cache, pgid)
 		tx := txp.alloctx[i]
@@ -98,13 +102,12 @@ func (t *shared) Rollback(txid common.Txid) {
 			// Pending free aborted; restore page back to alloc list.
 			t.allocs[pgid] = tx
 		} else {
-			// Freed page was allocated by this txn; OK to throw away.
-			m = append(m, pgid)
+			// A writing TXN should never free a page which was allocated by itself.
+			panic(fmt.Sprintf("rollback: freed page (%d) was allocated by the same transaction (%d)", pgid, txid))
 		}
 	}
 	// Remove pages from pending list and mark as free if allocated by txid.
 	delete(t.pending, txid)
-	t.mergeSpans(m)
 }
 
 func (t *shared) AddReadonlyTXID(tid common.Txid) {
