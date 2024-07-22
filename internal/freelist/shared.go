@@ -167,7 +167,7 @@ func (t *shared) releaseRange(begin, end common.Txid) {
 	if begin > end {
 		return
 	}
-	var m common.Pgids
+	m := common.Pgids{}
 	for tid, txp := range t.pending {
 		if tid < begin || tid > end {
 			continue

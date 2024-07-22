@@ -101,6 +101,7 @@ func (f *array) mergeSpans(ids common.Pgids) {
 func NewArrayFreelist() Interface {
 	a := &array{
 		shared: newShared(),
+		ids:    []common.Pgid{},
 	}
 	a.Interface = a
 	return a
