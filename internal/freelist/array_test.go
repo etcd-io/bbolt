@@ -33,8 +33,8 @@ func TestFreelistArray_allocate(t *testing.T) {
 	if id := int(f.Allocate(1, 0)); id != 0 {
 		t.Fatalf("exp=0; got=%v", id)
 	}
-	if exp := common.Pgids([]common.Pgid{9, 18}); !reflect.DeepEqual(exp, f.freePageIds()) {
-		t.Fatalf("exp=%v; got=%v", exp, f.freePageIds())
+	if exp := common.Pgids([]common.Pgid{9, 18}); !reflect.DeepEqual(exp, f.FreePageIds()) {
+		t.Fatalf("exp=%v; got=%v", exp, f.FreePageIds())
 	}
 
 	if id := int(f.Allocate(1, 1)); id != 9 {
@@ -46,7 +46,7 @@ func TestFreelistArray_allocate(t *testing.T) {
 	if id := int(f.Allocate(1, 1)); id != 0 {
 		t.Fatalf("exp=0; got=%v", id)
 	}
-	if exp := common.Pgids([]common.Pgid{}); !reflect.DeepEqual(exp, f.freePageIds()) {
-		t.Fatalf("exp=%v; got=%v", exp, f.freePageIds())
+	if exp := common.Pgids([]common.Pgid{}); !reflect.DeepEqual(exp, f.FreePageIds()) {
+		t.Fatalf("exp=%v; got=%v", exp, f.FreePageIds())
 	}
 }

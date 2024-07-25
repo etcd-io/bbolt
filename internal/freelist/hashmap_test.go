@@ -86,12 +86,12 @@ func TestFreelistHashmap_mergeWithExist(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		f := newTestHashMapFreelist()
+		f := newHashMap()
 		f.Init(tt.ids)
 
 		f.mergeWithExistingSpan(tt.pgid)
 
-		if got := f.freePageIds(); !reflect.DeepEqual(tt.want, got) {
+		if got := f.FreePageIds(); !reflect.DeepEqual(tt.want, got) {
 			t.Fatalf("name %s; exp=%v; got=%v", tt.name, tt.want, got)
 		}
 		if got := f.forwardMap; !reflect.DeepEqual(tt.wantForwardmap, got) {
@@ -107,7 +107,7 @@ func TestFreelistHashmap_mergeWithExist(t *testing.T) {
 }
 
 func TestFreelistHashmap_GetFreePageIDs(t *testing.T) {
-	f := newTestHashMapFreelist()
+	f := newHashMap()
 
 	N := int32(100000)
 	fm := make(map[common.Pgid]uint64)
@@ -121,7 +121,7 @@ func TestFreelistHashmap_GetFreePageIDs(t *testing.T) {
 	}
 
 	f.forwardMap = fm
-	res := f.freePageIds()
+	res := f.FreePageIds()
 
 	if !sort.SliceIsSorted(res, func(i, j int) bool { return res[i] < res[j] }) {
 		t.Fatalf("pgids not sorted")
@@ -129,7 +129,7 @@ func TestFreelistHashmap_GetFreePageIDs(t *testing.T) {
 }
 
 func Benchmark_freelist_hashmapGetFreePageIDs(b *testing.B) {
-	f := newTestHashMapFreelist()
+	f := newHashMap()
 	N := int32(100000)
 	fm := make(map[common.Pgid]uint64)
 	i := int32(0)
@@ -145,11 +145,6 @@ func Benchmark_freelist_hashmapGetFreePageIDs(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		f.freePageIds()
+		f.FreePageIds()
 	}
-}
-
-func newTestHashMapFreelist() *hashMap {
-	f := NewHashMapFreelist()
-	return f.(*hashMap)
 }

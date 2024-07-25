@@ -40,13 +40,13 @@ func TestFreelist_release(t *testing.T) {
 	f.Free(102, common.NewPage(39, 0, 0, 0))
 	f.release(100)
 	f.release(101)
-	if exp := common.Pgids([]common.Pgid{9, 12, 13}); !reflect.DeepEqual(exp, f.freePageIds()) {
-		t.Fatalf("exp=%v; got=%v", exp, f.freePageIds())
+	if exp := common.Pgids([]common.Pgid{9, 12, 13}); !reflect.DeepEqual(exp, f.FreePageIds()) {
+		t.Fatalf("exp=%v; got=%v", exp, f.FreePageIds())
 	}
 
 	f.release(102)
-	if exp := common.Pgids([]common.Pgid{9, 12, 13, 39}); !reflect.DeepEqual(exp, f.freePageIds()) {
-		t.Fatalf("exp=%v; got=%v", exp, f.freePageIds())
+	if exp := common.Pgids([]common.Pgid{9, 12, 13, 39}); !reflect.DeepEqual(exp, f.FreePageIds()) {
+		t.Fatalf("exp=%v; got=%v", exp, f.FreePageIds())
 	}
 }
 
@@ -173,8 +173,8 @@ func TestFreelist_releaseRange(t *testing.T) {
 			f.releaseRange(r.begin, r.end)
 		}
 
-		if exp := common.Pgids(c.wantFree); !reflect.DeepEqual(exp, f.freePageIds()) {
-			t.Errorf("exp=%v; got=%v for %s", exp, f.freePageIds(), c.title)
+		if exp := common.Pgids(c.wantFree); !reflect.DeepEqual(exp, f.FreePageIds()) {
+			t.Errorf("exp=%v; got=%v for %s", exp, f.FreePageIds(), c.title)
 		}
 	}
 }
@@ -194,11 +194,12 @@ func TestFreelist_read(t *testing.T) {
 
 	// Deserialize page into a freelist.
 	f := newTestFreelist()
-	f.Read(page)
+	s := SortedSerializer{}
+	s.Read(f, page)
 
 	// Ensure that there are two page ids in the freelist.
-	if exp := common.Pgids([]common.Pgid{23, 50}); !reflect.DeepEqual(exp, f.freePageIds()) {
-		t.Fatalf("exp=%v; got=%v", exp, f.freePageIds())
+	if exp := common.Pgids([]common.Pgid{23, 50}); !reflect.DeepEqual(exp, f.FreePageIds()) {
+		t.Fatalf("exp=%v; got=%v", exp, f.FreePageIds())
 	}
 }
 
@@ -207,21 +208,22 @@ func TestFreelist_write(t *testing.T) {
 	// Create a freelist and write it to a page.
 	var buf [4096]byte
 	f := newTestFreelist()
+	s := SortedSerializer{}
 
 	f.Init([]common.Pgid{12, 39})
 	f.pendingPageIds()[100] = &txPending{ids: []common.Pgid{28, 11}}
 	f.pendingPageIds()[101] = &txPending{ids: []common.Pgid{3}}
 	p := (*common.Page)(unsafe.Pointer(&buf[0]))
-	f.Write(p)
+	s.Write(f, p)
 
 	// Read the page back out.
 	f2 := newTestFreelist()
-	f2.Read(p)
+	s.Read(f2, p)
 
 	// Ensure that the freelist is correct.
 	// All pages should be present and in reverse order.
-	if exp := common.Pgids([]common.Pgid{3, 11, 12, 28, 39}); !reflect.DeepEqual(exp, f2.freePageIds()) {
-		t.Fatalf("exp=%v; got=%v", exp, f2.freePageIds())
+	if exp := common.Pgids([]common.Pgid{3, 11, 12, 28, 39}); !reflect.DeepEqual(exp, f2.FreePageIds()) {
+		t.Fatalf("exp=%v; got=%v", exp, f2.FreePageIds())
 	}
 }
 
@@ -258,7 +260,7 @@ func Test_freelist_ReadIDs_and_getFreePageIDs(t *testing.T) {
 
 	f.Init(exp)
 
-	if got := f.freePageIds(); !reflect.DeepEqual(exp, got) {
+	if got := f.FreePageIds(); !reflect.DeepEqual(exp, got) {
 		t.Fatalf("exp=%v; got=%v", exp, got)
 	}
 
@@ -266,7 +268,7 @@ func Test_freelist_ReadIDs_and_getFreePageIDs(t *testing.T) {
 	var exp2 []common.Pgid
 	f2.Init(exp2)
 
-	if got2 := f2.freePageIds(); !reflect.DeepEqual(got2, common.Pgids(exp2)) {
+	if got2 := f2.FreePageIds(); !reflect.DeepEqual(got2, common.Pgids(exp2)) {
 		t.Fatalf("exp2=%#v; got2=%#v", exp2, got2)
 	}
 

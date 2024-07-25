@@ -134,8 +134,9 @@ type DB struct {
 	rwtx     *Tx
 	txs      []*Tx
 
-	freelist     fl.Interface
-	freelistLoad sync.Once
+	freelist           fl.Interface
+	freelistLoad       sync.Once
+	freelistReadWriter fl.ReadWriter
 
 	pagePool sync.Pool
 
@@ -417,12 +418,13 @@ func (db *DB) getPageSizeFromSecondMeta() (int, bool, error) {
 func (db *DB) loadFreelist() {
 	db.freelistLoad.Do(func() {
 		db.freelist = newFreelist(db.FreelistType)
+		db.freelistReadWriter = fl.NewSortedSerializer()
 		if !db.hasSyncedFreelist() {
 			// Reconstruct free list by scanning the DB.
 			db.freelist.Init(db.freepages())
 		} else {
 			// Read free list from freelist page.
-			db.freelist.Read(db.page(db.meta().Freelist()))
+			db.freelistReadWriter.Read(db.freelist, db.page(db.meta().Freelist()))
 		}
 		db.stats.FreePageN = db.freelist.FreeCount()
 	})
