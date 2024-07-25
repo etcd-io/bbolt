@@ -285,13 +285,13 @@ func (tx *Tx) Commit() (err error) {
 func (tx *Tx) commitFreelist() error {
 	// Allocate new pages for the new free list. This will overestimate
 	// the size of the freelist but not underestimate the size (which would be bad).
-	p, err := tx.allocate((tx.db.freelist.EstimatedWritePageSize() / tx.db.pageSize) + 1)
+	p, err := tx.allocate((tx.db.freelistReadWriter.EstimatedWritePageSize(tx.db.freelist) / tx.db.pageSize) + 1)
 	if err != nil {
 		tx.rollback()
 		return err
 	}
 
-	tx.db.freelist.Write(p)
+	tx.db.freelistReadWriter.Write(tx.db.freelist, p)
 	tx.meta.SetFreelist(p.Id())
 
 	return nil
@@ -329,17 +329,22 @@ func (tx *Tx) rollback() {
 		// When mmap fails, the `data`, `dataref` and `datasz` may be reset to
 		// zero values, and there is no way to reload free page IDs in this case.
 		if tx.db.data != nil {
-			if !tx.db.hasSyncedFreelist() {
-				// Reconstruct free page list by scanning the DB to get the whole free page list.
-				// Note: scanning the whole db is heavy if your db size is large in NoSyncFreeList mode.
-				tx.db.freelist.NoSyncReload(tx.db.freepages())
-			} else {
-				// Read free page list from freelist page.
-				tx.db.freelist.Reload(tx.db.page(tx.db.meta().Freelist()))
-			}
+			tx.reloadFreelist()
 		}
 	}
 	tx.close()
+}
+
+func (tx *Tx) reloadFreelist() {
+	if !tx.db.hasSyncedFreelist() {
+		// Reconstruct free page list by scanning the DB to get the whole free page list.
+		// Note: scanning the whole db is heavy if your db size is large in NoSyncFreeList mode.
+		tx.db.freelist.Reload(tx.db.freepages())
+	} else {
+		// Read free page list from freelist page.
+		tx.db.freelistReadWriter.Read(tx.db.freelist, tx.db.page(tx.db.meta().Freelist()))
+		tx.db.freelist.Reload(tx.db.freelist.FreePageIds())
+	}
 }
 
 func (tx *Tx) close() {
@@ -350,7 +355,7 @@ func (tx *Tx) close() {
 		// Grab freelist stats.
 		var freelistFreeN = tx.db.freelist.FreeCount()
 		var freelistPendingN = tx.db.freelist.PendingCount()
-		var freelistAlloc = tx.db.freelist.EstimatedWritePageSize()
+		var freelistAlloc = tx.db.freelistReadWriter.EstimatedWritePageSize(tx.db.freelist)
 
 		// Remove transaction ref & writer lock.
 		tx.db.rwtx = nil

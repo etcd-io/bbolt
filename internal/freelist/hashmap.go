@@ -110,7 +110,7 @@ func (f *hashMap) FreeCount() int {
 	return int(f.freePagesCount)
 }
 
-func (f *hashMap) freePageIds() common.Pgids {
+func (f *hashMap) FreePageIds() common.Pgids {
 	count := f.FreeCount()
 	if count == 0 {
 		return nil

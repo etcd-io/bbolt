@@ -61,7 +61,7 @@ func (f *array) FreeCount() int {
 	return len(f.ids)
 }
 
-func (f *array) freePageIds() common.Pgids {
+func (f *array) FreePageIds() common.Pgids {
 	return f.ids
 }
 

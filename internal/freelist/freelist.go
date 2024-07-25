@@ -6,14 +6,14 @@ import (
 
 type ReadWriter interface {
 	// Read calls Init with the page ids stored in the given page.
-	Read(page *common.Page)
+	Read(f Interface, page *common.Page)
 
 	// Write writes the freelist into the given page.
-	Write(page *common.Page)
+	Write(f Interface, page *common.Page)
 
 	// EstimatedWritePageSize returns the size of the freelist after serialization in Write.
 	// This should never underestimate the size.
-	EstimatedWritePageSize() int
+	EstimatedWritePageSize(f Interface) int
 }
 
 type allocator interface {
@@ -23,8 +23,8 @@ type allocator interface {
 	// FreeCount returns the number of free pages.
 	FreeCount() int
 
-	// freePageIds returns the IDs of all free pages.
-	freePageIds() common.Pgids
+	// FreePageIds returns the IDs of all free pages.
+	FreePageIds() common.Pgids
 
 	// mergeSpans is merging the given pages into the freelist
 	mergeSpans(ids common.Pgids)
@@ -54,7 +54,6 @@ type txManager interface {
 }
 
 type Interface interface {
-	ReadWriter
 	allocator
 	txManager
 
@@ -79,13 +78,9 @@ type Interface interface {
 	// Rollback removes the pages from a given pending tx.
 	Rollback(txId common.Txid)
 
-	// Copyall copies a list of all free ids and all pending ids in one sorted list.
-	// f.count returns the minimum length required for dst.
-	Copyall(dst []common.Pgid)
+	// List returns a list of all free ids and all pending ids in one sorted list.
+	List() common.Pgids
 
-	// Reload reads the freelist from a page and filters out pending items.
-	Reload(p *common.Page)
-
-	// NoSyncReload reads the freelist from Pgids and filters out pending items.
-	NoSyncReload(pgIds common.Pgids)
+	// Reload reads the freelist from Pgids and filters out pending items.
+	Reload(pgIds common.Pgids)
 }

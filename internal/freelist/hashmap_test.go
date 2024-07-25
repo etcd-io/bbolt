@@ -91,7 +91,7 @@ func TestFreelistHashmap_mergeWithExist(t *testing.T) {
 
 		f.mergeWithExistingSpan(tt.pgid)
 
-		if got := f.freePageIds(); !reflect.DeepEqual(tt.want, got) {
+		if got := f.FreePageIds(); !reflect.DeepEqual(tt.want, got) {
 			t.Fatalf("name %s; exp=%v; got=%v", tt.name, tt.want, got)
 		}
 		if got := f.forwardMap; !reflect.DeepEqual(tt.wantForwardmap, got) {
@@ -121,7 +121,7 @@ func TestFreelistHashmap_GetFreePageIDs(t *testing.T) {
 	}
 
 	f.forwardMap = fm
-	res := f.freePageIds()
+	res := f.FreePageIds()
 
 	if !sort.SliceIsSorted(res, func(i, j int) bool { return res[i] < res[j] }) {
 		t.Fatalf("pgids not sorted")
@@ -145,6 +145,6 @@ func Benchmark_freelist_hashmapGetFreePageIDs(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		f.freePageIds()
+		f.FreePageIds()
 	}
 }
