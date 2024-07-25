@@ -16,7 +16,7 @@ type txPending struct {
 }
 
 type shared struct {
-	Interface
+	allocator
 
 	readonlyTXIDs []common.Txid               // all readonly transaction IDs.
 	allocs        map[common.Pgid]common.Txid // mapping of Txid that allocated a pgid.
@@ -24,12 +24,22 @@ type shared struct {
 	pending       map[common.Txid]*txPending  // mapping of soon-to-be free page ids by tx.
 }
 
-func newShared() *shared {
+func newShared(a allocator) Interface {
 	return &shared{
-		pending: make(map[common.Txid]*txPending),
-		allocs:  make(map[common.Pgid]common.Txid),
-		cache:   make(map[common.Pgid]struct{}),
+		allocator: a,
+		pending:   make(map[common.Txid]*txPending),
+		allocs:    make(map[common.Pgid]common.Txid),
+		cache:     make(map[common.Pgid]struct{}),
 	}
+}
+
+func (t *shared) Init(ids common.Pgids) {
+	t.allocator.Init(ids)
+	t.reindex()
+}
+
+func (t *shared) Allocate(txid common.Txid, n int) common.Pgid {
+	return t.allocator.alloc(txid, n, &t.allocs, &t.cache)
 }
 
 func (t *shared) pendingPageIds() map[common.Txid]*txPending {

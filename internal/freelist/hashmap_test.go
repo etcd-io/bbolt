@@ -86,7 +86,7 @@ func TestFreelistHashmap_mergeWithExist(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		f := newTestHashMapFreelist()
+		f := newHashMap()
 		f.Init(tt.ids)
 
 		f.mergeWithExistingSpan(tt.pgid)
@@ -107,7 +107,7 @@ func TestFreelistHashmap_mergeWithExist(t *testing.T) {
 }
 
 func TestFreelistHashmap_GetFreePageIDs(t *testing.T) {
-	f := newTestHashMapFreelist()
+	f := newHashMap()
 
 	N := int32(100000)
 	fm := make(map[common.Pgid]uint64)
@@ -129,7 +129,7 @@ func TestFreelistHashmap_GetFreePageIDs(t *testing.T) {
 }
 
 func Benchmark_freelist_hashmapGetFreePageIDs(b *testing.B) {
-	f := newTestHashMapFreelist()
+	f := newHashMap()
 	N := int32(100000)
 	fm := make(map[common.Pgid]uint64)
 	i := int32(0)
@@ -147,9 +147,4 @@ func Benchmark_freelist_hashmapGetFreePageIDs(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		f.freePageIds()
 	}
-}
-
-func newTestHashMapFreelist() *hashMap {
-	f := NewHashMapFreelist()
-	return f.(*hashMap)
 }

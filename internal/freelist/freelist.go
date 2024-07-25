@@ -16,11 +16,47 @@ type ReadWriter interface {
 	EstimatedWritePageSize() int
 }
 
-type Interface interface {
-	ReadWriter
-
+type allocator interface {
 	// Init initializes this freelist with the given list of pages.
 	Init(ids common.Pgids)
+
+	// FreeCount returns the number of free pages.
+	FreeCount() int
+
+	// freePageIds returns the IDs of all free pages.
+	freePageIds() common.Pgids
+
+	// mergeSpans is merging the given pages into the freelist
+	mergeSpans(ids common.Pgids)
+
+	// TODO(thomas): this is necessary to decouple, but leaks internals
+	alloc(txid common.Txid, numPages int, allocs *map[common.Pgid]common.Txid, cache *map[common.Pgid]struct{}) common.Pgid
+}
+
+type txManager interface {
+	// AddReadonlyTXID adds a given read-only transaction id for pending page tracking.
+	AddReadonlyTXID(txid common.Txid)
+
+	// RemoveReadonlyTXID removes a given read-only transaction id for pending page tracking.
+	RemoveReadonlyTXID(txid common.Txid)
+
+	// ReleasePendingPages releases any pages associated with closed read-only transactions.
+	ReleasePendingPages()
+
+	// pendingPageIds returns all pending pages by transaction id.
+	pendingPageIds() map[common.Txid]*txPending
+
+	// release moves all page ids for a transaction id (or older) to the freelist.
+	release(txId common.Txid)
+
+	// releaseRange moves pending pages allocated within an extent [begin,end] to the free list.
+	releaseRange(begin, end common.Txid)
+}
+
+type Interface interface {
+	ReadWriter
+	allocator
+	txManager
 
 	// Allocate tries to allocate the given number of contiguous pages
 	// from the free list pages. It returns the starting page ID if
@@ -30,20 +66,8 @@ type Interface interface {
 	// Count returns the number of free and pending pages.
 	Count() int
 
-	// FreeCount returns the number of free pages.
-	FreeCount() int
-
 	// PendingCount returns the number of pending pages.
 	PendingCount() int
-
-	// AddReadonlyTXID adds a given read-only transaction id for pending page tracking.
-	AddReadonlyTXID(txid common.Txid)
-
-	// RemoveReadonlyTXID removes a given read-only transaction id for pending page tracking.
-	RemoveReadonlyTXID(txid common.Txid)
-
-	// ReleasePendingPages releases any pages associated with closed read-only transactions.
-	ReleasePendingPages()
 
 	// Free releases a page and its overflow for a given transaction id.
 	// If the page is already free then a panic will occur.
@@ -64,19 +88,4 @@ type Interface interface {
 
 	// NoSyncReload reads the freelist from Pgids and filters out pending items.
 	NoSyncReload(pgIds common.Pgids)
-
-	// freePageIds returns the IDs of all free pages.
-	freePageIds() common.Pgids
-
-	// pendingPageIds returns all pending pages by transaction id.
-	pendingPageIds() map[common.Txid]*txPending
-
-	// release moves all page ids for a transaction id (or older) to the freelist.
-	release(txId common.Txid)
-
-	// releaseRange moves pending pages allocated within an extent [begin,end] to the free list.
-	releaseRange(begin, end common.Txid)
-
-	// mergeSpans is merging the given pages into the freelist
-	mergeSpans(ids common.Pgids)
 }

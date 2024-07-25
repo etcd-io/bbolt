@@ -12,8 +12,6 @@ import (
 type pidSet map[common.Pgid]struct{}
 
 type hashMap struct {
-	*shared
-
 	freePagesCount uint64                 // count of free pages(hashmap version)
 	freemaps       map[uint64]pidSet      // key is the size of continuous pages(span), value is a set which contains the starting pgids of same size
 	forwardMap     map[common.Pgid]uint64 // key is start pgid, value is its span size
@@ -54,11 +52,9 @@ func (f *hashMap) Init(pgids common.Pgids) {
 	if size != 0 && start != 0 {
 		f.addSpan(start, size)
 	}
-
-	f.reindex()
 }
 
-func (f *hashMap) Allocate(txid common.Txid, n int) common.Pgid {
+func (f *hashMap) alloc(txid common.Txid, n int, allocs *map[common.Pgid]common.Txid, cache *map[common.Pgid]struct{}) common.Pgid {
 	if n == 0 {
 		return 0
 	}
@@ -69,10 +65,10 @@ func (f *hashMap) Allocate(txid common.Txid, n int) common.Pgid {
 			// remove the span
 			f.delSpan(pid, uint64(n))
 
-			f.allocs[pid] = txid
+			(*allocs)[pid] = txid
 
 			for i := common.Pgid(0); i < common.Pgid(n); i++ {
-				delete(f.cache, pid+i)
+				delete(*cache, pid+i)
 			}
 			return pid
 		}
@@ -88,7 +84,7 @@ func (f *hashMap) Allocate(txid common.Txid, n int) common.Pgid {
 			// remove the initial
 			f.delSpan(pid, size)
 
-			f.allocs[pid] = txid
+			(*allocs)[pid] = txid
 
 			remain := size - uint64(n)
 
@@ -96,7 +92,7 @@ func (f *hashMap) Allocate(txid common.Txid, n int) common.Pgid {
 			f.addSpan(pid+common.Pgid(n), remain)
 
 			for i := common.Pgid(0); i < common.Pgid(n); i++ {
-				delete(f.cache, pid+i)
+				delete(*cache, pid+i)
 			}
 			return pid
 		}
@@ -280,13 +276,14 @@ func (f *hashMap) idsFromBackwardMap() map[common.Pgid]struct{} {
 	return ids
 }
 
-func NewHashMapFreelist() Interface {
-	hm := &hashMap{
-		shared:      newShared(),
+func newHashMap() *hashMap {
+	return &hashMap{
 		freemaps:    make(map[uint64]pidSet),
 		forwardMap:  make(map[common.Pgid]uint64),
 		backwardMap: make(map[common.Pgid]uint64),
 	}
-	hm.Interface = hm
-	return hm
+}
+
+func NewHashMapFreelist() Interface {
+	return newShared(newHashMap())
 }

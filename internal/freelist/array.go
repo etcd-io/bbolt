@@ -8,17 +8,14 @@ import (
 )
 
 type array struct {
-	*shared
-
 	ids []common.Pgid // all free and available free page ids.
 }
 
 func (f *array) Init(ids common.Pgids) {
 	f.ids = ids
-	f.reindex()
 }
 
-func (f *array) Allocate(txid common.Txid, n int) common.Pgid {
+func (f *array) alloc(txid common.Txid, n int, allocs *map[common.Pgid]common.Txid, cache *map[common.Pgid]struct{}) common.Pgid {
 	if len(f.ids) == 0 {
 		return 0
 	}
@@ -49,9 +46,9 @@ func (f *array) Allocate(txid common.Txid, n int) common.Pgid {
 
 			// Remove from the free cache.
 			for i := common.Pgid(0); i < common.Pgid(n); i++ {
-				delete(f.cache, initial+i)
+				delete(*cache, initial+i)
 			}
-			f.allocs[initial] = txid
+			(*allocs)[initial] = txid
 			return initial
 		}
 
@@ -99,9 +96,5 @@ func (f *array) mergeSpans(ids common.Pgids) {
 }
 
 func NewArrayFreelist() Interface {
-	a := &array{
-		shared: newShared(),
-	}
-	a.Interface = a
-	return a
+	return newShared(&array{})
 }
