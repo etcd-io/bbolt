@@ -1,0 +1,13 @@
+---
+name: Nightly Benchmarks against last release (AMD64)
+permissions: read-all
+on:
+  schedule:
+    - cron: '10 5 * * *' # runs every day at 05:10 UTC
+  # workflow_dispatch enables manual testing of this job by maintainers
+  workflow_dispatch:
+jobs:
+  amd64:
+    uses: ./.github/workflows/benchmark-template.yaml
+    with:
+      benchGitRef: release-1.3

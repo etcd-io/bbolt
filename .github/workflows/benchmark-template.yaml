@@ -1,0 +1,57 @@
+---
+name: Reusable Benchmark Template
+on:
+  workflow_call:
+    inputs:
+      # which git reference to benchmark against
+      benchGitRef:
+        required: true
+        type: string
+      maxAcceptableDifferencePercent:
+        required: false
+        type: number
+        default: 5
+      runs-on:
+        required: false
+        type: string
+        default: "['ubuntu-latest-8-cores']"
+permissions: read-all
+
+jobs:
+  benchmark:
+    runs-on: ${{ fromJson(inputs.runs-on) }}
+    steps:
+    - uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
+      with:
+        fetch-depth: 0
+    - id: goversion
+      run: echo "goversion=$(cat .go-version)" >> "$GITHUB_OUTPUT"
+    - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+      with:
+        go-version: ${{ steps.goversion.outputs.goversion }}
+    - name: Run Benchmarks
+      run: |
+        BENCHSTAT_OUTPUT_FILE=result.txt make test-benchmark-compare REF=${{ inputs.benchGitRef }}
+    - run: |
+        echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+        cat result.txt >> "$GITHUB_STEP_SUMMARY"
+        echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+        cat <<EOL >> "$GITHUB_STEP_SUMMARY"
+        <hr />
+        The table shows the median and 90% confidence interval (CI) summaries for each benchmark comparing the HEAD and the BASE, and an A/B comparison under "vs base". The last column shows the statistical p-value with ten runs (n=10).
+        The last row has the Geometric Mean (geomean) for the given rows in the table.
+        Refer to [benchstat's documentation](https://pkg.go.dev/golang.org/x/perf/cmd/benchstat) for more help.
+        EOL
+    - name: Validate results under acceptable limit
+      run: |
+        export MAX_ACCEPTABLE_DIFFERENCE=${{ inputs.maxAcceptableDifferencePercent }}
+        while IFS= read -r line; do
+          # Get fourth value, which is the comparison with the base.
+          value="$(echo "$line" | awk '{print $4}')"
+          if [[ "$value" = +* ]] || [[ "$value" = -* ]]; then
+            if (( $(echo "${value//[^0-9.]/}"'>'"$MAX_ACCEPTABLE_DIFFERENCE" | bc -l) )); then
+              echo "::error::$value is above the maximum acceptable difference ($MAX_ACCEPTABLE_DIFFERENCE)"
+              exit 1
+            fi
+          fi
+        done < <(grep geomean result.txt)
