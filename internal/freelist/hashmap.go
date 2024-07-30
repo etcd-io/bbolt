@@ -21,22 +21,22 @@ type hashMap struct {
 }
 
 func (f *hashMap) Init(pgids common.Pgids) {
+	// reset the counter when freelist init
+	f.freePagesCount = 0
+	f.freemaps = make(map[uint64]pidSet)
+	f.forwardMap = make(map[common.Pgid]uint64)
+	f.backwardMap = make(map[common.Pgid]uint64)
+
 	if len(pgids) == 0 {
 		return
 	}
-
-	size := uint64(1)
-	start := pgids[0]
-	// reset the counter when freelist init
-	f.freePagesCount = 0
 
 	if !sort.SliceIsSorted([]common.Pgid(pgids), func(i, j int) bool { return pgids[i] < pgids[j] }) {
 		panic("pgids not sorted")
 	}
 
-	f.freemaps = make(map[uint64]pidSet)
-	f.forwardMap = make(map[common.Pgid]uint64)
-	f.backwardMap = make(map[common.Pgid]uint64)
+	size := uint64(1)
+	start := pgids[0]
 
 	for i := 1; i < len(pgids); i++ {
 		// continuous page
@@ -117,7 +117,7 @@ func (f *hashMap) FreeCount() int {
 func (f *hashMap) freePageIds() common.Pgids {
 	count := f.FreeCount()
 	if count == 0 {
-		return nil
+		return common.Pgids{}
 	}
 
 	m := make([]common.Pgid, 0, count)

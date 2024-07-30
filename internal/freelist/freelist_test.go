@@ -8,6 +8,8 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/stretchr/testify/require"
+
 	"go.etcd.io/bbolt/internal/common"
 )
 
@@ -85,7 +87,7 @@ func TestFreelist_releaseRange(t *testing.T) {
 			title:         "Single pending outsize minimum end range",
 			pagesIn:       []testPage{{id: 3, n: 1, allocTxn: 100, freeTxn: 200}},
 			releaseRanges: []testRange{{1, 199}},
-			wantFree:      nil,
+			wantFree:      []common.Pgid{},
 		},
 		{
 			title:         "Single pending with minimum begin range",
@@ -97,7 +99,7 @@ func TestFreelist_releaseRange(t *testing.T) {
 			title:         "Single pending outside minimum begin range",
 			pagesIn:       []testPage{{id: 3, n: 1, allocTxn: 100, freeTxn: 200}},
 			releaseRanges: []testRange{{101, 300}},
-			wantFree:      nil,
+			wantFree:      []common.Pgid{},
 		},
 		{
 			title:         "Single pending in minimum range",
@@ -109,7 +111,7 @@ func TestFreelist_releaseRange(t *testing.T) {
 			title:         "Single pending and read transaction at 199",
 			pagesIn:       []testPage{{id: 3, n: 1, allocTxn: 199, freeTxn: 200}},
 			releaseRanges: []testRange{{100, 198}, {200, 300}},
-			wantFree:      nil,
+			wantFree:      []common.Pgid{},
 		},
 		{
 			title: "Adjacent pending and read transactions at 199, 200",
@@ -122,7 +124,7 @@ func TestFreelist_releaseRange(t *testing.T) {
 				{200, 199}, // Simulate the ranges db.freePages might produce.
 				{201, 300},
 			},
-			wantFree: nil,
+			wantFree: []common.Pgid{},
 		},
 		{
 			title: "Out of order ranges",
@@ -135,7 +137,7 @@ func TestFreelist_releaseRange(t *testing.T) {
 				{201, 200},
 				{200, 200},
 			},
-			wantFree: nil,
+			wantFree: []common.Pgid{},
 		},
 		{
 			title: "Multiple pending, read transaction at 150",
@@ -153,30 +155,69 @@ func TestFreelist_releaseRange(t *testing.T) {
 	}
 
 	for _, c := range releaseRangeTests {
-		f := newTestFreelist()
-		var ids []common.Pgid
-		for _, p := range c.pagesIn {
-			for i := uint64(0); i < uint64(p.n); i++ {
-				ids = append(ids, common.Pgid(uint64(p.id)+i))
+		t.Run(c.title, func(t *testing.T) {
+			f := newTestFreelist()
+			var ids []common.Pgid
+			for _, p := range c.pagesIn {
+				for i := uint64(0); i < uint64(p.n); i++ {
+					ids = append(ids, common.Pgid(uint64(p.id)+i))
+				}
 			}
-		}
-		f.Init(ids)
-		for _, p := range c.pagesIn {
-			f.Allocate(p.allocTxn, p.n)
-		}
+			f.Init(ids)
+			for _, p := range c.pagesIn {
+				f.Allocate(p.allocTxn, p.n)
+			}
 
-		for _, p := range c.pagesIn {
-			f.Free(p.freeTxn, common.NewPage(p.id, 0, 0, uint32(p.n-1)))
-		}
+			for _, p := range c.pagesIn {
+				f.Free(p.freeTxn, common.NewPage(p.id, 0, 0, uint32(p.n-1)))
+			}
 
-		for _, r := range c.releaseRanges {
-			f.releaseRange(r.begin, r.end)
-		}
+			for _, r := range c.releaseRanges {
+				f.releaseRange(r.begin, r.end)
+			}
 
-		if exp := common.Pgids(c.wantFree); !reflect.DeepEqual(exp, f.freePageIds()) {
-			t.Errorf("exp=%v; got=%v for %s", exp, f.freePageIds(), c.title)
-		}
+			require.Equal(t, common.Pgids(c.wantFree), f.freePageIds())
+		})
 	}
+}
+
+func TestFreeList_init(t *testing.T) {
+	buf := make([]byte, 4096)
+	f := newTestFreelist()
+	f.Init(common.Pgids{5, 6, 8})
+
+	p := common.LoadPage(buf)
+	f.Write(p)
+
+	f2 := newTestFreelist()
+	f2.Read(p)
+	require.Equal(t, common.Pgids{5, 6, 8}, f2.freePageIds())
+
+	// When initializing the freelist with an empty list of page ID,
+	// it should reset the freelist page IDs.
+	f2.Init([]common.Pgid{})
+	require.Equal(t, common.Pgids{}, f2.freePageIds())
+}
+
+func TestFreeList_reload(t *testing.T) {
+	buf := make([]byte, 4096)
+	f := newTestFreelist()
+	f.Init(common.Pgids{5, 6, 8})
+
+	p := common.LoadPage(buf)
+	f.Write(p)
+
+	f2 := newTestFreelist()
+	f2.Read(p)
+	require.Equal(t, common.Pgids{5, 6, 8}, f2.freePageIds())
+
+	f2.Free(common.Txid(5), common.NewPage(10, common.LeafPageFlag, 0, 2))
+
+	// reload shouldn't affect the pending list
+	f2.Reload(p)
+
+	require.Equal(t, common.Pgids{5, 6, 8}, f2.freePageIds())
+	require.Equal(t, []common.Pgid{10, 11, 12}, f2.pendingPageIds()[5].ids)
 }
 
 // Ensure that a freelist can deserialize from a freelist page.
@@ -263,7 +304,7 @@ func Test_freelist_ReadIDs_and_getFreePageIDs(t *testing.T) {
 	}
 
 	f2 := newTestFreelist()
-	var exp2 []common.Pgid
+	exp2 := []common.Pgid{}
 	f2.Init(exp2)
 
 	if got2 := f2.freePageIds(); !reflect.DeepEqual(got2, common.Pgids(exp2)) {
