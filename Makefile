@@ -41,6 +41,15 @@ coverage:
 	TEST_FREELIST_TYPE=array go test -v -timeout 30m \
 		-coverprofile cover-freelist-array.out -covermode atomic
 
+BOLT_CMD=bbolt
+
+build:
+	go build -o bin/${BOLT_CMD} ./cmd/${BOLT_CMD}
+
+.PHONY: clean
+clean: # Clean binaries
+	rm -f ./bin/${BOLT_CMD}
+
 .PHONY: gofail-enable
 gofail-enable: install-gofail
 	gofail enable .
