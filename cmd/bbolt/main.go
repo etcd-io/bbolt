@@ -15,6 +15,7 @@ import (
 	"runtime/pprof"
 	"strconv"
 	"strings"
+	"testing"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -1114,9 +1115,26 @@ func (cmd *benchCommand) Run(args ...string) error {
 	}
 
 	// Print results.
-	fmt.Fprintf(os.Stderr, "# Write\t%v\t(%v/op)\t(%v op/sec)\n", results.WriteDuration, results.WriteOpDuration(), results.WriteOpsPerSecond())
-	fmt.Fprintf(os.Stderr, "# Read\t%v\t(%v/op)\t(%v op/sec)\n", results.ReadDuration, results.ReadOpDuration(), results.ReadOpsPerSecond())
-	fmt.Fprintln(os.Stderr, "")
+	if options.GoBenchOutput {
+		// below replicates the output of testing.B benchmarks, e.g. for external tooling
+		benchWriteName := "BenchmarkWrite"
+		benchReadName := "BenchmarkRead"
+		maxLen := max(len(benchReadName), len(benchWriteName))
+		gobenchResult := testing.BenchmarkResult{}
+		gobenchResult.T = results.WriteDuration
+		gobenchResult.N = results.WriteOps
+		fmt.Fprintf(os.Stderr, "%-*s\t%s\n", maxLen, benchWriteName, gobenchResult.String())
+
+		gobenchResult = testing.BenchmarkResult{}
+		gobenchResult.T = results.ReadDuration
+		gobenchResult.N = results.ReadOps
+		fmt.Fprintf(os.Stderr, "%-*s\t%s\n", maxLen, benchReadName, gobenchResult.String())
+	} else {
+		fmt.Fprintf(os.Stderr, "# Write\t%v\t(%v/op)\t(%v op/sec)\n", results.WriteDuration, results.WriteOpDuration(), results.WriteOpsPerSecond())
+		fmt.Fprintf(os.Stderr, "# Read\t%v\t(%v/op)\t(%v op/sec)\n", results.ReadDuration, results.ReadOpDuration(), results.ReadOpsPerSecond())
+	}
+	fmt.Fprintln(cmd.Stderr, "")
+
 	return nil
 }
 
@@ -1140,6 +1158,7 @@ func (cmd *benchCommand) ParseFlags(args []string) (*BenchOptions, error) {
 	fs.BoolVar(&options.NoSync, "no-sync", false, "")
 	fs.BoolVar(&options.Work, "work", false, "")
 	fs.StringVar(&options.Path, "path", "", "")
+	fs.BoolVar(&options.GoBenchOutput, "gobench-output", false, "")
 	fs.SetOutput(cmd.Stderr)
 	if err := fs.Parse(args); err != nil {
 		return nil, err
@@ -1482,6 +1501,7 @@ type BenchOptions struct {
 	NoSync        bool
 	Work          bool
 	Path          string
+	GoBenchOutput bool
 }
 
 // BenchResults represents the performance results of the benchmark.
