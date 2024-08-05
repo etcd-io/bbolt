@@ -11,7 +11,7 @@ type ReadWriter interface {
 	// Write writes the freelist into the given page.
 	Write(page *common.Page)
 
-	// EstimatedWritePageSize returns the size of the freelist after serialization in Write.
+	// EstimatedWritePageSize returns the size in bytes of the freelist after serialization in Write.
 	// This should never underestimate the size.
 	EstimatedWritePageSize() int
 }
@@ -46,7 +46,7 @@ type Interface interface {
 	ReleasePendingPages()
 
 	// Free releases a page and its overflow for a given transaction id.
-	// If the page is already free then a panic will occur.
+	// If the page is already free or is one of the meta pages, then a panic will occur.
 	Free(txId common.Txid, p *common.Page)
 
 	// Freed returns whether a given page is in the free list.
@@ -65,7 +65,7 @@ type Interface interface {
 	// NoSyncReload reads the freelist from Pgids and filters out pending items.
 	NoSyncReload(pgIds common.Pgids)
 
-	// freePageIds returns the IDs of all free pages.
+	// freePageIds returns the IDs of all free pages. Returns an empty slice if no free pages are available.
 	freePageIds() common.Pgids
 
 	// pendingPageIds returns all pending pages by transaction id.

@@ -208,25 +208,7 @@ func (t *shared) Copyall(dst []common.Pgid) {
 
 func (t *shared) Reload(p *common.Page) {
 	t.Read(p)
-
-	// Build a cache of only pending pages.
-	pcache := make(map[common.Pgid]bool)
-	for _, txp := range t.pending {
-		for _, pendingID := range txp.ids {
-			pcache[pendingID] = true
-		}
-	}
-
-	// Check each page in the freelist and build a new available freelist
-	// with any pages not in the pending lists.
-	var a []common.Pgid
-	for _, id := range t.freePageIds() {
-		if !pcache[id] {
-			a = append(a, id)
-		}
-	}
-
-	t.Init(a)
+	t.NoSyncReload(t.freePageIds())
 }
 
 func (t *shared) NoSyncReload(pgIds common.Pgids) {
@@ -240,7 +222,7 @@ func (t *shared) NoSyncReload(pgIds common.Pgids) {
 
 	// Check each page in the freelist and build a new available freelist
 	// with any pages not in the pending lists.
-	var a []common.Pgid
+	a := []common.Pgid{}
 	for _, id := range pgIds {
 		if !pcache[id] {
 			a = append(a, id)
@@ -274,7 +256,7 @@ func (t *shared) Read(p *common.Page) {
 
 	// Copy the list of page ids from the freelist.
 	if len(ids) == 0 {
-		t.Init(nil)
+		t.Init([]common.Pgid{})
 	} else {
 		// copy the ids, so we don't modify on the freelist page directly
 		idsCopy := make([]common.Pgid, len(ids))
