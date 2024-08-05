@@ -15,7 +15,7 @@ jobs:
     needs:
       - test-linux-amd64
       - test-linux-amd64-race
-    runs-on: ubuntu-latest-8-cores
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
       - id: goversion
