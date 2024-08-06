@@ -1123,15 +1123,15 @@ func (cmd *benchCommand) Run(args ...string) error {
 		gobenchResult := testing.BenchmarkResult{}
 		gobenchResult.T = results.WriteDuration
 		gobenchResult.N = results.WriteOps
-		fmt.Fprintf(os.Stderr, "%-*s\t%s\n", maxLen, benchWriteName, gobenchResult.String())
+		fmt.Fprintf(os.Stdout, "%-*s\t%s\n", maxLen, benchWriteName, gobenchResult.String())
 
 		gobenchResult = testing.BenchmarkResult{}
 		gobenchResult.T = results.ReadDuration
 		gobenchResult.N = results.ReadOps
-		fmt.Fprintf(os.Stderr, "%-*s\t%s\n", maxLen, benchReadName, gobenchResult.String())
+		fmt.Fprintf(os.Stdout, "%-*s\t%s\n", maxLen, benchReadName, gobenchResult.String())
 	} else {
-		fmt.Fprintf(os.Stderr, "# Write\t%v\t(%v/op)\t(%v op/sec)\n", results.WriteDuration, results.WriteOpDuration(), results.WriteOpsPerSecond())
-		fmt.Fprintf(os.Stderr, "# Read\t%v\t(%v/op)\t(%v op/sec)\n", results.ReadDuration, results.ReadOpDuration(), results.ReadOpsPerSecond())
+		fmt.Fprintf(os.Stdout, "# Write\t%v\t(%v/op)\t(%v op/sec)\n", results.WriteDuration, results.WriteOpDuration(), results.WriteOpsPerSecond())
+		fmt.Fprintf(os.Stdout, "# Read\t%v\t(%v/op)\t(%v op/sec)\n", results.ReadDuration, results.ReadOpDuration(), results.ReadOpsPerSecond())
 	}
 	fmt.Fprintln(cmd.Stderr, "")
 
