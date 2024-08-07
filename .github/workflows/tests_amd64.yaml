@@ -8,14 +8,14 @@ jobs:
   test-linux-amd64-race:
     uses: ./.github/workflows/tests-template.yml
     with:
-      runs-on: ubuntu-latest-8-cores
+      runs-on: ubuntu-latest
       targets: "['linux-unit-test-4-cpu-race']"
 
   coverage:
     needs:
       - test-linux-amd64
       - test-linux-amd64-race
-    runs-on: ubuntu-latest-8-cores
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       - id: goversion

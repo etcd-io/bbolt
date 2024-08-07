@@ -14,7 +14,7 @@ on:
       runs-on:
         required: false
         type: string
-        default: "['ubuntu-latest-8-cores']"
+        default: "['ubuntu-latest']"
 permissions: read-all
 
 jobs:
