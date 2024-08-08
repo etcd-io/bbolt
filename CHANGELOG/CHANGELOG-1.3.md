@@ -2,6 +2,11 @@ Note that we start to track changes starting from v1.3.7.
 
 <hr>
 
+## v1.3.11 (TBD)
+
+### Other
+- [Bump go version to 1.21.13](https://github.com/etcd-io/bbolt/pull/813)
+
 ## v1.3.10(2024-05-06)
 
 ### BoltDB

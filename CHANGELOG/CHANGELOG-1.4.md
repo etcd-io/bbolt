@@ -1,6 +1,11 @@
 
 <hr>
 
+## v1.4.0-alpha.2 (TBD)
+
+### Other
+- [Bump go toolchain version to 1.22.6](https://github.com/etcd-io/bbolt/pull/814)
+
 ## v1.4.0-alpha.1(2024-05-06)
 
 ### BoltDB
