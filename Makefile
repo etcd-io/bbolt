@@ -70,3 +70,7 @@ test-failpoint:
 	@echo "[failpoint] array freelist test"
 	TEST_FREELIST_TYPE=array go test -v ${TESTFLAGS} -timeout 30m ./tests/failpoint
 
+.PHONY: test-robustness # Running robustness tests requires root permission
+test-robustness:
+	go test -v ${TESTFLAGS} ./tests/dmflakey -test.root
+	go test -v ${TESTFLAGS} ./tests/robustness -test.root
