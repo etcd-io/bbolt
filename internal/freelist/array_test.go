@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"go.etcd.io/bbolt/internal/common"
 )
 
@@ -49,4 +51,14 @@ func TestFreelistArray_allocate(t *testing.T) {
 	if exp := common.Pgids([]common.Pgid{}); !reflect.DeepEqual(exp, f.freePageIds()) {
 		t.Fatalf("exp=%v; got=%v", exp, f.freePageIds())
 	}
+}
+
+func TestInvalidArrayAllocation(t *testing.T) {
+	f := NewArrayFreelist()
+	// page 0 and 1 are reserved for meta pages, so they should never be free pages.
+	ids := []common.Pgid{1}
+	f.Init(ids)
+	require.Panics(t, func() {
+		f.Allocate(common.Txid(1), 1)
+	})
 }
