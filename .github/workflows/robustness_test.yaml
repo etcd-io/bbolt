@@ -12,6 +12,9 @@ jobs:
         with:
           go-version: ${{ steps.goversion.outputs.goversion }}
       - run: |
+          set -euo pipefail
+          sudo apt-get install -y dmsetup xfsprogs
+
           make gofail-enable
           # build bbolt with failpoint
           go install ./cmd/bbolt

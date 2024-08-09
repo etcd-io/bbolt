@@ -209,3 +209,63 @@ func TestIssue72(t *testing.T) {
 func idToBytes(id int) []byte {
 	return []byte(fmt.Sprintf("%010d", id))
 }
+
+func TestFailpoint_ResizeFileFail(t *testing.T) {
+	db := btesting.MustCreateDB(t)
+
+	err := gofail.Enable("resizeFileError", `return("resizeFile somehow failed")`)
+	require.NoError(t, err)
+
+	err = db.Fill([]byte("data"), 1, 10000,
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
+		func(tx int, k int) []byte { return make([]byte, 100) },
+	)
+
+	require.Error(t, err)
+	require.ErrorContains(t, err, "resizeFile somehow failed")
+
+	// It should work after disabling the failpoint.
+	err = gofail.Disable("resizeFileError")
+	require.NoError(t, err)
+	db.MustClose()
+	db.MustReopen()
+
+	err = db.Fill([]byte("data"), 1, 10000,
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
+		func(tx int, k int) []byte { return make([]byte, 100) },
+	)
+
+	require.NoError(t, err)
+}
+
+func TestFailpoint_LackOfDiskSpace(t *testing.T) {
+	db := btesting.MustCreateDB(t)
+
+	err := gofail.Enable("lackOfDiskSpace", `return("grow somehow failed")`)
+	require.NoError(t, err)
+
+	tx, err := db.Begin(true)
+	require.NoError(t, err)
+
+	err = tx.Commit()
+	require.Error(t, err)
+	require.ErrorContains(t, err, "grow somehow failed")
+
+	err = tx.Rollback()
+	require.Error(t, err)
+	require.ErrorIs(t, err, bolt.ErrTxClosed)
+
+	// It should work after disabling the failpoint.
+	err = gofail.Disable("lackOfDiskSpace")
+	require.NoError(t, err)
+
+	tx, err = db.Begin(true)
+	require.NoError(t, err)
+
+	err = tx.Commit()
+	require.NoError(t, err)
+
+	err = tx.Rollback()
+	require.Error(t, err)
+	require.ErrorIs(t, err, bolt.ErrTxClosed)
+}

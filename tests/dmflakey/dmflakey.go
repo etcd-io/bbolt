@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -89,9 +90,9 @@ const (
 // The device-mapper device will be /dev/mapper/$flakeyDevice. And the filesystem
 // image will be created at $dataStorePath/$flakeyDevice.img. By default, the
 // device is available for 2 minutes and size is 10 GiB.
-func InitFlakey(flakeyDevice, dataStorePath string, fsType FSType) (_ Flakey, retErr error) {
+func InitFlakey(flakeyDevice, dataStorePath string, fsType FSType, mkfsOpt string) (_ Flakey, retErr error) {
 	imgPath := filepath.Join(dataStorePath, fmt.Sprintf("%s.img", flakeyDevice))
-	if err := createEmptyFSImage(imgPath, fsType); err != nil {
+	if err := createEmptyFSImage(imgPath, fsType, mkfsOpt); err != nil {
 		return nil, err
 	}
 	defer func() {
@@ -275,7 +276,7 @@ func (f *flakey) Teardown() error {
 
 // createEmptyFSImage creates empty filesystem on dataStorePath folder with
 // default size - 10 GiB.
-func createEmptyFSImage(imgPath string, fsType FSType) error {
+func createEmptyFSImage(imgPath string, fsType FSType, mkfsOpt string) error {
 	if err := validateFSType(fsType); err != nil {
 		return err
 	}
@@ -287,6 +288,10 @@ func createEmptyFSImage(imgPath string, fsType FSType) error {
 
 	if _, err := os.Stat(imgPath); err == nil {
 		return fmt.Errorf("failed to create image because %s already exists", imgPath)
+	}
+
+	if err := os.MkdirAll(path.Dir(imgPath), 0600); err != nil {
+		return fmt.Errorf("failed to ensure parent directory %s: %w", path.Dir(imgPath), err)
 	}
 
 	f, err := os.Create(imgPath)
@@ -303,10 +308,16 @@ func createEmptyFSImage(imgPath string, fsType FSType) error {
 			imgPath, defaultImgSize, err)
 	}
 
-	output, err := exec.Command(mkfs, imgPath).CombinedOutput()
+	args := []string{imgPath}
+	if mkfsOpt != "" {
+		splitArgs := strings.Split(mkfsOpt, " ")
+		args = append(splitArgs, imgPath)
+	}
+
+	output, err := exec.Command(mkfs, args...).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to mkfs.%s on %s (out: %s): %w",
-			fsType, imgPath, string(output), err)
+		return fmt.Errorf("failed to mkfs on %s (%s %v) (out: %s): %w",
+			imgPath, mkfs, args, string(output), err)
 	}
 	return nil
 }
