@@ -108,6 +108,13 @@ func (t *shared) Rollback(txid common.Txid) {
 	}
 	// Remove pages from pending list and mark as free if allocated by txid.
 	delete(t.pending, txid)
+
+	// Remove pgids which are allocated by this txid
+	for pgid, tid := range t.allocs {
+		if tid == txid {
+			delete(t.allocs, pgid)
+		}
+	}
 }
 
 func (t *shared) AddReadonlyTXID(tid common.Txid) {
