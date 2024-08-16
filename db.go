@@ -545,7 +545,7 @@ func (db *DB) munmap() error {
 	// return errors.New(unmapError)
 	if err := munmap(db); err != nil {
 		db.Logger().Errorf("[GOOS: %s, GOARCH: %s] munmap failed, db.datasz: %d, error: %v", runtime.GOOS, runtime.GOARCH, db.datasz, err)
-		return fmt.Errorf("unmap error: " + err.Error())
+		return fmt.Errorf("unmap error: %v", err.Error())
 	}
 
 	return nil
@@ -593,7 +593,7 @@ func (db *DB) munlock(fileSize int) error {
 	// return errors.New(munlockError)
 	if err := munlock(db, fileSize); err != nil {
 		db.Logger().Errorf("[GOOS: %s, GOARCH: %s] munlock failed, fileSize: %d, db.datasz: %d, error: %v", runtime.GOOS, runtime.GOARCH, fileSize, db.datasz, err)
-		return fmt.Errorf("munlock error: " + err.Error())
+		return fmt.Errorf("munlock error: %v", err.Error())
 	}
 	return nil
 }
@@ -603,7 +603,7 @@ func (db *DB) mlock(fileSize int) error {
 	// return errors.New(mlockError)
 	if err := mlock(db, fileSize); err != nil {
 		db.Logger().Errorf("[GOOS: %s, GOARCH: %s] mlock failed, fileSize: %d, db.datasz: %d, error: %v", runtime.GOOS, runtime.GOARCH, fileSize, db.datasz, err)
-		return fmt.Errorf("mlock error: " + err.Error())
+		return fmt.Errorf("mlock error: %v", err.Error())
 	}
 	return nil
 }
