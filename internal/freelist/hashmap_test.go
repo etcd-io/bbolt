@@ -6,6 +6,8 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"go.etcd.io/bbolt/internal/common"
 )
 
@@ -126,6 +128,28 @@ func TestFreelistHashmap_GetFreePageIDs(t *testing.T) {
 	if !sort.SliceIsSorted(res, func(i, j int) bool { return res[i] < res[j] }) {
 		t.Fatalf("pgids not sorted")
 	}
+}
+
+func Test_Freelist_Hashmap_Rollback(t *testing.T) {
+	f := newTestHashMapFreelist()
+
+	f.Init([]common.Pgid{3, 5, 6, 7, 12, 13})
+
+	f.Free(100, common.NewPage(20, 0, 0, 1))
+	f.Allocate(100, 3)
+	f.Free(100, common.NewPage(25, 0, 0, 0))
+	f.Allocate(100, 2)
+
+	require.Equal(t, map[common.Pgid]common.Txid{5: 100, 12: 100}, f.allocs)
+	require.Equal(t, map[common.Txid]*txPending{100: {
+		ids:     []common.Pgid{20, 21, 25},
+		alloctx: []common.Txid{0, 0, 0},
+	}}, f.pending)
+
+	f.Rollback(100)
+
+	require.Equal(t, map[common.Pgid]common.Txid{}, f.allocs)
+	require.Equal(t, map[common.Txid]*txPending{}, f.pending)
 }
 
 func Benchmark_freelist_hashmapGetFreePageIDs(b *testing.B) {
