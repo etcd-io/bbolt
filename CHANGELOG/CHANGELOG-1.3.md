@@ -2,6 +2,20 @@ Note that we start to track changes starting from v1.3.7.
 
 <hr>
 
+## v1.3.11(TBD)
+
+### BoltDB
+- Fix [the `freelist.allocs` isn't rollbacked when a tx is rollbacked](https://github.com/etcd-io/bbolt/pull/823).
+
+### CMD
+- Add [`-gobench-output` option for bench command to adapt to benchstat](https://github.com/etcd-io/bbolt/pull/802).
+
+### Other
+- [Bump go version to 1.22.x](https://github.com/etcd-io/bbolt/pull/822).
+- This patch also added `dmflakey` package, which can be reused by other projects. See https://github.com/etcd-io/bbolt/pull/812.
+
+<hr>
+
 ## v1.3.10(2024-05-06)
 
 ### BoltDB
