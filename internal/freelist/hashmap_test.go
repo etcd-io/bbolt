@@ -11,6 +11,14 @@ import (
 	"go.etcd.io/bbolt/internal/common"
 )
 
+func TestFreelistHashmap_init_panics(t *testing.T) {
+	f := NewHashMapFreelist()
+	require.Panics(t, func() {
+		// init expects sorted input
+		f.Init([]common.Pgid{25, 5})
+	})
+}
+
 func TestFreelistHashmap_allocate(t *testing.T) {
 	f := NewHashMapFreelist()
 

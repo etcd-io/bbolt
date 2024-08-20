@@ -53,6 +53,16 @@ func TestFreelistArray_allocate(t *testing.T) {
 	}
 }
 
+func TestInvalidArrayAllocation(t *testing.T) {
+	f := NewArrayFreelist()
+	// page 0 and 1 are reserved for meta pages, so they should never be free pages.
+	ids := []common.Pgid{1}
+	f.Init(ids)
+	require.Panics(t, func() {
+		f.Allocate(common.Txid(1), 1)
+	})
+}
+
 func Test_Freelist_Array_Rollback(t *testing.T) {
 	f := newTestArrayFreelist()
 
