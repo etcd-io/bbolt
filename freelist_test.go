@@ -7,6 +7,8 @@ import (
 	"sort"
 	"testing"
 	"unsafe"
+
+	"github.com/stretchr/testify/require"
 )
 
 // TestFreelistType is used as a env variable for test to indicate the backend type
@@ -251,6 +253,38 @@ func TestFreelistArray_allocate(t *testing.T) {
 	if exp := []pgid{}; !reflect.DeepEqual(exp, f.getFreePageIDs()) {
 		t.Fatalf("exp=%v; got=%v", exp, f.getFreePageIDs())
 	}
+}
+
+func Test_Freelist_Rollback(t *testing.T) {
+	f := newTestFreelist()
+
+	f.readIDs([]pgid{3, 5, 6, 7, 12, 13})
+
+	f.free(100, &page{
+		id:       20,
+		flags:    0,
+		count:    0,
+		overflow: 1,
+	})
+	f.allocate(100, 3)
+	f.free(100, &page{
+		id:       25,
+		flags:    0,
+		count:    0,
+		overflow: 0,
+	})
+	f.allocate(100, 2)
+
+	require.Equal(t, map[pgid]txid{5: 100, 12: 100}, f.allocs)
+	require.Equal(t, map[txid]*txPending{100: {
+		ids:     []pgid{20, 21, 25},
+		alloctx: []txid{0, 0, 0},
+	}}, f.pending)
+
+	f.rollback(100)
+
+	require.Equal(t, map[pgid]txid{}, f.allocs)
+	require.Equal(t, map[txid]*txPending{}, f.pending)
 }
 
 // Ensure that a freelist can deserialize from a freelist page.
