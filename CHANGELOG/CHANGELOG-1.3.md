@@ -2,7 +2,7 @@ Note that we start to track changes starting from v1.3.7.
 
 <hr>
 
-## v1.3.11(TBD)
+## v1.3.11(2024-08-21)
 
 ### BoltDB
 - Fix [the `freelist.allocs` isn't rollbacked when a tx is rollbacked](https://github.com/etcd-io/bbolt/pull/823).
