@@ -315,6 +315,17 @@ guarantee that they exist for future transactions.
 
 To delete a bucket, simply call the `Tx.DeleteBucket()` function.
 
+You can also iterate over all existing buckets with `Tx.forEach()`:
+
+```go
+db.View(func(tx *bolt.Tx) error {
+	tx.ForEach(func(name []byte, b *bolt.Bucket) error {
+		fmt.Println(string(name))
+		return nil
+	})
+	return nil
+})
+```
 
 ### Using key/value pairs
 
