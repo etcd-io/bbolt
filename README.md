@@ -315,6 +315,17 @@ guarantee that they exist for future transactions.
 
 To delete a bucket, simply call the `Tx.DeleteBucket()` function.
 
+You can also iterate over all existing top-level buckets with `Tx.ForEach()`:
+
+```go
+db.View(func(tx *bolt.Tx) error {
+	tx.ForEach(func(name []byte, b *bolt.Bucket) error {
+		fmt.Println(string(name))
+		return nil
+	})
+	return nil
+})
+```
 
 ### Using key/value pairs
 
@@ -452,7 +463,7 @@ key and the cursor still points to the first element if present.
 
 If you remove key/value pairs during iteration, the cursor may automatically
 move to the next position if present in current node each time removing a key.
-When you call `c.Next()` after removing a key, it may skip one key/value pair.  
+When you call `c.Next()` after removing a key, it may skip one key/value pair.
 Refer to [pull/611](https://github.com/etcd-io/bbolt/pull/611) to get more detailed info.
 
 During iteration, if the key is non-`nil` but the value is `nil`, that means
