@@ -41,6 +41,8 @@ type Bucket struct {
 	//
 	// This is non-persisted across transactions so it must be set in every Tx.
 	FillPercent float64
+
+	slave *Bucket
 }
 
 // newBucket returns a new bucket associated with a transaction.
@@ -82,10 +84,20 @@ func (b *Bucket) Cursor() *Cursor {
 	}
 }
 
-// Bucket retrieves a nested bucket by name.
+// Bucket retrieves a nested bucket by name with slave.
+func (b *Bucket) Bucket(name []byte) *Bucket {
+	rb := b.bucket(name)
+	if rb != nil && b.slave != nil {
+		rb.slave = b.slave.bucket(name)
+	}
+
+	return rb
+}
+
+// bucket retrieves a nested bucket by name.
 // Returns nil if the bucket does not exist.
 // The bucket instance is only valid for the lifetime of the transaction.
-func (b *Bucket) Bucket(name []byte) *Bucket {
+func (b *Bucket) bucket(name []byte) *Bucket {
 	if b.buckets != nil {
 		if child := b.buckets[string(name)]; child != nil {
 			return child
@@ -142,10 +154,20 @@ func (b *Bucket) openBucket(value []byte) *Bucket {
 	return &child
 }
 
-// CreateBucket creates a new bucket at the given key and returns the new bucket.
+// CreateBucket creates a new bucket at the given key and returns the new bucket with slave.
+func (b *Bucket) CreateBucket(key []byte) (rb *Bucket, err error) {
+	rb, err = b.createBucket(key)
+	if err == nil && b.slave != nil {
+		rb.slave, err = b.slave.createBucket(key)
+	}
+
+	return
+}
+
+// createBucket creates a new bucket at the given key and returns the new bucket.
 // Returns an error if the key already exists, if the bucket name is blank, or if the bucket name is too long.
 // The bucket instance is only valid for the lifetime of the transaction.
-func (b *Bucket) CreateBucket(key []byte) (rb *Bucket, err error) {
+func (b *Bucket) createBucket(key []byte) (rb *Bucket, err error) {
 	if lg := b.tx.db.Logger(); lg != discardLogger {
 		lg.Debugf("Creating bucket %q", key)
 		defer func() {
@@ -199,10 +221,20 @@ func (b *Bucket) CreateBucket(key []byte) (rb *Bucket, err error) {
 	return b.Bucket(newKey), nil
 }
 
-// CreateBucketIfNotExists creates a new bucket if it doesn't already exist and returns a reference to it.
+// CreateBucketIfNotExists creates a new bucket with slave if it doesn't already exist and returns a reference to it.
+func (b *Bucket) CreateBucketIfNotExists(key []byte) (rb *Bucket, err error) {
+	rb, err = b.createBucketIfNotExists(key)
+	if err == nil && b.slave != nil {
+		rb.slave, err = b.slave.createBucketIfNotExists(key)
+	}
+
+	return
+}
+
+// createBucketIfNotExists creates a new bucket if it doesn't already exist and returns a reference to it.
 // Returns an error if the bucket name is blank, or if the bucket name is too long.
 // The bucket instance is only valid for the lifetime of the transaction.
-func (b *Bucket) CreateBucketIfNotExists(key []byte) (rb *Bucket, err error) {
+func (b *Bucket) createBucketIfNotExists(key []byte) (rb *Bucket, err error) {
 	if lg := b.tx.db.Logger(); lg != discardLogger {
 		lg.Debugf("Creating bucket if not exist %q", key)
 		defer func() {
@@ -269,8 +301,18 @@ func (b *Bucket) CreateBucketIfNotExists(key []byte) (rb *Bucket, err error) {
 }
 
 // DeleteBucket deletes a bucket at the given key.
-// Returns an error if the bucket does not exist, or if the key represents a non-bucket value.
 func (b *Bucket) DeleteBucket(key []byte) (err error) {
+	err = b.deleteBucket(key)
+	if err == nil && b.slave != nil {
+		err = b.slave.deleteBucket(key)
+	}
+
+	return
+}
+
+// deleteBucket deletes a bucket at the given key.
+// Returns an error if the bucket does not exist, or if the key represents a non-bucket value.
+func (b *Bucket) deleteBucket(key []byte) (err error) {
 	if lg := b.tx.db.Logger(); lg != discardLogger {
 		lg.Debugf("Deleting bucket %q", key)
 		defer func() {
@@ -327,13 +369,23 @@ func (b *Bucket) DeleteBucket(key []byte) (err error) {
 	return nil
 }
 
-// MoveBucket moves a sub-bucket from the source bucket to the destination bucket.
+// MoveBucket moves a sub-bucket from the source bucket to the destination bucket with slave.
+func (b *Bucket) MoveBucket(key []byte, dstBucket *Bucket) (err error) {
+	err = b.moveBucket(key, dstBucket)
+	if err == nil && b.slave != nil && dstBucket.slave != nil {
+		err = b.slave.moveBucket(key, dstBucket.slave)
+	}
+
+	return
+}
+
+// moveBucket moves a sub-bucket from the source bucket to the destination bucket.
 // Returns an error if
 //  1. the sub-bucket cannot be found in the source bucket;
 //  2. or the key already exists in the destination bucket;
 //  3. or the key represents a non-bucket value;
 //  4. the source and destination buckets are the same.
-func (b *Bucket) MoveBucket(key []byte, dstBucket *Bucket) (err error) {
+func (b *Bucket) moveBucket(key []byte, dstBucket *Bucket) (err error) {
 	lg := b.tx.db.Logger()
 	if lg != discardLogger {
 		lg.Debugf("Moving bucket %q", key)
@@ -445,11 +497,21 @@ func (b *Bucket) Get(key []byte) []byte {
 	return v
 }
 
-// Put sets the value for a key in the bucket.
+// Put sets the value for a key in the bucket with slave.
+func (b *Bucket) Put(key []byte, value []byte) (err error) {
+	err = b.put(key, value)
+	if err == nil && b.slave != nil {
+		err = b.slave.put(key, value)
+	}
+
+	return
+}
+
+// put sets the value for a key in the bucket.
 // If the key exist then its previous value will be overwritten.
 // Supplied value must remain valid for the life of the transaction.
 // Returns an error if the bucket was created from a read-only transaction, if the key is blank, if the key is too large, or if the value is too large.
-func (b *Bucket) Put(key []byte, value []byte) (err error) {
+func (b *Bucket) put(key []byte, value []byte) (err error) {
 	if lg := b.tx.db.Logger(); lg != discardLogger {
 		lg.Debugf("Putting key %q", key)
 		defer func() {
@@ -493,10 +555,20 @@ func (b *Bucket) Put(key []byte, value []byte) (err error) {
 	return nil
 }
 
+// Delete removes a key from the bucket with slave.
+func (b *Bucket) Delete(key []byte) (err error) {
+	err = b.delete(key)
+	if err == nil && b.slave != nil {
+		err = b.slave.delete(key)
+	}
+
+	return
+}
+
 // Delete removes a key from the bucket.
 // If the key does not exist then nothing is done and a nil error is returned.
 // Returns an error if the bucket was created from a read-only transaction.
-func (b *Bucket) Delete(key []byte) (err error) {
+func (b *Bucket) delete(key []byte) (err error) {
 	if lg := b.tx.db.Logger(); lg != discardLogger {
 		lg.Debugf("Deleting key %q", key)
 		defer func() {
@@ -539,8 +611,18 @@ func (b *Bucket) Sequence() uint64 {
 	return b.InSequence()
 }
 
-// SetSequence updates the sequence number for the bucket.
+// SetSequence updates the sequence number for the bucket with slave.
 func (b *Bucket) SetSequence(v uint64) error {
+	err := b.setSequence(v)
+	if err == nil && b.slave != nil {
+		err = b.slave.setSequence(v)
+	}
+
+	return err
+}
+
+// SetSequence updates the sequence number for the bucket.
+func (b *Bucket) setSequence(v uint64) error {
 	if b.tx.db == nil {
 		return errors.ErrTxClosed
 	} else if !b.Writable() {
@@ -558,8 +640,18 @@ func (b *Bucket) SetSequence(v uint64) error {
 	return nil
 }
 
-// NextSequence returns an autoincrementing integer for the bucket.
+// NextSequence returns an autoincrementing integer for the bucket with slave.
 func (b *Bucket) NextSequence() (uint64, error) {
+	r, err := b.nextSequence()
+	if err == nil && b.slave != nil {
+		_, err = b.slave.nextSequence()
+	}
+
+	return r, err
+}
+
+// nextSequence returns an autoincrementing integer for the bucket.
+func (b *Bucket) nextSequence() (uint64, error) {
 	if b.tx.db == nil {
 		return 0, errors.ErrTxClosed
 	} else if !b.Writable() {

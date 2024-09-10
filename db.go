@@ -154,6 +154,8 @@ type DB struct {
 	// Read only mode.
 	// When true, Update() and Begin(true) return ErrDatabaseReadOnly immediately.
 	readOnly bool
+
+	slave *DB
 }
 
 // Path returns the path to currently open database file.
@@ -171,11 +173,113 @@ func (db *DB) String() string {
 	return fmt.Sprintf("DB<%q>", db.path)
 }
 
-// Open creates and opens a database at the given path with a given file mode.
+// Open creates and opens master database and slave database
+func Open(path string, mode os.FileMode, options *Options) (db *DB, err error) {
+	openSlave := true
+	if options != nil && options.OpenSlave != nil {
+		openSlave = *options.OpenSlave
+	}
+
+	var master *DB
+
+	master, err = tryOpenMasterDB(path, 0644, options, openSlave)
+	if err != nil {
+		return nil, err
+	}
+
+	if !openSlave {
+		return master, nil
+	}
+
+	slaveDbPath := path + ".slave"
+	err = copyFile(path, slaveDbPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var slave *DB
+	slave, err = open(slaveDbPath, 0644, options)
+	if err != nil {
+		return nil, err
+	}
+
+	master.slave = slave
+
+	return master, nil
+}
+
+func tryOpenMasterDB(path string, mode os.FileMode, options *Options, openSlave bool) (db *DB, err error) {
+	slaveDbPath := path + ".slave"
+	pathBackup := path + ".backup"
+
+	defer func() {
+		if e := recover(); e != nil {
+			if openSlave {
+				if _, err := os.Stat(slaveDbPath); err == nil {
+					if err := os.Rename(slaveDbPath, pathBackup); err != nil {
+						panic(fmt.Sprintf("rename %s-%s err %v: failed (%v)", slaveDbPath, pathBackup, err, e))
+					}
+				} else {
+					panic(fmt.Sprintf("slave db path %s err %v, by open db %s failed (%v)", slaveDbPath, err, path, e))
+				}
+			}
+
+			panic(fmt.Sprintf("open db %s failed (%v),rename %s-%s success", path, e, slaveDbPath, pathBackup))
+		}
+	}()
+
+	if openSlave {
+		if _, err := os.Stat(pathBackup); err == nil {
+			if err := os.Rename(pathBackup, path); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	db, err = open(path, 0644, options)
+
+	return
+}
+
+func copyFile(src, dst string) error {
+	os.RemoveAll(dst)
+
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	tmpDst := dst + ".tmp"
+	os.RemoveAll(tmpDst)
+
+	dstFile, err := os.Create(tmpDst)
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+
+	_, err = io.Copy(dstFile, srcFile)
+	if err != nil {
+		return err
+	}
+
+	if err := dstFile.Sync(); err != nil {
+		return err
+	}
+
+	if err := os.Rename(tmpDst, dst); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// open creates and opens a database at the given path with a given file mode.
 // If the file does not exist then it will be created automatically with a given file mode.
 // Passing in nil options will cause Bolt to open the database with the default options.
 // Note: For read/write transactions, ensure the owner has write permission on the created/opened database file, e.g. 0600
-func Open(path string, mode os.FileMode, options *Options) (db *DB, err error) {
+func open(path string, mode os.FileMode, options *Options) (db *DB, err error) {
 	db = &DB{
 		opened: true,
 	}
@@ -664,10 +768,20 @@ func (db *DB) init() error {
 	return nil
 }
 
+// Close releases all database resources with slave.
+func (db *DB) Close() error {
+	err := db._close()
+	if err == nil && db.slave != nil {
+		err = db.slave._close()
+	}
+
+	return err
+}
+
 // Close releases all database resources.
 // It will block waiting for any open transactions to finish
 // before closing the database and returning.
-func (db *DB) Close() error {
+func (db *DB) _close() error {
 	db.rwlock.Lock()
 	defer db.rwlock.Unlock()
 
@@ -814,6 +928,15 @@ func (db *DB) beginTx() (*Tx, error) {
 }
 
 func (db *DB) beginRWTx() (*Tx, error) {
+	tx, err := db._beginRWTx()
+	if err == nil && db.slave != nil {
+		tx.slave, err = db.slave._beginRWTx()
+	}
+
+	return tx, err
+}
+
+func (db *DB) _beginRWTx() (*Tx, error) {
 	// If the database was opened with Options.ReadOnly, return an error.
 	if db.readOnly {
 		return nil, berrors.ErrDatabaseReadOnly
@@ -1330,6 +1453,8 @@ type Options struct {
 
 	// Logger is the logger used for bbolt.
 	Logger Logger
+
+	OpenSlave *bool
 }
 
 func (o *Options) String() string {

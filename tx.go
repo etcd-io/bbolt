@@ -41,6 +41,8 @@ type Tx struct {
 	// workloads. For databases that are much larger than available RAM,
 	// set the flag to syscall.O_DIRECT to avoid trashing the page cache.
 	WriteFlag int
+
+	slave *Tx
 }
 
 // init initializes the transaction.
@@ -105,34 +107,93 @@ func (tx *Tx) Inspect() BucketStructure {
 	return tx.root.Inspect()
 }
 
+// Bucket retrieves a bucket by name with slave.
+func (tx *Tx) Bucket(name []byte) *Bucket {
+	b := tx.bucket(name)
+	if b != nil && tx.slave != nil {
+		b.slave = tx.slave.bucket(name)
+	}
+
+	return b
+}
+
 // Bucket retrieves a bucket by name.
 // Returns nil if the bucket does not exist.
 // The bucket instance is only valid for the lifetime of the transaction.
-func (tx *Tx) Bucket(name []byte) *Bucket {
+func (tx *Tx) bucket(name []byte) *Bucket {
 	return tx.root.Bucket(name)
+}
+
+// CreateBucket creates a new bucket with slave.
+func (tx *Tx) CreateBucket(name []byte) (*Bucket, error) {
+	b, err := tx.createBucket(name)
+	if err == nil && tx.slave != nil {
+		b.slave, err = tx.slave.createBucket(name)
+	}
+
+	return b, err
 }
 
 // CreateBucket creates a new bucket.
 // Returns an error if the bucket already exists, if the bucket name is blank, or if the bucket name is too long.
 // The bucket instance is only valid for the lifetime of the transaction.
-func (tx *Tx) CreateBucket(name []byte) (*Bucket, error) {
+func (tx *Tx) createBucket(name []byte) (*Bucket, error) {
 	return tx.root.CreateBucket(name)
+}
+
+// CreateBucketIfNotExists creates a new bucket with slave if it doesn't already exist.
+func (tx *Tx) CreateBucketIfNotExists(name []byte) (*Bucket, error) {
+	b, err := tx.createBucketIfNotExists(name)
+	if err == nil && tx.slave != nil {
+		b.slave, err = tx.slave.createBucketIfNotExists(name)
+	}
+
+	return b, err
 }
 
 // CreateBucketIfNotExists creates a new bucket if it doesn't already exist.
 // Returns an error if the bucket name is blank, or if the bucket name is too long.
 // The bucket instance is only valid for the lifetime of the transaction.
-func (tx *Tx) CreateBucketIfNotExists(name []byte) (*Bucket, error) {
+func (tx *Tx) createBucketIfNotExists(name []byte) (*Bucket, error) {
 	return tx.root.CreateBucketIfNotExists(name)
 }
 
-// DeleteBucket deletes a bucket.
-// Returns an error if the bucket cannot be found or if the key represents a non-bucket value.
+// DeleteBucket deletes a bucket with slave.
 func (tx *Tx) DeleteBucket(name []byte) error {
+	err := tx.deleteBucket(name)
+	if err == nil && tx.slave != nil {
+		err = tx.slave.deleteBucket(name)
+	}
+
+	return err
+}
+
+// deleteBucket deletes a bucket.
+// Returns an error if the bucket cannot be found or if the key represents a non-bucket value.
+func (tx *Tx) deleteBucket(name []byte) error {
 	return tx.root.DeleteBucket(name)
 }
 
-// MoveBucket moves a sub-bucket from the source bucket to the destination bucket.
+// MoveBucket moves a sub-bucket from the source bucket to the destination bucket with slave.
+func (tx *Tx) MoveBucket(child []byte, src *Bucket, dst *Bucket) error {
+	err := tx.moveBucket(child, src, dst)
+
+	if err == nil && tx.slave != nil {
+		if src != nil {
+			src = src.slave
+		}
+
+		if dst != nil {
+			dst = dst.slave
+		}
+
+		err = tx.slave.moveBucket(child, src, dst)
+	}
+
+	return err
+}
+
+// moveBucket moves a sub-bucket from the source bucket to the destination bucket.
 // Returns an error if
 //  1. the sub-bucket cannot be found in the source bucket;
 //  2. or the key already exists in the destination bucket;
@@ -140,7 +201,7 @@ func (tx *Tx) DeleteBucket(name []byte) error {
 //
 // If src is nil, it means moving a top level bucket into the target bucket.
 // If dst is nil, it means converting the child bucket into a top level bucket.
-func (tx *Tx) MoveBucket(child []byte, src *Bucket, dst *Bucket) error {
+func (tx *Tx) moveBucket(child []byte, src *Bucket, dst *Bucket) error {
 	if src == nil {
 		src = &tx.root
 	}
@@ -164,10 +225,27 @@ func (tx *Tx) OnCommit(fn func()) {
 	tx.commitHandlers = append(tx.commitHandlers, fn)
 }
 
-// Commit writes all changes to disk, updates the meta page and closes the transaction.
+// Commit writes all changes to disk, updates the meta page and closes the transaction with slave.
+func (tx *Tx) Commit() (err error) {
+	err = tx.commit()
+	if err == nil && tx.slave != nil {
+		err = tx.slave.commit()
+	}
+
+	if err == nil {
+		// Execute commit handlers now that the locks have been removed.
+		for _, fn := range tx.commitHandlers {
+			fn()
+		}
+	}
+
+	return err
+}
+
+// commit writes all changes to disk, updates the meta page and closes the transaction.
 // Returns an error if a disk write error occurs, or if Commit is
 // called on a read-only transaction.
-func (tx *Tx) Commit() (err error) {
+func (tx *Tx) commit() (err error) {
 	txId := tx.ID()
 	lg := tx.db.Logger()
 	if lg != discardLogger {
@@ -274,11 +352,6 @@ func (tx *Tx) Commit() (err error) {
 	// Finalize the transaction.
 	tx.close()
 
-	// Execute commit handlers now that the locks have been removed.
-	for _, fn := range tx.commitHandlers {
-		fn()
-	}
-
 	return nil
 }
 
@@ -297,9 +370,19 @@ func (tx *Tx) commitFreelist() error {
 	return nil
 }
 
+// Rollback closes the transaction and ignores all previous updates with slave.
+func (tx *Tx) Rollback() error {
+	err := tx._rollback()
+	if err == nil && tx.slave != nil {
+		err = tx.slave._rollback()
+	}
+
+	return err
+}
+
 // Rollback closes the transaction and ignores all previous updates. Read-only
 // transactions must be rolled back and not committed.
-func (tx *Tx) Rollback() error {
+func (tx *Tx) _rollback() error {
 	common.Assert(!tx.managed, "managed tx rollback not allowed")
 	if tx.db == nil {
 		return berrors.ErrTxClosed
