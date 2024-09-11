@@ -739,7 +739,7 @@ func (b *Bucket) _forEachPageNode(pgId common.Pgid, depth int, fn func(*common.P
 }
 
 // spill writes all the nodes for this bucket to dirty pages.
-func (b *Bucket) spill() error {
+func (b *Bucket) spill() (freepages []common.Pgid, e error) {
 	// Spill all child buckets first.
 	for name, child := range b.buckets {
 		// If the child bucket is small enough and it has no child buckets then
@@ -750,8 +750,10 @@ func (b *Bucket) spill() error {
 			child.free()
 			value = child.write()
 		} else {
-			if err := child.spill(); err != nil {
-				return err
+			if pages, err := child.spill(); err != nil {
+				return nil, err
+			} else {
+				freepages = append(freepages, pages...)
 			}
 
 			// Update the child bucket header in this bucket.
@@ -779,12 +781,14 @@ func (b *Bucket) spill() error {
 
 	// Ignore if there's not a materialized root node.
 	if b.rootNode == nil {
-		return nil
+		return
 	}
 
 	// Spill nodes.
-	if err := b.rootNode.spill(); err != nil {
-		return err
+	if pages, err := b.rootNode.spill(); err != nil {
+		return nil, err
+	} else {
+		freepages = append(freepages, pages...)
 	}
 	b.rootNode = b.rootNode.root()
 
@@ -794,7 +798,7 @@ func (b *Bucket) spill() error {
 	}
 	b.SetRootPage(b.rootNode.pgid)
 
-	return nil
+	return
 }
 
 // inlineable returns true if a bucket is small enough to be written inline

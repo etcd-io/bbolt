@@ -292,10 +292,10 @@ func (n *node) splitIndex(threshold int) (index, sz uintptr) {
 
 // spill writes the nodes to dirty pages and splits nodes as it goes.
 // Returns an error if dirty pages cannot be allocated.
-func (n *node) spill() error {
+func (n *node) spill() (freepages []common.Pgid, e error) {
 	var tx = n.bucket.tx
 	if n.spilled {
-		return nil
+		return
 	}
 
 	// Spill child nodes first. Child nodes can materialize sibling nodes in
@@ -303,8 +303,10 @@ func (n *node) spill() error {
 	// the children size on every loop iteration.
 	sort.Sort(n.children)
 	for i := 0; i < len(n.children); i++ {
-		if err := n.children[i].spill(); err != nil {
-			return err
+		if pages, err := n.children[i].spill(); err != nil {
+			return nil, err
+		} else {
+			freepages = append(freepages, pages...)
 		}
 	}
 
@@ -316,14 +318,14 @@ func (n *node) spill() error {
 	for _, node := range nodes {
 		// Add node's page to the freelist if it's not new.
 		if node.pgid > 0 {
-			tx.db.freelist.Free(tx.meta.Txid(), tx.page(node.pgid))
+			freepages = append(freepages, node.pgid)
 			node.pgid = 0
 		}
 
 		// Allocate contiguous space for the node.
 		p, err := tx.allocate((node.size() + tx.db.pageSize - 1) / tx.db.pageSize)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		// Write the node.
@@ -357,7 +359,7 @@ func (n *node) spill() error {
 		return n.parent.spill()
 	}
 
-	return nil
+	return
 }
 
 // rebalance attempts to combine the node with sibling nodes if the node fill

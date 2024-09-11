@@ -201,11 +201,13 @@ func (tx *Tx) Commit() (err error) {
 
 	// spill data onto dirty pages.
 	startTime = time.Now()
-	if err = tx.root.spill(); err != nil {
+	var freepages []common.Pgid
+	if freepages, err = tx.root.spill(); err != nil {
 		lg.Errorf("spilling data onto dirty pages failed: %v", err)
 		tx.rollback()
 		return err
 	}
+
 	tx.stats.IncSpillTime(time.Since(startTime))
 
 	// Free the old root bucket.
@@ -270,6 +272,10 @@ func (tx *Tx) Commit() (err error) {
 		return err
 	}
 	tx.stats.IncWriteTime(time.Since(startTime))
+
+	for _, pid := range freepages {
+		tx.db.freelist.Free(tx.meta.Txid(), tx.page(pid))
+	}
 
 	// Finalize the transaction.
 	tx.close()
