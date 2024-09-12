@@ -316,7 +316,7 @@ func (n *node) spill() error {
 	for _, node := range nodes {
 		// Add node's page to the freelist if it's not new.
 		if node.pgid > 0 {
-			tx.db.freelist.Free(tx.meta.Txid(), tx.page(node.pgid))
+			commitCtx.addFreePage(node.pgid)
 			node.pgid = 0
 		}
 
@@ -493,7 +493,7 @@ func (n *node) dereference() {
 // free adds the node's underlying page to the freelist.
 func (n *node) free() {
 	if n.pgid != 0 {
-		n.bucket.tx.db.freelist.Free(n.bucket.tx.meta.Txid(), n.bucket.tx.page(n.pgid))
+		commitCtx.addFreePage(n.pgid)
 		n.pgid = 0
 	}
 }

@@ -213,10 +213,11 @@ func (tx *Tx) Commit() (err error) {
 
 	// Free the old freelist because commit writes out a fresh freelist.
 	if tx.meta.Freelist() != common.PgidNoFreelist {
-		tx.db.freelist.Free(tx.meta.Txid(), tx.db.page(tx.meta.Freelist()))
+		commitCtx.addFreePage(tx.meta.Freelist())
 	}
 
 	if !tx.db.NoFreelistSync {
+		commitCtx.commitFreePages(tx)
 		err = tx.commitFreelist()
 		if err != nil {
 			lg.Errorf("committing freelist failed: %v", err)
@@ -270,6 +271,8 @@ func (tx *Tx) Commit() (err error) {
 		return err
 	}
 	tx.stats.IncWriteTime(time.Since(startTime))
+
+	commitCtx.commitFreePages(tx)
 
 	// Finalize the transaction.
 	tx.close()

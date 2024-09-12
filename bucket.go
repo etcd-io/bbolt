@@ -900,10 +900,9 @@ func (b *Bucket) free() {
 		return
 	}
 
-	var tx = b.tx
 	b.forEachPageNode(func(p *common.Page, n *node, _ int) {
 		if p != nil {
-			tx.db.freelist.Free(tx.meta.Txid(), p)
+			commitCtx.addFreePage(p.Id())
 		} else {
 			n.free()
 		}
