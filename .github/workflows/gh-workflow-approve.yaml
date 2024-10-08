@@ -8,6 +8,7 @@ on:
       - synchronize
     branches:
       - main
+      - release-1.3
 
 jobs:
   approve:
