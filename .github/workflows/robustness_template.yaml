@@ -34,4 +34,4 @@ jobs:
           set -euo pipefail
           sudo apt-get install -y dmsetup xfsprogs
 
-          ROBUSTNESS_TESTFLAGS="--count ${{ inputs.count }} --timeout ${{ inputs.testTimeout }} -failfast" make test-robustness
+          SUDO=true ROBUSTNESS_TESTFLAGS="--count ${{ inputs.count }} --timeout ${{ inputs.testTimeout }} -failfast" make test-robustness
