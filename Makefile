@@ -90,7 +90,8 @@ test-failpoint:
 	@echo "[failpoint] array freelist test"
 	BBOLT_VERIFY=all TEST_FREELIST_TYPE=array go test -v ${TESTFLAGS} -timeout 30m ./tests/failpoint
 
-.PHONY: test-robustness # Running robustness tests requires root permission
+.PHONY: test-robustness # Running robustness tests requires root permission for now
+# TODO: Remove sudo once we fully migrate to the prow infrastructure
 test-robustness: gofail-enable build
 	sudo env PATH=$$PATH go test -v ${TESTFLAGS} ./tests/dmflakey -test.root
 	sudo env PATH=$(PWD)/bin:$$PATH go test -v ${TESTFLAGS} ${ROBUSTNESS_TESTFLAGS} ./tests/robustness -test.root

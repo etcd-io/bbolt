@@ -8,9 +8,3 @@ jobs:
       count: 10
       testTimeout: 30m
       runs-on: "['ubuntu-latest']"
-  arm64:
-    uses: ./.github/workflows/robustness_template.yaml
-    with:
-      count: 10
-      testTimeout: 30m
-      runs-on: "['actuated-arm64-4cpu-8gb']"
