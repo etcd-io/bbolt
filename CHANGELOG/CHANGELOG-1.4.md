@@ -1,6 +1,26 @@
 
 <hr>
 
+## v1.4.0-beta.0(TBD)
+
+### BoltDB
+- Reorganized the directory structure of freelist source code
+  - [Move array related freelist source code into a separate file](https://github.com/etcd-io/bbolt/pull/777)
+  - [Move method `freePages` into freelist.go](https://github.com/etcd-io/bbolt/pull/783)
+  - [Add an interface for freelist](https://github.com/etcd-io/bbolt/pull/775)
+- [Rollback alloc map when a transaction is rollbacked](https://github.com/etcd-io/bbolt/pull/819)
+- [No handling freelist as a special case when freeing a page](https://github.com/etcd-io/bbolt/pull/788)
+- [Ensure hashmap init method clears the data structures](https://github.com/etcd-io/bbolt/pull/794)
+- [Panicking when a write transaction tries to free a page allocated by itself](https://github.com/etcd-io/bbolt/pull/792)
+
+### CMD
+- [Add `-gobench-output` flag for `bbolt bench` command](https://github.com/etcd-io/bbolt/pull/765)
+
+### Other
+- [Bump go version to 1.23.x](https://github.com/etcd-io/bbolt/pull/821)
+
+<hr>
+
 ## v1.4.0-alpha.1(2024-05-06)
 
 ### BoltDB
