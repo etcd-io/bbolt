@@ -1,7 +1,7 @@
 
 <hr>
 
-## v1.4.0-beta.0(TBD)
+## v1.4.0-beta.0(2024-11-04)
 
 ### BoltDB
 - Reorganized the directory structure of freelist source code
