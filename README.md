@@ -76,7 +76,7 @@ New minor versions may add additional features to the API.
 
 ### Installing
 
-To start using Bolt, install Go and run `go get`:
+To start using `bbolt`, install Go and run `go get`:
 ```sh
 $ go get go.etcd.io/bbolt@latest
 ```
