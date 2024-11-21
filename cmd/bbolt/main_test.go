@@ -274,36 +274,6 @@ func TestStatsCommand_Run(t *testing.T) {
 	}
 }
 
-// Ensure the "buckets" command can print a list of buckets.
-func TestBucketsCommand_Run(t *testing.T) {
-	db := btesting.MustCreateDB(t)
-
-	if err := db.Update(func(tx *bolt.Tx) error {
-		for _, name := range []string{"foo", "bar", "baz"} {
-			_, err := tx.CreateBucket([]byte(name))
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	db.Close()
-
-	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
-
-	expected := "bar\nbaz\nfoo\n"
-
-	// Run the command.
-	m := NewMain()
-	if err := m.Run("buckets", db.Path()); err != nil {
-		t.Fatal(err)
-	} else if actual := m.Stdout.String(); actual != expected {
-		t.Fatalf("unexpected stdout:\n\n%s", actual)
-	}
-}
-
 // Ensure the "keys" command can print a list of keys for a bucket.
 func TestKeysCommand_Run(t *testing.T) {
 	testCases := []struct {
