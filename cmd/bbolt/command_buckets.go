@@ -21,10 +21,7 @@ func newBucketsCommand() *cobra.Command {
 
 func bucketsFunc(cmd *cobra.Command, srcDBPath string) error {
 	// Required database path.
-	if srcDBPath == "" {
-		return ErrPathRequired
-		// Verify if the specified database file exists.
-	} else if _, err := checkSourceDBPath(srcDBPath); err != nil {
+	if _, err := checkSourceDBPath(srcDBPath); err != nil {
 		return err
 	}
 
