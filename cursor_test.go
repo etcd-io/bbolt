@@ -332,7 +332,7 @@ func TestCursor_Seek_Large(t *testing.T) {
 
 			k, _ := c.Seek(seek)
 
-			// The last seek is beyond the end of the the range so
+			// The last seek is beyond the end of the range so
 			// it should return nil.
 			if i == count-1 {
 				if k != nil {
