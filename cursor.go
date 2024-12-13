@@ -182,6 +182,9 @@ func (c *Cursor) goToFirstElementOnTheStack() {
 			pgId = ref.page.BranchPageElement(uint16(ref.index)).Pgid()
 		}
 		p, n := c.bucket.pageNode(pgId)
+		if p.flags == 16 {
+			break
+		}
 		c.stack = append(c.stack, elemRef{page: p, node: n, index: 0})
 	}
 }
