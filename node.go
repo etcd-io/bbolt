@@ -473,7 +473,7 @@ func (n *node) dereference() {
 
 		buf := make([]byte, len(inode.Key())+len(inode.Value()))
 
-		key := buf[:len(inode.Key())]
+		key := buf[:len(inode.Key()):len(inode.Key())]
 		copy(key, inode.Key())
 		inode.SetKey(key)
 		common.Assert(len(inode.Key()) > 0, "dereference: zero-length inode key")
