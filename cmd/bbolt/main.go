@@ -1192,8 +1192,10 @@ func (cmd *benchCommand) runWritesWithSource(db *bolt.DB, options *BenchOptions,
 
 			fmt.Fprintf(cmd.Stderr, "Starting write iteration %d\n", i)
 			for j := int64(0); j < options.BatchSize; j++ {
-				key := make([]byte, options.KeySize)
-				value := make([]byte, options.ValueSize)
+				buf := make([]byte, options.KeySize+options.ValueSize)
+
+				key := buf[:options.KeySize:options.KeySize]
+				value := buf[options.KeySize:]
 
 				// Write key as uint32.
 				binary.BigEndian.PutUint32(key, keySource())
@@ -1244,8 +1246,10 @@ func (cmd *benchCommand) runWritesNestedWithSource(db *bolt.DB, options *BenchOp
 
 			fmt.Fprintf(cmd.Stderr, "Starting write iteration %d\n", i)
 			for j := int64(0); j < options.BatchSize; j++ {
-				var key = make([]byte, options.KeySize)
-				var value = make([]byte, options.ValueSize)
+				buf := make([]byte, options.KeySize+options.ValueSize)
+
+				var key = buf[:options.KeySize:options.KeySize]
+				var value = buf[options.KeySize:]
 
 				// Generate key as uint32.
 				binary.BigEndian.PutUint32(key, keySource())
