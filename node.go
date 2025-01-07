@@ -471,12 +471,14 @@ func (n *node) dereference() {
 	for i := range n.inodes {
 		inode := &n.inodes[i]
 
-		key := make([]byte, len(inode.Key()))
+		buf := make([]byte, len(inode.Key())+len(inode.Value()))
+
+		key := buf[:len(inode.Key()):len(inode.Key())]
 		copy(key, inode.Key())
 		inode.SetKey(key)
 		common.Assert(len(inode.Key()) > 0, "dereference: zero-length inode key")
 
-		value := make([]byte, len(inode.Value()))
+		value := buf[len(inode.Key()):]
 		copy(value, inode.Value())
 		inode.SetValue(value)
 	}
