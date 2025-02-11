@@ -1080,7 +1080,7 @@ func safelyCall(fn func(*Tx) error, tx *Tx) (err error) {
 // then it allows you to force the database file to sync against the disk.
 func (db *DB) Sync() (err error) {
 	if lg := db.Logger(); lg != discardLogger {
-		lg.Debug("Syncing bbolt db (%s)", db.path)
+		lg.Debugf("Syncing bbolt db (%s)", db.path)
 		defer func() {
 			if err != nil {
 				lg.Errorf("[GOOS: %s, GOARCH: %s] syncing bbolt db (%s) failed: %v", runtime.GOOS, runtime.GOARCH, db.path, err)
