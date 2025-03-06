@@ -41,7 +41,6 @@ func TestCheckCommand_Run(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-
 			t.Log("Creating sample DB")
 			db := btesting.MustCreateDB(t)
 			db.Close()

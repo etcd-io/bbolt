@@ -191,7 +191,7 @@ func (tx *Tx) Commit() (err error) {
 	// TODO(benbjohnson): Use vectorized I/O to write out dirty pages.
 
 	// Rebalance nodes which have had deletions.
-	var startTime = time.Now()
+	startTime := time.Now()
 	tx.root.rebalance()
 	if tx.stats.GetRebalance() > 0 {
 		tx.stats.IncRebalanceTime(time.Since(startTime))
@@ -348,9 +348,9 @@ func (tx *Tx) close() {
 	}
 	if tx.writable {
 		// Grab freelist stats.
-		var freelistFreeN = tx.db.freelist.FreeCount()
-		var freelistPendingN = tx.db.freelist.PendingCount()
-		var freelistAlloc = tx.db.freelist.EstimatedWritePageSize()
+		freelistFreeN := tx.db.freelist.FreeCount()
+		freelistPendingN := tx.db.freelist.PendingCount()
+		freelistAlloc := tx.db.freelist.EstimatedWritePageSize()
 
 		// Remove transaction ref & writer lock.
 		tx.db.rwtx = nil
@@ -410,7 +410,7 @@ func (tx *Tx) WriteTo(w io.Writer) (n int64, err error) {
 	nn, err := w.Write(buf)
 	n += int64(nn)
 	if err != nil {
-		return n, fmt.Errorf("meta 0 copy: %s", err)
+		return n, fmt.Errorf("meta 0 copy: %w", err)
 	}
 
 	// Write meta 1 with a lower transaction id.
@@ -420,12 +420,12 @@ func (tx *Tx) WriteTo(w io.Writer) (n int64, err error) {
 	nn, err = w.Write(buf)
 	n += int64(nn)
 	if err != nil {
-		return n, fmt.Errorf("meta 1 copy: %s", err)
+		return n, fmt.Errorf("meta 1 copy: %w", err)
 	}
 
 	// Move past the meta pages in the file.
 	if _, err := f.Seek(int64(tx.db.pageSize*2), io.SeekStart); err != nil {
-		return n, fmt.Errorf("seek: %s", err)
+		return n, fmt.Errorf("seek: %w", err)
 	}
 
 	// Copy data pages.
