@@ -335,7 +335,7 @@ func TestKeysCommand_Run(t *testing.T) {
 				t.Logf("creating test bucket %s", tc.testBucket)
 				b, bErr := tx.CreateBucketIfNotExists([]byte(tc.testBucket))
 				if bErr != nil {
-					return fmt.Errorf("error creating test bucket %q: %v", tc.testBucket, bErr)
+					return fmt.Errorf("error creating test bucket %q: %w", tc.testBucket, bErr)
 				}
 
 				t.Logf("inserting test data into test bucket %s", tc.testBucket)
@@ -691,7 +691,7 @@ func fillBucket(b *bolt.Bucket, prefix []byte) error {
 }
 
 func chkdb(path string) ([]byte, error) {
-	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true})
+	db, err := bolt.Open(path, 0o600, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		return nil, err
 	}

@@ -68,9 +68,7 @@ func ClearPageElements(path string, pgId common.Pgid, start, end int, abandonFre
 
 	preOverflow := p.Overflow()
 
-	var (
-		dataWritten uint32
-	)
+	var dataWritten uint32
 	if end == int(p.Count()) || end == -1 {
 		inodes := common.ReadInodeFromPage(p)
 		inodes = inodes[:start]
