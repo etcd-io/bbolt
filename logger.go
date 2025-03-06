@@ -32,9 +32,7 @@ func getDiscardLogger() Logger {
 	return discardLogger
 }
 
-var (
-	discardLogger = &DefaultLogger{Logger: log.New(io.Discard, "", 0)}
-)
+var discardLogger = &DefaultLogger{Logger: log.New(io.Discard, "", 0)}
 
 const (
 	calldepth = 2

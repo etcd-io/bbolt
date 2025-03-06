@@ -145,7 +145,8 @@ func doPowerFailure(t *testing.T, du time.Duration, fsType dmflakey.FSType, mkfs
 
 	dbPath := filepath.Join(root, "boltdb")
 
-	args := []string{"bbolt", "bench",
+	args := []string{
+		"bbolt", "bench",
 		"-work", // keep the database
 		"-path", dbPath,
 		"-count=1000000000",
@@ -154,7 +155,7 @@ func doPowerFailure(t *testing.T, du time.Duration, fsType dmflakey.FSType, mkfs
 	}
 
 	logPath := filepath.Join(t.TempDir(), fmt.Sprintf("%s.log", t.Name()))
-	require.NoError(t, os.MkdirAll(path.Dir(logPath), 0600))
+	require.NoError(t, os.MkdirAll(path.Dir(logPath), 0o600))
 
 	logFd, err := os.Create(logPath)
 	require.NoError(t, err)

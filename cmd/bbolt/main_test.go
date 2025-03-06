@@ -691,7 +691,7 @@ func fillBucket(b *bolt.Bucket, prefix []byte) error {
 }
 
 func chkdb(path string) ([]byte, error) {
-	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true})
+	db, err := bolt.Open(path, 0o600, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		return nil, err
 	}

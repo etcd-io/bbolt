@@ -141,7 +141,6 @@ func TestTx_MoveBucket(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-
 		t.Run(tc.name, func(*testing.T) {
 			db := btesting.MustCreateDBWithOption(t, &bbolt.Options{PageSize: 4096})
 
@@ -376,7 +375,7 @@ func createBucketAndPopulateData(t testing.TB, tx *bbolt.Tx, bk *bbolt.Bucket, b
 }
 
 func populateSampleDataInBucket(t testing.TB, bk *bbolt.Bucket, n int) {
-	var min, max = 1, 1024
+	min, max := 1, 1024
 
 	for i := 0; i < n; i++ {
 		// generate rand key/value length

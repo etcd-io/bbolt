@@ -37,7 +37,7 @@ func TestBasic(t *testing.T) {
 			}()
 
 			target := filepath.Join(tmpDir, "root")
-			require.NoError(t, os.MkdirAll(target, 0600))
+			require.NoError(t, os.MkdirAll(target, 0o600))
 
 			require.NoError(t, mount(target, flakey.DevicePath(), ""))
 			defer func() {
@@ -45,7 +45,7 @@ func TestBasic(t *testing.T) {
 			}()
 
 			file := filepath.Join(target, "test")
-			assert.NoError(t, writeFile(file, []byte("hello, world"), 0600, true))
+			assert.NoError(t, writeFile(file, []byte("hello, world"), 0o600, true))
 
 			assert.NoError(t, unmount(target))
 
@@ -62,15 +62,15 @@ func TestDropWritesExt4(t *testing.T) {
 
 	// ensure testdir/f1 is synced.
 	target := filepath.Join(root, "testdir")
-	require.NoError(t, os.MkdirAll(target, 0600))
+	require.NoError(t, os.MkdirAll(target, 0o600))
 
 	f1 := filepath.Join(target, "f1")
-	assert.NoError(t, writeFile(f1, []byte("hello, world from f1"), 0600, false))
+	assert.NoError(t, writeFile(f1, []byte("hello, world from f1"), 0o600, false))
 	require.NoError(t, syncfs(f1))
 
 	// testdir/f2 is created but without fsync
 	f2 := filepath.Join(target, "f2")
-	assert.NoError(t, writeFile(f2, []byte("hello, world from f2"), 0600, false))
+	assert.NoError(t, writeFile(f2, []byte("hello, world from f2"), 0o600, false))
 
 	// simulate power failure
 	assert.NoError(t, flakey.DropWrites())
@@ -96,12 +96,12 @@ func TestErrorWritesExt4(t *testing.T) {
 	assert.NoError(t, flakey.ErrorWrites())
 
 	f1 := filepath.Join(root, "f1")
-	err := writeFile(f1, []byte("hello, world during failpoint"), 0600, true)
+	err := writeFile(f1, []byte("hello, world during failpoint"), 0o600, true)
 	assert.ErrorContains(t, err, "input/output error")
 
 	// resume
 	assert.NoError(t, flakey.AllowWrites())
-	err = writeFile(f1, []byte("hello, world"), 0600, true)
+	err = writeFile(f1, []byte("hello, world"), 0o600, true)
 	assert.NoError(t, err)
 
 	assert.NoError(t, unmount(root))
@@ -116,7 +116,7 @@ func initFlakey(t *testing.T, fsType FSType) (_ Flakey, root string) {
 	tmpDir := t.TempDir()
 
 	target := filepath.Join(tmpDir, "root")
-	require.NoError(t, os.MkdirAll(target, 0600))
+	require.NoError(t, os.MkdirAll(target, 0o600))
 
 	flakey, err := InitFlakey("go-dmflakey", tmpDir, fsType, "")
 	require.NoError(t, err, "init flakey")

@@ -59,7 +59,7 @@ func (m *Meta) Write(p *Page) {
 
 // Sum64 generates the checksum for the meta.
 func (m *Meta) Sum64() uint64 {
-	var h = fnv.New64a()
+	h := fnv.New64a()
 	_, _ = h.Write((*[unsafe.Offsetof(Meta{}.checksum)]byte)(unsafe.Pointer(m))[:])
 	return h.Sum64()
 }

@@ -36,10 +36,10 @@ func testSimulate(t *testing.T, openOption *bolt.Options, round, threadCount, pa
 	}
 
 	// A list of operations that readers and writers can perform.
-	var readerHandlers = []simulateHandler{simulateGetHandler}
-	var writerHandlers = []simulateHandler{simulateGetHandler, simulatePutHandler}
+	readerHandlers := []simulateHandler{simulateGetHandler}
+	writerHandlers := []simulateHandler{simulateGetHandler, simulatePutHandler}
 
-	var versions = make(map[int]*QuickDB)
+	versions := make(map[int]*QuickDB)
 	versions[1] = NewQuickDB()
 
 	db := btesting.MustCreateDBWithOption(t, openOption)
@@ -48,7 +48,7 @@ func testSimulate(t *testing.T, openOption *bolt.Options, round, threadCount, pa
 
 	for n := 0; n < round; n++ {
 		// Run n threads in parallel, each with their own operation.
-		var threads = make(chan bool, parallelism)
+		threads := make(chan bool, parallelism)
 		var wg sync.WaitGroup
 
 		// counter for how many goroutines were fired
@@ -57,7 +57,7 @@ func testSimulate(t *testing.T, openOption *bolt.Options, round, threadCount, pa
 		// counter for ignored operations
 		var igCount int64
 
-		var errCh = make(chan error, threadCount)
+		errCh := make(chan error, threadCount)
 
 		var i int
 		for {
@@ -92,7 +92,7 @@ func testSimulate(t *testing.T, openOption *bolt.Options, round, threadCount, pa
 
 				// Obtain current state of the dataset.
 				mutex.Lock()
-				var qdb = versions[tx.ID()]
+				qdb := versions[tx.ID()]
 				if writable {
 					qdb = versions[tx.ID()-1].Copy()
 				}
@@ -149,7 +149,6 @@ func testSimulate(t *testing.T, openOption *bolt.Options, round, threadCount, pa
 		db.MustDeleteFile()
 		db.MustReopen()
 	}
-
 }
 
 type simulateHandler func(tx *bolt.Tx, qdb *QuickDB)
@@ -334,7 +333,7 @@ func (db *QuickDB) copy(m map[string]interface{}) map[string]interface{} {
 }
 
 func randKey() []byte {
-	var min, max = 1, 1024
+	min, max := 1, 1024
 	n := rand.Intn(max-min) + min
 	b := make([]byte, n)
 	for i := 0; i < n; i++ {
@@ -345,7 +344,7 @@ func randKey() []byte {
 
 func randKeys() [][]byte {
 	var keys [][]byte
-	var count = rand.Intn(2) + 2
+	count := rand.Intn(2) + 2
 	for i := 0; i < count; i++ {
 		keys = append(keys, randKey())
 	}

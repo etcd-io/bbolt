@@ -212,7 +212,7 @@ func (cmd *infoCommand) Run(args ...string) error {
 	}
 
 	// Open the database.
-	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true})
+	db, err := bolt.Open(path, 0o600, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
@@ -572,7 +572,7 @@ func (cmd *pagesCommand) Run(args ...string) error {
 	}
 
 	// Open database.
-	db, err := bolt.Open(path, 0600, &bolt.Options{
+	db, err := bolt.Open(path, 0o600, &bolt.Options{
 		ReadOnly:        true,
 		PreLoadFreelist: true,
 	})
@@ -665,7 +665,7 @@ func (cmd *statsCommand) Run(args ...string) error {
 	}
 
 	// Open database.
-	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true})
+	db, err := bolt.Open(path, 0o600, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
@@ -796,7 +796,7 @@ func (cmd *bucketsCommand) Run(args ...string) error {
 	}
 
 	// Open database.
-	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true})
+	db, err := bolt.Open(path, 0o600, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
@@ -860,7 +860,7 @@ func (cmd *keysCommand) Run(args ...string) error {
 	}
 
 	// Open database.
-	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true})
+	db, err := bolt.Open(path, 0o600, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
@@ -948,7 +948,7 @@ func (cmd *getCommand) Run(args ...string) error {
 	}
 
 	// Open database.
-	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true})
+	db, err := bolt.Open(path, 0o600, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
@@ -1019,7 +1019,7 @@ func (cmd *benchCommand) Run(args ...string) error {
 	}
 
 	// Create database.
-	db, err := bolt.Open(options.Path, 0600, nil)
+	db, err := bolt.Open(options.Path, 0o600, nil)
 	if err != nil {
 		return err
 	}
@@ -1162,7 +1162,7 @@ func (cmd *benchCommand) runWrites(db *bolt.DB, options *BenchOptions, results *
 }
 
 func (cmd *benchCommand) runWritesSequential(db *bolt.DB, options *BenchOptions, results *BenchResults) ([]nestedKey, error) {
-	var i = uint32(0)
+	i := uint32(0)
 	return cmd.runWritesWithSource(db, options, results, func() uint32 { i++; return i })
 }
 
@@ -1171,7 +1171,7 @@ func (cmd *benchCommand) runWritesRandom(db *bolt.DB, options *BenchOptions, res
 }
 
 func (cmd *benchCommand) runWritesSequentialNested(db *bolt.DB, options *BenchOptions, results *BenchResults) ([]nestedKey, error) {
-	var i = uint32(0)
+	i := uint32(0)
 	return cmd.runWritesNestedWithSource(db, options, results, func() uint32 { i++; return i })
 }
 
@@ -1244,8 +1244,8 @@ func (cmd *benchCommand) runWritesNestedWithSource(db *bolt.DB, options *BenchOp
 
 			fmt.Fprintf(cmd.Stderr, "Starting write iteration %d\n", i)
 			for j := int64(0); j < options.BatchSize; j++ {
-				var key = make([]byte, options.KeySize)
-				var value = make([]byte, options.ValueSize)
+				key := make([]byte, options.KeySize)
+				value := make([]byte, options.ValueSize)
 
 				// Generate key as uint32.
 				binary.BigEndian.PutUint32(key, keySource())
@@ -1334,7 +1334,6 @@ func (cmd *benchCommand) runReadsSequential(db *bolt.DB, options *BenchOptions, 
 
 				return nil
 			}()
-
 			if err != nil {
 				return err
 			}
@@ -1373,7 +1372,6 @@ func (cmd *benchCommand) runReadsRandom(db *bolt.DB, options *BenchOptions, keys
 
 				return nil
 			}()
-
 			if err != nil {
 				return err
 			}
@@ -1398,7 +1396,7 @@ func (cmd *benchCommand) runReadsSequentialNested(db *bolt.DB, options *BenchOpt
 
 		for {
 			numReads := int64(0)
-			var top = tx.Bucket(benchBucketName)
+			top := tx.Bucket(benchBucketName)
 			if err := top.ForEach(func(name, _ []byte) error {
 				defer func() { results.AddCompletedOps(numReads) }()
 				if b := top.Bucket(name); b != nil {
@@ -1438,7 +1436,7 @@ func (cmd *benchCommand) runReadsRandomNested(db *bolt.DB, options *BenchOptions
 			err := func() error {
 				defer func() { results.AddCompletedOps(numReads) }()
 
-				var top = tx.Bucket(benchBucketName)
+				top := tx.Bucket(benchBucketName)
 				for _, nestedKey := range nestedKeys {
 					if b := top.Bucket(nestedKey.bucket); b != nil {
 						v := b.Get(nestedKey.key)
@@ -1451,7 +1449,6 @@ func (cmd *benchCommand) runReadsRandomNested(db *bolt.DB, options *BenchOptions
 
 				return nil
 			}()
-
 			if err != nil {
 				return err
 			}
@@ -1609,7 +1606,7 @@ func (r *BenchResults) OpDuration() time.Duration {
 
 // Returns average number of read/write operations that can be performed per second.
 func (r *BenchResults) OpsPerSecond() int {
-	var op = r.OpDuration()
+	op := r.OpDuration()
 	if op == 0 {
 		return 0
 	}
@@ -1714,7 +1711,7 @@ func (cmd *compactCommand) Run(args ...string) (err error) {
 	initialSize := fi.Size()
 
 	// Open source database.
-	src, err := bolt.Open(cmd.SrcPath, 0400, &bolt.Options{ReadOnly: true})
+	src, err := bolt.Open(cmd.SrcPath, 0o400, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
@@ -1781,7 +1778,7 @@ func CmdKvStringer() bolt.KVStringer {
 }
 
 func findLastBucket(tx *bolt.Tx, bucketNames []string) (*bolt.Bucket, error) {
-	var lastbucket *bolt.Bucket = tx.Bucket([]byte(bucketNames[0]))
+	lastbucket := tx.Bucket([]byte(bucketNames[0]))
 	if lastbucket == nil {
 		return nil, berrors.ErrBucketNotFound
 	}

@@ -235,7 +235,7 @@ func ReadMetaPageAt(dbPath string, metaPageId uint32, pageSize uint32) (*common.
 		return nil, nil, fmt.Errorf("invalid metaPageId: %d", metaPageId)
 	}
 
-	f, err := os.OpenFile(dbPath, os.O_RDONLY, 0444)
+	f, err := os.OpenFile(dbPath, os.O_RDONLY, 0o444)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -260,7 +260,7 @@ func writeMetaPageAt(dbPath string, buf []byte, metaPageId uint32, pageSize uint
 		return fmt.Errorf("invalid metaPageId: %d", metaPageId)
 	}
 
-	f, err := os.OpenFile(dbPath, os.O_RDWR, 0666)
+	f, err := os.OpenFile(dbPath, os.O_RDWR, 0o666)
 	if err != nil {
 		return err
 	}

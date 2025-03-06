@@ -169,7 +169,7 @@ func (c *Cursor) seek(seek []byte) (key []byte, value []byte, flags uint32) {
 func (c *Cursor) goToFirstElementOnTheStack() {
 	for {
 		// Exit when we hit a leaf page.
-		var ref = &c.stack[len(c.stack)-1]
+		ref := &c.stack[len(c.stack)-1]
 		if ref.isLeaf() {
 			break
 		}
@@ -204,7 +204,7 @@ func (c *Cursor) last() {
 		}
 		p, n := c.bucket.pageNode(pgId)
 
-		var nextRef = elemRef{page: p, node: n}
+		nextRef := elemRef{page: p, node: n}
 		nextRef.index = nextRef.count() - 1
 		c.stack = append(c.stack, nextRef)
 	}
@@ -396,7 +396,7 @@ func (c *Cursor) node() *node {
 	}
 
 	// Start from root and traverse down the hierarchy.
-	var n = c.stack[0].node
+	n := c.stack[0].node
 	if n == nil {
 		n = c.bucket.node(c.stack[0].page.Id(), nil)
 	}

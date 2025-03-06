@@ -191,7 +191,7 @@ func (tx *Tx) Commit() (err error) {
 	// TODO(benbjohnson): Use vectorized I/O to write out dirty pages.
 
 	// Rebalance nodes which have had deletions.
-	var startTime = time.Now()
+	startTime := time.Now()
 	tx.root.rebalance()
 	if tx.stats.GetRebalance() > 0 {
 		tx.stats.IncRebalanceTime(time.Since(startTime))
@@ -348,9 +348,9 @@ func (tx *Tx) close() {
 	}
 	if tx.writable {
 		// Grab freelist stats.
-		var freelistFreeN = tx.db.freelist.FreeCount()
-		var freelistPendingN = tx.db.freelist.PendingCount()
-		var freelistAlloc = tx.db.freelist.EstimatedWritePageSize()
+		freelistFreeN := tx.db.freelist.FreeCount()
+		freelistPendingN := tx.db.freelist.PendingCount()
+		freelistAlloc := tx.db.freelist.EstimatedWritePageSize()
 
 		// Remove transaction ref & writer lock.
 		tx.db.rwtx = nil

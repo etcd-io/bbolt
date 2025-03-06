@@ -84,13 +84,15 @@ func (tx *Tx) check(cfg checkConfig, ch chan error) {
 }
 
 func (tx *Tx) recursivelyCheckPage(pageId common.Pgid, reachable map[common.Pgid]*common.Page, freed map[common.Pgid]bool,
-	kvStringer KVStringer, ch chan error) {
+	kvStringer KVStringer, ch chan error,
+) {
 	tx.checkInvariantProperties(pageId, reachable, freed, kvStringer, ch)
 	tx.recursivelyCheckBucketInPage(pageId, reachable, freed, kvStringer, ch)
 }
 
 func (tx *Tx) recursivelyCheckBucketInPage(pageId common.Pgid, reachable map[common.Pgid]*common.Page, freed map[common.Pgid]bool,
-	kvStringer KVStringer, ch chan error) {
+	kvStringer KVStringer, ch chan error,
+) {
 	p := tx.page(pageId)
 
 	switch {
@@ -121,7 +123,8 @@ func (tx *Tx) recursivelyCheckBucketInPage(pageId common.Pgid, reachable map[com
 }
 
 func (tx *Tx) recursivelyCheckBucket(b *Bucket, reachable map[common.Pgid]*common.Page, freed map[common.Pgid]bool,
-	kvStringer KVStringer, ch chan error) {
+	kvStringer KVStringer, ch chan error,
+) {
 	// Ignore inline buckets.
 	if b.RootPage() == 0 {
 		return
@@ -139,7 +142,8 @@ func (tx *Tx) recursivelyCheckBucket(b *Bucket, reachable map[common.Pgid]*commo
 }
 
 func (tx *Tx) checkInvariantProperties(pageId common.Pgid, reachable map[common.Pgid]*common.Page, freed map[common.Pgid]bool,
-	kvStringer KVStringer, ch chan error) {
+	kvStringer KVStringer, ch chan error,
+) {
 	tx.forEachPage(pageId, func(p *common.Page, _ int, stack []common.Pgid) {
 		verifyPageReachable(p, tx.meta.Pgid(), stack, reachable, freed, ch)
 	})
@@ -154,7 +158,7 @@ func verifyPageReachable(p *common.Page, hwm common.Pgid, stack []common.Pgid, r
 
 	// Ensure each page is only referenced once.
 	for i := common.Pgid(0); i <= common.Pgid(p.Overflow()); i++ {
-		var id = p.Id() + i
+		id := p.Id() + i
 		if _, ok := reachable[id]; ok {
 			ch <- fmt.Errorf("page %d: multiple references (stack: %v)", int(id), stack)
 		}
@@ -184,8 +188,8 @@ func (tx *Tx) recursivelyCheckPageKeyOrder(pgId common.Pgid, keyToString func([]
 //     `pagesStack` is expected to contain IDs of pages from the tree root to `pgid` for the clean debugging message.
 func (tx *Tx) recursivelyCheckPageKeyOrderInternal(
 	pgId common.Pgid, minKeyClosed, maxKeyOpen []byte, pagesStack []common.Pgid,
-	keyToString func([]byte) string, ch chan error) (maxKeyInSubtree []byte) {
-
+	keyToString func([]byte) string, ch chan error,
+) (maxKeyInSubtree []byte) {
 	p := tx.page(pgId)
 	pagesStack = append(pagesStack, pgId)
 	switch {
