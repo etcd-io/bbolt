@@ -6,21 +6,19 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func createDb(t *testing.T) (*DB, func()) {
 	// First, create a temporary directory to be used for the duration of
 	// this test.
 	tempDirName, err := os.MkdirTemp("", "bboltmemtest")
-	if err != nil {
-		t.Fatalf("error creating temp dir: %v", err)
-	}
+	require.NoErrorf(t, err, "error creating temp dir: %v", err)
 	path := filepath.Join(tempDirName, "testdb.db")
 
 	bdb, err := Open(path, 0600, nil)
-	if err != nil {
-		t.Fatalf("error creating bbolt db: %v", err)
-	}
+	require.NoErrorf(t, err, "error creating bbolt db: %v", err)
 
 	cleanup := func() {
 		bdb.Close()
@@ -56,9 +54,7 @@ func createAndPutKeys(t *testing.T) {
 
 			return nil
 		})
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 	}
 }
 

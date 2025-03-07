@@ -17,6 +17,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
@@ -197,14 +198,10 @@ func concurrentReadAndWrite(t *testing.T,
 		testDuration)
 
 	t.Log("Analyzing the history records.")
-	if err := validateSequential(records); err != nil {
-		t.Errorf("The history records are not sequential:\n %v", err)
-	}
+	require.NoErrorf(t, validateSequential(records), "The history records are not sequential")
 
 	t.Log("Checking database consistency.")
-	if err := checkConsistency(t, db); err != nil {
-		t.Errorf("The data isn't consistency: %v", err)
-	}
+	assert.NoErrorf(t, checkConsistency(t, db), "The data isn't consistency")
 
 	panicked = false
 	// TODO (ahrtr):
@@ -225,8 +222,7 @@ func mustReOpenDB(t *testing.T, db *bolt.DB, o *bolt.Options) *bolt.DB {
 	f := db.Path()
 
 	t.Logf("Closing bbolt DB at: %s", f)
-	err := db.Close()
-	require.NoError(t, err)
+	require.NoError(t, db.Close())
 
 	return mustOpenDB(t, f, o)
 }
@@ -311,9 +307,7 @@ func runWorkers(t *testing.T,
 
 	close(stopCh)
 	t.Log("Waiting for all workers to finish.")
-	if err := g.Wait(); err != nil {
-		t.Errorf("Received error: %v", err)
-	}
+	assert.NoErrorf(t, g.Wait(), "Received error")
 
 	return rs
 }
@@ -547,9 +541,7 @@ func saveDataIfFailed(t *testing.T, db *bolt.DB, rs historyRecords, force bool) 
 	if t.Failed() || force {
 		t.Log("Saving data...")
 		dbPath := db.Path()
-		if err := db.Close(); err != nil {
-			t.Errorf("Failed to close db: %v", err)
-		}
+		require.NoErrorf(t, db.Close(), "Failed to close db")
 		backupPath := testResultsDirectory(t)
 		backupDB(t, dbPath, backupPath)
 		persistHistoryRecords(t, rs, backupPath)
@@ -559,8 +551,7 @@ func saveDataIfFailed(t *testing.T, db *bolt.DB, rs historyRecords, force bool) 
 func backupDB(t *testing.T, srcPath string, dstPath string) {
 	targetFile := filepath.Join(dstPath, "db.bak")
 	t.Logf("Saving the DB file to %s", targetFile)
-	err := copyFile(srcPath, targetFile)
-	require.NoError(t, err)
+	require.NoError(t, copyFile(srcPath, targetFile))
 	t.Logf("DB file saved to %s", targetFile)
 }
 
