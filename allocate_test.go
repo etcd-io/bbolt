@@ -3,6 +3,9 @@ package bbolt
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"go.etcd.io/bbolt/internal/common"
 	"go.etcd.io/bbolt/internal/freelist"
 )
@@ -26,14 +29,11 @@ func TestTx_allocatePageStats(t *testing.T) {
 			prePageCnt := txStats.GetPageCount()
 			allocateCnt := f.FreeCount()
 
-			if _, err := tx.allocate(allocateCnt); err != nil {
-				t.Fatal(err)
-			}
+			_, err := tx.allocate(allocateCnt)
+			require.NoError(t, err)
 
 			txStats = tx.Stats()
-			if txStats.GetPageCount() != prePageCnt+int64(allocateCnt) {
-				t.Errorf("Allocated %d but got %d page in stats", allocateCnt, txStats.GetPageCount())
-			}
+			assert.Equalf(t, txStats.GetPageCount(), prePageCnt+int64(allocateCnt), "Allocated %d but got %d page in stats", allocateCnt, txStats.GetPageCount())
 		})
 	}
 }

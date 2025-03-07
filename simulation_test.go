@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	bolt "go.etcd.io/bbolt"
 	"go.etcd.io/bbolt/internal/btesting"
 )
@@ -138,9 +140,7 @@ func testSimulate(t *testing.T, openOption *bolt.Options, round, threadCount, pa
 		t.Logf("transactions:%d ignored:%d", opCount, igCount)
 		close(errCh)
 		for err := range errCh {
-			if err != nil {
-				t.Fatalf("error from inside goroutine: %v", err)
-			}
+			require.NoErrorf(t, err, "error from inside goroutine: %v", err)
 		}
 
 		db.MustClose()

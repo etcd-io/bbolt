@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -50,20 +49,13 @@ func TestOpen(t *testing.T) {
 	path := tempfile()
 	defer os.RemoveAll(path)
 
-	db, err := bolt.Open(path, 0600, nil)
-	if err != nil {
-		t.Fatal(err)
-	} else if db == nil {
-		t.Fatal("expected db")
-	}
+	db, err := bolt.Open(path, 0o600, nil)
+	require.NoError(t, err)
+	require.NotNilf(t, db, "expected db")
 
-	if s := db.Path(); s != path {
-		t.Fatalf("unexpected path: %s", s)
-	}
+	require.Equalf(t, db.Path(), path, "unexpected path")
 
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, db.Close())
 }
 
 // Regression validation for https://github.com/etcd-io/bbolt/pull/122.
@@ -86,7 +78,7 @@ func TestOpen_MultipleGoroutines(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				db, err := bolt.Open(path, 0600, nil)
+				db, err := bolt.Open(path, 0o600, nil)
 				if err != nil {
 					errCh <- err
 					return
@@ -101,26 +93,20 @@ func TestOpen_MultipleGoroutines(t *testing.T) {
 	}
 	close(errCh)
 	for err := range errCh {
-		if err != nil {
-			t.Fatalf("error from inside goroutine: %v", err)
-		}
+		require.NoErrorf(t, err, "error from inside goroutine: %v", err)
 	}
 }
 
 // Ensure that opening a database with a blank path returns an error.
 func TestOpen_ErrPathRequired(t *testing.T) {
-	_, err := bolt.Open("", 0600, nil)
-	if err == nil {
-		t.Fatalf("expected error")
-	}
+	_, err := bolt.Open("", 0o600, nil)
+	require.Errorf(t, err, "expected error")
 }
 
 // Ensure that opening a database with a bad path returns an error.
 func TestOpen_ErrNotExists(t *testing.T) {
-	_, err := bolt.Open(filepath.Join(tempfile(), "bad-path"), 0600, nil)
-	if err == nil {
-		t.Fatal("expected error")
-	}
+	_, err := bolt.Open(filepath.Join(tempfile(), "bad-path"), 0o600, nil)
+	require.Errorf(t, err, "expected error")
 }
 
 // Ensure that opening a file that is not a Bolt database returns ErrInvalid.
@@ -129,19 +115,13 @@ func TestOpen_ErrInvalid(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	f, err := os.Create(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := fmt.Fprintln(f, "this is not a bolt database"); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.Close(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+	_, err = fmt.Fprintln(f, "this is not a bolt database")
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
 
-	if _, err := bolt.Open(path, 0600, nil); err != berrors.ErrInvalid {
-		t.Fatalf("unexpected error: %s", err)
-	}
+	_, err = bolt.Open(path, 0o600, nil)
+	require.Equalf(t, err, berrors.ErrInvalid, "unexpected error: %s", err)
 }
 
 // Ensure that opening a file with two invalid versions returns ErrVersionMismatch.
@@ -155,29 +135,22 @@ func TestOpen_ErrVersionMismatch(t *testing.T) {
 	path := db.Path()
 
 	// Close database.
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, db.Close())
 
 	// Read data file.
 	buf, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// Rewrite meta pages.
 	meta0 := (*meta)(unsafe.Pointer(&buf[pageHeaderSize]))
 	meta0.version++
 	meta1 := (*meta)(unsafe.Pointer(&buf[pageSize+pageHeaderSize]))
 	meta1.version++
-	if err := os.WriteFile(path, buf, 0666); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(path, buf, 0o666))
 
 	// Reopen data file.
-	if _, err := bolt.Open(path, 0600, nil); err != berrors.ErrVersionMismatch {
-		t.Fatalf("unexpected error: %s", err)
-	}
+	_, err = bolt.Open(path, 0o600, nil)
+	require.Equalf(t, err, berrors.ErrVersionMismatch, "unexpected error: %s", err)
 }
 
 // Ensure that opening a file with two invalid checksums returns ErrChecksum.
@@ -191,29 +164,22 @@ func TestOpen_ErrChecksum(t *testing.T) {
 	path := db.Path()
 
 	// Close database.
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, db.Close())
 
 	// Read data file.
 	buf, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// Rewrite meta pages.
 	meta0 := (*meta)(unsafe.Pointer(&buf[pageHeaderSize]))
 	meta0.pgid++
 	meta1 := (*meta)(unsafe.Pointer(&buf[pageSize+pageHeaderSize]))
 	meta1.pgid++
-	if err := os.WriteFile(path, buf, 0666); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(path, buf, 0o666))
 
 	// Reopen data file.
-	if _, err := bolt.Open(path, 0600, nil); err != berrors.ErrChecksum {
-		t.Fatalf("unexpected error: %s", err)
-	}
+	_, err = bolt.Open(path, 0o600, nil)
+	require.Equalf(t, err, berrors.ErrChecksum, "unexpected error: %s", err)
 }
 
 // Ensure that it can read the page size from the second meta page if the first one is invalid.
@@ -227,16 +193,12 @@ func TestOpen_ReadPageSize_FromMeta1_OS(t *testing.T) {
 
 	// Read data file.
 	buf, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// Rewrite first meta page.
 	meta0 := (*meta)(unsafe.Pointer(&buf[pageHeaderSize]))
 	meta0.pgid++
-	if err := os.WriteFile(path, buf, 0666); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(path, buf, 0o666))
 
 	// Reopen data file.
 	db = btesting.MustOpenDBWithOption(t, path, nil)
@@ -265,8 +227,7 @@ func TestOpen_ReadPageSize_FromMeta1_Given(t *testing.T) {
 			t.Logf("#%d: Intentionally corrupt the first meta page for pageSize %d", i, givenPageSize)
 			meta0 := (*meta)(unsafe.Pointer(&buf[pageHeaderSize]))
 			meta0.pgid++
-			err = os.WriteFile(path, buf, 0666)
-			require.NoError(t, err)
+			require.NoError(t, os.WriteFile(path, buf, 0o666))
 		}
 
 		// Reopen data file.
@@ -289,40 +250,27 @@ func TestOpen_Size(t *testing.T) {
 		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
 		func(tx int, k int) []byte { return make([]byte, 1000) },
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	path := db.Path()
 	db.MustClose()
 
 	sz := fileSize(path)
-	if sz == 0 {
-		t.Fatalf("unexpected new file size: %d", sz)
-	}
+	require.NotEqualf(t, 0, sz, "unexpected new file size: %d", sz)
 
 	db.MustReopen()
-	if err := db.Update(func(tx *bolt.Tx) error {
-		if err := tx.Bucket([]byte("data")).Put([]byte{0}, []byte{0}); err != nil {
-			t.Fatal(err)
-		}
+	err = db.Update(func(tx *bolt.Tx) error {
+		require.NoError(t, tx.Bucket([]byte("data")).Put([]byte{0}, []byte{0}))
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
 	newSz := fileSize(path)
-	if newSz == 0 {
-		t.Fatalf("unexpected new file size: %d", newSz)
-	}
+	require.NotEqualf(t, 0, newSz, "unexpected new file size: %d", newSz)
 
 	// Compare the original size with the new size.
 	// db size might increase by a few page sizes due to the new small update.
-	if sz < newSz-5*int64(pagesize) {
-		t.Fatalf("unexpected file growth: %d => %d", sz, newSz)
-	}
+	require.GreaterOrEqualf(t, sz, newSz-5*int64(pagesize), "unexpected file growth: %d => %d", sz, newSz)
 }
 
 // Ensure that opening a database beyond the max step size does not increase its size.
@@ -341,55 +289,38 @@ func TestOpen_Size_Large(t *testing.T) {
 	// Insert until we get above the minimum 4MB size.
 	var index uint64
 	for i := 0; i < 10000; i++ {
-		if err := db.Update(func(tx *bolt.Tx) error {
+		err := db.Update(func(tx *bolt.Tx) error {
 			b, _ := tx.CreateBucketIfNotExists([]byte("data"))
 			for j := 0; j < 1000; j++ {
-				if err := b.Put(u64tob(index), make([]byte, 50)); err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, b.Put(u64tob(index), make([]byte, 50)))
 				index++
 			}
 			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
+		require.NoError(t, err)
 	}
 
 	// Close database and grab the size.
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, db.Close())
 	sz := fileSize(path)
-	if sz == 0 {
-		t.Fatalf("unexpected new file size: %d", sz)
-	} else if sz < (1 << 30) {
-		t.Fatalf("expected larger initial size: %d", sz)
-	}
+	require.NotEqualf(t, 0, sz, "unexpected new file size: %d", sz)
+	require.GreaterOrEqualf(t, sz, int64(1<<30), "expected larger initial size: %d", sz)
 
 	// Reopen database, update, and check size again.
-	db0, err := bolt.Open(path, 0600, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db0.Update(func(tx *bolt.Tx) error {
+	db0, err := bolt.Open(path, 0o600, nil)
+	require.NoError(t, err)
+	err = db0.Update(func(tx *bolt.Tx) error {
 		return tx.Bucket([]byte("data")).Put([]byte{0}, []byte{0})
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := db0.Close(); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
+	require.NoError(t, db0.Close())
 
 	newSz := fileSize(path)
-	if newSz == 0 {
-		t.Fatalf("unexpected new file size: %d", newSz)
-	}
+	require.NotEqualf(t, 0, newSz, "unexpected new file size: %d", newSz)
 
 	// Compare the original size with the new size.
 	// db size might increase by a few page sizes due to the new small update.
-	if sz < newSz-5*int64(pagesize) {
-		t.Fatalf("unexpected file growth: %d => %d", sz, newSz)
-	}
+	require.GreaterOrEqualf(t, sz, newSz-5*int64(pagesize), "unexpected file growth: %d => %d", sz, newSz)
 }
 
 // Ensure that a re-opened database is consistent.
@@ -397,27 +328,15 @@ func TestOpen_Check(t *testing.T) {
 	path := tempfile()
 	defer os.RemoveAll(path)
 
-	db, err := bolt.Open(path, 0600, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = db.View(func(tx *bolt.Tx) error { return <-tx.Check() }); err != nil {
-		t.Fatal(err)
-	}
-	if err = db.Close(); err != nil {
-		t.Fatal(err)
-	}
+	db, err := bolt.Open(path, 0o600, nil)
+	require.NoError(t, err)
+	require.NoError(t, db.View(func(tx *bolt.Tx) error { return <-tx.Check() }))
+	require.NoError(t, db.Close())
 
-	db, err = bolt.Open(path, 0600, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.View(func(tx *bolt.Tx) error { return <-tx.Check() }); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
+	db, err = bolt.Open(path, 0o600, nil)
+	require.NoError(t, err)
+	require.NoError(t, db.View(func(tx *bolt.Tx) error { return <-tx.Check() }))
+	require.NoError(t, db.Close())
 }
 
 // Ensure that write errors to the meta file handler during initialization are returned.
@@ -430,24 +349,16 @@ func TestOpen_FileTooSmall(t *testing.T) {
 	path := tempfile()
 	defer os.RemoveAll(path)
 
-	db, err := bolt.Open(path, 0600, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	db, err := bolt.Open(path, 0o600, nil)
+	require.NoError(t, err)
 	pageSize := int64(db.Info().PageSize)
-	if err = db.Close(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, db.Close())
 
 	// corrupt the database
-	if err = os.Truncate(path, pageSize); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.Truncate(path, pageSize))
 
-	_, err = bolt.Open(path, 0600, nil)
-	if err == nil || !strings.Contains(err.Error(), "file size too small") {
-		t.Fatalf("unexpected error: %s", err)
-	}
+	_, err = bolt.Open(path, 0o600, nil)
+	require.ErrorContainsf(t, err, "file size too small", "unexpected error: %s", err)
 }
 
 // TestDB_Open_InitialMmapSize tests if having InitialMmapSize large enough
@@ -461,34 +372,23 @@ func TestDB_Open_InitialMmapSize(t *testing.T) {
 	initMmapSize := 1 << 30  // 1GB
 	testWriteSize := 1 << 27 // 134MB
 
-	db, err := bolt.Open(path, 0600, &bolt.Options{InitialMmapSize: initMmapSize})
-	if err != nil {
-		t.Fatal(err)
-	}
+	db, err := bolt.Open(path, 0o600, &bolt.Options{InitialMmapSize: initMmapSize})
+	require.NoError(t, err)
 
 	// create a long-running read transaction
 	// that never gets closed while writing
 	rtx, err := db.Begin(false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// create a write transaction
 	wtx, err := db.Begin(true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	b, err := wtx.CreateBucket([]byte("test"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// and commit a large write
-	err = b.Put([]byte("foo"), make([]byte, testWriteSize))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, b.Put([]byte("foo"), make([]byte, testWriteSize)))
 
 	done := make(chan error, 1)
 
@@ -501,14 +401,10 @@ func TestDB_Open_InitialMmapSize(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Errorf("unexpected that the reader blocks writer")
 	case err := <-done:
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 	}
 
-	if err := rtx.Rollback(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, rtx.Rollback())
 }
 
 // TestDB_Open_ReadOnly checks a database in read only mode can read but not write.
@@ -516,57 +412,42 @@ func TestDB_Open_ReadOnly(t *testing.T) {
 	// Create a writable db, write k-v and close it.
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("foo"), []byte("bar")); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+		require.NoError(t, b.Put([]byte("foo"), []byte("bar")))
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
 
 	f := db.Path()
 	o := &bolt.Options{ReadOnly: true}
-	readOnlyDB, err := bolt.Open(f, 0600, o)
+	readOnlyDB, err := bolt.Open(f, 0o600, o)
 	if err != nil {
 		panic(err)
 	}
 
-	if !readOnlyDB.IsReadOnly() {
-		t.Fatal("expect db in read only mode")
-	}
+	require.Truef(t, readOnlyDB.IsReadOnly(), "expect db in read only mode")
 
 	// Read from a read-only transaction.
-	if err := readOnlyDB.View(func(tx *bolt.Tx) error {
+	err = readOnlyDB.View(func(tx *bolt.Tx) error {
 		value := tx.Bucket([]byte("widgets")).Get([]byte("foo"))
-		if !bytes.Equal(value, []byte("bar")) {
-			t.Fatal("expect value 'bar', got", value)
-		}
+		require.Truef(t, bytes.Equal(value, []byte("bar")), "expect value 'bar', got %s", value)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	// Can't launch read-write transaction.
-	if _, err := readOnlyDB.Begin(true); err != berrors.ErrDatabaseReadOnly {
-		t.Fatalf("unexpected error: %s", err)
-	}
+	_, err = readOnlyDB.Begin(true)
+	require.Equalf(t, err, berrors.ErrDatabaseReadOnly, "unexpected error: %s", err)
 
-	if err := readOnlyDB.Close(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, readOnlyDB.Close())
 }
 
 func TestDB_Open_ReadOnly_NoCreate(t *testing.T) {
 	f := filepath.Join(t.TempDir(), "db")
-	_, err := bolt.Open(f, 0600, &bolt.Options{ReadOnly: true})
+	_, err := bolt.Open(f, 0o600, &bolt.Options{ReadOnly: true})
 	require.ErrorIs(t, err, os.ErrNotExist)
 }
 
@@ -579,9 +460,8 @@ func TestOpen_BigPage(t *testing.T) {
 
 	db2 := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: pageSize * 4})
 
-	if db1sz, db2sz := fileSize(db1.Path()), fileSize(db2.Path()); db1sz >= db2sz {
-		t.Errorf("expected %d < %d", db1sz, db2sz)
-	}
+	db1sz, db2sz := fileSize(db1.Path()), fileSize(db2.Path())
+	assert.Lessf(t, db1sz, db2sz, "expected %d < %d", db1sz, db2sz)
 }
 
 // TestOpen_RecoverFreeList tests opening the DB with free-list
@@ -592,49 +472,32 @@ func TestOpen_RecoverFreeList(t *testing.T) {
 
 	// Write some pages.
 	tx, err := db.Begin(true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	wbuf := make([]byte, 8192)
 	for i := 0; i < 100; i++ {
 		s := fmt.Sprintf("%d", i)
 		b, err := tx.CreateBucket([]byte(s))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err = b.Put([]byte(s), wbuf); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+		require.NoError(t, b.Put([]byte(s), wbuf))
 	}
-	if err = tx.Commit(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, tx.Commit())
 
 	// Generate free pages.
-	if tx, err = db.Begin(true); err != nil {
-		t.Fatal(err)
-	}
+	tx, err = db.Begin(true)
+	require.NoError(t, err)
 	for i := 0; i < 50; i++ {
 		s := fmt.Sprintf("%d", i)
 		b := tx.Bucket([]byte(s))
-		if b == nil {
-			t.Fatal(err)
-		}
-		if err := b.Delete([]byte(s)); err != nil {
-			t.Fatal(err)
-		}
+		require.NotNil(t, b)
+		require.NoError(t, b.Delete([]byte(s)))
 	}
-	if err := tx.Commit(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, tx.Commit())
 	db.MustClose()
 
 	// Record freelist count from opening with NoFreelistSync.
 	db.MustReopen()
 	freepages := db.Stats().FreePageN
-	if freepages == 0 {
-		t.Fatalf("no free pages on NoFreelistSync reopen")
-	}
+	require.NotEqualf(t, 0, freepages, "no free pages on NoFreelistSync reopen")
 	db.MustClose()
 
 	// Check free page count is reconstructed when opened with freelist sync.
@@ -642,17 +505,15 @@ func TestOpen_RecoverFreeList(t *testing.T) {
 	db.MustReopen()
 	// One less free page for syncing the free list on open.
 	freepages--
-	if fp := db.Stats().FreePageN; fp < freepages {
-		t.Fatalf("closed with %d free pages, opened with %d", freepages, fp)
-	}
+	fp := db.Stats().FreePageN
+	require.GreaterOrEqualf(t, fp, freepages, "closed with %d free pages, opened with %d", freepages, fp)
 }
 
 // Ensure that a database cannot open a transaction when it's not open.
 func TestDB_Begin_ErrDatabaseNotOpen(t *testing.T) {
 	var db bolt.DB
-	if _, err := db.Begin(false); err != berrors.ErrDatabaseNotOpen {
-		t.Fatalf("unexpected error: %s", err)
-	}
+	_, err := db.Begin(false)
+	require.Equalf(t, err, berrors.ErrDatabaseNotOpen, "unexpected error: %s", err)
 }
 
 // Ensure that a read-write transaction can be retrieved.
@@ -661,10 +522,10 @@ func TestDB_BeginRW(t *testing.T) {
 
 	tx, err := db.Begin(true)
 	require.NoError(t, err)
-	require.NotNil(t, tx, "expected tx")
+	require.NotNilf(t, tx, "expected tx")
 	defer func() { require.NoError(t, tx.Commit()) }()
 
-	require.True(t, tx.Writable(), "expected writable tx")
+	require.Truef(t, tx.Writable(), "expected writable tx")
 	require.Same(t, db.DB, tx.DB())
 }
 
@@ -691,7 +552,7 @@ func TestDB_Concurrent_WriteTo_and_ConsistentRead(t *testing.T) {
 		defer wg.Done()
 		time.Sleep(time.Duration(rand.Intn(200)+10) * time.Millisecond)
 		f := filepath.Join(t.TempDir(), fmt.Sprintf("%d-bolt-", round))
-		err := tx.CopyFile(f, 0600)
+		err := tx.CopyFile(f, 0o600)
 		require.NoError(t, err)
 
 		// read all the data
@@ -710,8 +571,7 @@ func TestDB_Concurrent_WriteTo_and_ConsistentRead(t *testing.T) {
 		dataCache[round] = dataSlice
 		dataLock.Unlock()
 
-		err = tx.Rollback()
-		require.NoError(t, err)
+		require.NoError(t, tx.Rollback())
 
 		copyOpt := *o
 		snap := btesting.MustOpenDBWithOption(t, f, &copyOpt)
@@ -742,8 +602,7 @@ func TestDB_Concurrent_WriteTo_and_ConsistentRead(t *testing.T) {
 				require.NoError(t, perr)
 			}
 		}
-		err = tx.Commit()
-		require.NoError(t, err)
+		require.NoError(t, tx.Commit())
 	}
 	wg.Wait()
 
@@ -755,7 +614,7 @@ func TestDB_Concurrent_WriteTo_and_ConsistentRead(t *testing.T) {
 		for i := 1; i < len(dataSlice); i++ {
 			datai := dataSlice[i]
 			same := reflect.DeepEqual(data0, datai)
-			require.True(t, same, fmt.Sprintf("found inconsistent data in round %d, data[0]: %v, data[%d] : %v", round, data0, i, datai))
+			require.Truef(t, same, "found inconsistent data in round %d, data[0]: %v, data[%d] : %v", round, data0, i, datai)
 		}
 	}
 }
@@ -763,9 +622,8 @@ func TestDB_Concurrent_WriteTo_and_ConsistentRead(t *testing.T) {
 // Ensure that opening a transaction while the DB is closed returns an error.
 func TestDB_BeginRW_Closed(t *testing.T) {
 	var db bolt.DB
-	if _, err := db.Begin(true); err != berrors.ErrDatabaseNotOpen {
-		t.Fatalf("unexpected error: %s", err)
-	}
+	_, err := db.Begin(true)
+	require.Equalf(t, err, berrors.ErrDatabaseNotOpen, "unexpected error: %s", err)
 }
 
 func TestDB_Close_PendingTx_RW(t *testing.T) { testDB_Close_PendingTx(t, true) }
@@ -777,9 +635,7 @@ func testDB_Close_PendingTx(t *testing.T, writable bool) {
 
 	// Start transaction.
 	tx, err := db.Begin(writable)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// Open update in separate goroutine.
 	startCh := make(chan struct{}, 1)
@@ -796,29 +652,22 @@ func testDB_Close_PendingTx(t *testing.T, writable bool) {
 	time.Sleep(100 * time.Millisecond)
 	select {
 	case err := <-done:
-		if err != nil {
-			t.Errorf("error from inside goroutine: %v", err)
-		}
+		require.NoErrorf(t, err, "error from inside goroutine: %v", err)
 		t.Fatal("database closed too early")
 	default:
 	}
 
 	// Commit/close transaction.
 	if writable {
-		err = tx.Commit()
+		require.NoError(t, tx.Commit())
 	} else {
-		err = tx.Rollback()
-	}
-	if err != nil {
-		t.Fatal(err)
+		require.NoError(t, tx.Rollback())
 	}
 
 	// Ensure database closed now.
 	select {
 	case err := <-done:
-		if err != nil {
-			t.Fatalf("error from inside goroutine: %v", err)
-		}
+		require.NoErrorf(t, err, "error from inside goroutine: %v", err)
 	case <-time.After(5 * time.Second):
 		t.Fatalf("database did not close")
 	}
@@ -827,49 +676,34 @@ func testDB_Close_PendingTx(t *testing.T, writable bool) {
 // Ensure a database can provide a transactional block.
 func TestDB_Update(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("foo"), []byte("bar")); err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("baz"), []byte("bat")); err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Delete([]byte("foo")); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+		require.NoError(t, b.Put([]byte("foo"), []byte("bar")))
+		require.NoError(t, b.Put([]byte("baz"), []byte("bat")))
+		require.NoError(t, b.Delete([]byte("foo")))
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.View(func(tx *bolt.Tx) error {
+	})
+	require.NoError(t, err)
+	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("widgets"))
-		if v := b.Get([]byte("foo")); v != nil {
-			t.Fatalf("expected nil value, got: %v", v)
-		}
-		if v := b.Get([]byte("baz")); !bytes.Equal(v, []byte("bat")) {
-			t.Fatalf("unexpected value: %v", v)
-		}
+		require.Nilf(t, b.Get([]byte("foo")), "expected nil value")
+		v := b.Get([]byte("baz"))
+		require.Truef(t, bytes.Equal(v, []byte("bat")), "unexpected value: %v", v)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure a closed database returns an error while running a transaction block
 func TestDB_Update_Closed(t *testing.T) {
 	var db bolt.DB
-	if err := db.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
-			t.Fatal(err)
-		}
+	err := db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucket([]byte("widgets"))
+		require.NoError(t, err)
 		return nil
-	}); err != berrors.ErrDatabaseNotOpen {
-		t.Fatalf("unexpected error: %s", err)
-	}
+	})
+	require.Equalf(t, err, berrors.ErrDatabaseNotOpen, "unexpected error: %s", err)
 }
 
 // Ensure a panic occurs while trying to commit a managed transaction.
@@ -877,7 +711,7 @@ func TestDB_Update_ManualCommit(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
 	var panicked bool
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -885,16 +719,12 @@ func TestDB_Update_ManualCommit(t *testing.T) {
 				}
 			}()
 
-			if err := tx.Commit(); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, tx.Commit())
 		}()
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	} else if !panicked {
-		t.Fatal("expected panic")
-	}
+	})
+	require.NoError(t, err)
+	require.Truef(t, panicked, "expected panic")
 }
 
 // Ensure a panic occurs while trying to rollback a managed transaction.
@@ -902,7 +732,7 @@ func TestDB_Update_ManualRollback(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
 	var panicked bool
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -910,16 +740,12 @@ func TestDB_Update_ManualRollback(t *testing.T) {
 				}
 			}()
 
-			if err := tx.Rollback(); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, tx.Rollback())
 		}()
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	} else if !panicked {
-		t.Fatal("expected panic")
-	}
+	})
+	require.NoError(t, err)
+	require.Truef(t, panicked, "expected panic")
 }
 
 // Ensure a panic occurs while trying to commit a managed transaction.
@@ -927,7 +753,7 @@ func TestDB_View_ManualCommit(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
 	var panicked bool
-	if err := db.View(func(tx *bolt.Tx) error {
+	err := db.View(func(tx *bolt.Tx) error {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -935,16 +761,12 @@ func TestDB_View_ManualCommit(t *testing.T) {
 				}
 			}()
 
-			if err := tx.Commit(); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, tx.Commit())
 		}()
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	} else if !panicked {
-		t.Fatal("expected panic")
-	}
+	})
+	require.NoError(t, err)
+	require.Truef(t, panicked, "expected panic")
 }
 
 // Ensure a panic occurs while trying to rollback a managed transaction.
@@ -952,7 +774,7 @@ func TestDB_View_ManualRollback(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
 	var panicked bool
-	if err := db.View(func(tx *bolt.Tx) error {
+	err := db.View(func(tx *bolt.Tx) error {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -960,16 +782,12 @@ func TestDB_View_ManualRollback(t *testing.T) {
 				}
 			}()
 
-			if err := tx.Rollback(); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, tx.Rollback())
 		}()
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	} else if !panicked {
-		t.Fatal("expected panic")
-	}
+	})
+	require.NoError(t, err)
+	require.Truef(t, panicked, "expected panic")
 }
 
 // Ensure a write transaction that panics does not hold open locks.
@@ -984,60 +802,50 @@ func TestDB_Update_Panic(t *testing.T) {
 			}
 		}()
 
-		if err := db.Update(func(tx *bolt.Tx) error {
-			if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
-				t.Fatal(err)
-			}
+		err := db.Update(func(tx *bolt.Tx) error {
+			_, err := tx.CreateBucket([]byte("widgets"))
+			require.NoError(t, err)
 			panic("omg")
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
+		require.NoError(t, err)
 	}()
 
 	// Verify we can update again.
-	if err := db.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
-			t.Fatal(err)
-		}
+	err := db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucket([]byte("widgets"))
+		require.NoError(t, err)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	// Verify that our change persisted.
-	if err := db.Update(func(tx *bolt.Tx) error {
-		if tx.Bucket([]byte("widgets")) == nil {
-			t.Fatal("expected bucket")
-		}
+	err = db.Update(func(tx *bolt.Tx) error {
+		require.NotNilf(t, tx.Bucket([]byte("widgets")), "expected bucket")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure a database can return an error through a read-only transactional block.
 func TestDB_View_Error(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.View(func(tx *bolt.Tx) error {
+	err := db.View(func(tx *bolt.Tx) error {
 		return errors.New("xxx")
-	}); err == nil || err.Error() != "xxx" {
-		t.Fatalf("unexpected error: %s", err)
-	}
+	})
+	require.EqualErrorf(t, err, "xxx", "unexpected error: %s", err)
 }
 
 // Ensure a read transaction that panics does not hold open locks.
 func TestDB_View_Panic(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
-			t.Fatal(err)
-		}
+	err := db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucket([]byte("widgets"))
+		require.NoError(t, err)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	// Panic during view transaction but recover.
 	func() {
@@ -1047,112 +855,84 @@ func TestDB_View_Panic(t *testing.T) {
 			}
 		}()
 
-		if err := db.View(func(tx *bolt.Tx) error {
-			if tx.Bucket([]byte("widgets")) == nil {
-				t.Fatal("expected bucket")
-			}
+		err := db.View(func(tx *bolt.Tx) error {
+			require.NotNilf(t, tx.Bucket([]byte("widgets")), "expected bucket")
 			panic("omg")
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
+		require.NoError(t, err)
 	}()
 
 	// Verify that we can still use read transactions.
-	if err := db.View(func(tx *bolt.Tx) error {
-		if tx.Bucket([]byte("widgets")) == nil {
-			t.Fatal("expected bucket")
-		}
+	err = db.View(func(tx *bolt.Tx) error {
+		require.NotNilf(t, tx.Bucket([]byte("widgets")), "expected bucket")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that DB stats can be returned.
 func TestDB_Stats(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucket([]byte("widgets"))
 		return err
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	stats := db.Stats()
-	if stats.TxStats.GetPageCount() != 2 {
-		t.Fatalf("unexpected TxStats.PageCount: %d", stats.TxStats.GetPageCount())
-	} else if stats.FreePageN != 0 {
-		t.Fatalf("unexpected FreePageN != 0: %d", stats.FreePageN)
-	} else if stats.PendingPageN != 2 {
-		t.Fatalf("unexpected PendingPageN != 2: %d", stats.PendingPageN)
-	}
+	require.Equalf(t, int64(2), stats.TxStats.GetPageCount(), "unexpected TxStats.PageCount: %d", stats.TxStats.GetPageCount())
+	require.Equalf(t, 0, stats.FreePageN, "unexpected FreePageN != 0: %d", stats.FreePageN)
+	require.Equalf(t, 2, stats.PendingPageN, "unexpected PendingPageN != 2: %d", stats.PendingPageN)
 }
 
 // Ensure that database pages are in expected order and type.
 func TestDB_Consistency(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucket([]byte("widgets"))
 		return err
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	for i := 0; i < 10; i++ {
-		if err := db.Update(func(tx *bolt.Tx) error {
-			if err := tx.Bucket([]byte("widgets")).Put([]byte("foo"), []byte("bar")); err != nil {
-				t.Fatal(err)
-			}
+		err := db.Update(func(tx *bolt.Tx) error {
+			err := tx.Bucket([]byte("widgets")).Put([]byte("foo"), []byte("bar"))
+			require.NoError(t, err)
 			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
+		require.NoError(t, err)
 	}
 
-	if err := db.Update(func(tx *bolt.Tx) error {
-		if p, _ := tx.Page(0); p == nil {
-			t.Fatal("expected page")
-		} else if p.Type != "meta" {
-			t.Fatalf("unexpected page type: %s", p.Type)
-		}
+	err = db.Update(func(tx *bolt.Tx) error {
+		p, _ := tx.Page(0)
+		require.NotNilf(t, p, "expected page")
+		require.Equalf(t, "meta", p.Type, "unexpected page type: %s", p.Type)
 
-		if p, _ := tx.Page(1); p == nil {
-			t.Fatal("expected page")
-		} else if p.Type != "meta" {
-			t.Fatalf("unexpected page type: %s", p.Type)
-		}
+		p, _ = tx.Page(1)
+		require.NotNilf(t, p, "expected page")
+		require.Equalf(t, "meta", p.Type, "unexpected page type: %s", p.Type)
 
-		if p, _ := tx.Page(2); p == nil {
-			t.Fatal("expected page")
-		} else if p.Type != "free" {
-			t.Fatalf("unexpected page type: %s", p.Type)
-		}
+		p, _ = tx.Page(2)
+		require.NotNilf(t, p, "expected page")
+		require.Equalf(t, "free", p.Type, "unexpected page type: %s", p.Type)
 
-		if p, _ := tx.Page(3); p == nil {
-			t.Fatal("expected page")
-		} else if p.Type != "free" {
-			t.Fatalf("unexpected page type: %s", p.Type)
-		}
+		p, _ = tx.Page(3)
+		require.NotNilf(t, p, "expected page")
+		require.Equalf(t, "free", p.Type, "unexpected page type: %s", p.Type)
 
-		if p, _ := tx.Page(4); p == nil {
-			t.Fatal("expected page")
-		} else if p.Type != "leaf" {
-			t.Fatalf("unexpected page type: %s", p.Type)
-		}
+		p, _ = tx.Page(4)
+		require.NotNilf(t, p, "expected page")
+		require.Equalf(t, "leaf", p.Type, "unexpected page type: %s", p.Type)
 
-		if p, _ := tx.Page(5); p == nil {
-			t.Fatal("expected page")
-		} else if p.Type != "freelist" {
-			t.Fatalf("unexpected page type: %s", p.Type)
-		}
+		p, _ = tx.Page(5)
+		require.NotNilf(t, p, "expected page")
+		require.Equalf(t, "freelist", p.Type, "unexpected page type: %s", p.Type)
 
-		if p, _ := tx.Page(6); p != nil {
-			t.Fatal("unexpected page")
-		}
+		p, _ = tx.Page(6)
+		require.Nilf(t, p, "unexpected page")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that DB stats can be subtracted from one another.
@@ -1163,28 +943,22 @@ func TestDBStats_Sub(t *testing.T) {
 	b.TxStats.PageCount = 10
 	b.FreePageN = 14
 	diff := b.Sub(&a)
-	if diff.TxStats.GetPageCount() != 7 {
-		t.Fatalf("unexpected TxStats.PageCount: %d", diff.TxStats.GetPageCount())
-	}
+	require.Equalf(t, int64(7), diff.TxStats.GetPageCount(), "unexpected TxStats.PageCount: %d", diff.TxStats.GetPageCount())
 
 	// free page stats are copied from the receiver and not subtracted
-	if diff.FreePageN != 14 {
-		t.Fatalf("unexpected FreePageN: %d", diff.FreePageN)
-	}
+	require.Equalf(t, 14, diff.FreePageN, "unexpected FreePageN: %d", diff.FreePageN)
 }
 
 // Ensure two functions can perform updates in a single batch.
 func TestDB_Batch(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
-			t.Fatal(err)
-		}
+	err := db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucket([]byte("widgets"))
+		require.NoError(t, err)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	// Iterate over multiple updates in separate goroutines.
 	n := 2
@@ -1199,30 +973,26 @@ func TestDB_Batch(t *testing.T) {
 
 	// Check all responses to make sure there's no error.
 	for i := 0; i < n; i++ {
-		if err := <-ch; err != nil {
-			t.Fatal(err)
-		}
+		err := <-ch
+		require.NoError(t, err)
 	}
 
 	// Ensure data is correct.
-	if err := db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("widgets"))
 		for i := 0; i < n; i++ {
-			if v := b.Get(u64tob(uint64(i))); v == nil {
-				t.Errorf("key not found: %d", i)
-			}
+			assert.NotNilf(t, b.Get(u64tob(uint64(i))), "key not found: %d", i)
 		}
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 func TestDB_Batch_Panic(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
 	var sentinel int
-	var bork = &sentinel
+	bork := &sentinel
 	var problem interface{}
 	var err error
 
@@ -1250,12 +1020,11 @@ func TestDB_Batch_Panic(t *testing.T) {
 
 func TestDB_BatchFull(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucket([]byte("widgets"))
 		return err
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	const size = 3
 	// buffered so we never leak goroutines
@@ -1287,33 +1056,28 @@ func TestDB_BatchFull(t *testing.T) {
 
 	// Check all responses to make sure there's no error.
 	for i := 0; i < size; i++ {
-		if err := <-ch; err != nil {
-			t.Fatal(err)
-		}
+		err := <-ch
+		require.NoError(t, err)
 	}
 
 	// Ensure data is correct.
-	if err := db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("widgets"))
 		for i := 1; i <= size; i++ {
-			if v := b.Get(u64tob(uint64(i))); v == nil {
-				t.Errorf("key not found: %d", i)
-			}
+			assert.NotNilf(t, b.Get(u64tob(uint64(i))), "key not found: %d", i)
 		}
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 func TestDB_BatchTime(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucket([]byte("widgets"))
 		return err
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	const size = 1
 	// buffered so we never leak goroutines
@@ -1333,23 +1097,19 @@ func TestDB_BatchTime(t *testing.T) {
 
 	// Check all responses to make sure there's no error.
 	for i := 0; i < size; i++ {
-		if err := <-ch; err != nil {
-			t.Fatal(err)
-		}
+		err := <-ch
+		require.NoError(t, err)
 	}
 
 	// Ensure data is correct.
-	if err := db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("widgets"))
 		for i := 1; i <= size; i++ {
-			if v := b.Get(u64tob(uint64(i))); v == nil {
-				t.Errorf("key not found: %d", i)
-			}
+			assert.NotNilf(t, b.Get(u64tob(uint64(i))), "key not found: %d", i)
 		}
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // TestDBUnmap verifes that `dataref`, `data` and `datasz` must be reset
@@ -1437,14 +1197,14 @@ func TestDB_MaxSizeNotExceeded(t *testing.T) {
 			// It should have space for roughly 16 more entries before trying to grow
 			// Keep inserting until grow is required
 			err := fillDBWithKeys(db, 100)
-			assert.ErrorIs(t, err, berrors.ErrMaxSizeReached)
+			require.ErrorIs(t, err, berrors.ErrMaxSizeReached)
 
 			newSz := fileSize(path)
-			require.Greater(t, newSz, int64(0), "unexpected new file size: %d", newSz)
-			assert.LessOrEqual(t, newSz, int64(db.MaxSize), "The size of the data file should not exceed db.MaxSize")
+			require.Positivef(t, newSz, "unexpected new file size: %d", newSz)
+			assert.LessOrEqualf(t, newSz, int64(db.MaxSize), "The size of the data file should not exceed db.MaxSize")
 
 			err = db.Close()
-			require.NoError(t, err, "Closing the re-opened database should succeed")
+			require.NoErrorf(t, err, "Closing the re-opened database should succeed")
 		})
 	}
 }
@@ -1459,25 +1219,25 @@ func TestDB_MaxSizeExceededCanOpen(t *testing.T) {
 
 	// Insert a reasonable amount of data below the max size.
 	err := fillDBWithKeys(db, 2000)
-	require.NoError(t, err, "fillDbWithKeys should succeed")
+	require.NoErrorf(t, err, "fillDbWithKeys should succeed")
 
 	err = db.Close()
-	require.NoError(t, err, "Close should succeed")
+	require.NoErrorf(t, err, "Close should succeed")
 
 	// The data file should be 4 MiB now (expanded once from zero).
 	minimumSizeForTest := int64(1024 * 1024)
 	newSz := fileSize(path)
-	require.GreaterOrEqual(t, newSz, minimumSizeForTest, "unexpected new file size: %d. Expected at least %d", newSz, minimumSizeForTest)
+	require.GreaterOrEqualf(t, newSz, minimumSizeForTest, "unexpected new file size: %d. Expected at least %d", newSz, minimumSizeForTest)
 
 	// Now try to re-open the database with an extremely small max size
 	t.Logf("Reopening bbolt DB at: %s", path)
 	db, err = btesting.OpenDBWithOption(t, path, &bolt.Options{
 		MaxSize: 1,
 	})
-	assert.NoError(t, err, "Should be able to open database bigger than MaxSize")
+	require.NoErrorf(t, err, "Should be able to open database bigger than MaxSize")
 
 	err = db.Close()
-	require.NoError(t, err, "Closing the re-opened database should succeed")
+	require.NoErrorf(t, err, "Closing the re-opened database should succeed")
 }
 
 // Ensure that opening a database that is beyond the maximum size succeeds,
@@ -1496,12 +1256,12 @@ func TestDB_MaxSizeExceededCanOpenWithHighMmap(t *testing.T) {
 	path := db.Path()
 
 	err := db.Close()
-	require.NoError(t, err, "Close should succeed")
+	require.NoErrorf(t, err, "Close should succeed")
 
 	// The data file should be 4 MiB now (expanded once from zero).
 	minimumSizeForTest := int64(1024 * 1024)
 	newSz := fileSize(path)
-	require.GreaterOrEqual(t, newSz, minimumSizeForTest, "unexpected new file size: %d. Expected at least %d", newSz, minimumSizeForTest)
+	require.GreaterOrEqualf(t, newSz, minimumSizeForTest, "unexpected new file size: %d. Expected at least %d", newSz, minimumSizeForTest)
 
 	// Now try to re-open the database with an extremely small max size
 	t.Logf("Reopening bbolt DB at: %s", path)
@@ -1509,10 +1269,10 @@ func TestDB_MaxSizeExceededCanOpenWithHighMmap(t *testing.T) {
 		MaxSize:         1,
 		InitialMmapSize: int(minimumSizeForTest) * 2,
 	})
-	assert.NoError(t, err, "Should be able to open database bigger than MaxSize when InitialMmapSize set high")
+	require.NoErrorf(t, err, "Should be able to open database bigger than MaxSize when InitialMmapSize set high")
 
 	err = db.Close()
-	require.NoError(t, err, "Closing the re-opened database should succeed")
+	require.NoErrorf(t, err, "Closing the re-opened database should succeed")
 }
 
 // Ensure that when InitialMmapSize is above the limit, opening a database
@@ -1530,12 +1290,12 @@ func TestDB_MaxSizeExceededDoesNotGrow(t *testing.T) {
 	path := db.Path()
 
 	err := db.Close()
-	require.NoError(t, err, "Close should succeed")
+	require.NoErrorf(t, err, "Close should succeed")
 
 	// The data file should be 4 MiB now (expanded once from zero).
 	minimumSizeForTest := int64(1024 * 1024)
 	newSz := fileSize(path)
-	assert.GreaterOrEqual(t, newSz, minimumSizeForTest, "unexpected new file size: %d. Expected at least %d", newSz, minimumSizeForTest)
+	assert.GreaterOrEqualf(t, newSz, minimumSizeForTest, "unexpected new file size: %d. Expected at least %d", newSz, minimumSizeForTest)
 
 	// Now try to re-open the database with an extremely small max size and
 	// an initial mmap size to be greater than the actual file size, forcing an illegal grow on open
@@ -1544,12 +1304,12 @@ func TestDB_MaxSizeExceededDoesNotGrow(t *testing.T) {
 		MaxSize:         1,
 		InitialMmapSize: int(newSz) * 2,
 	})
-	assert.Error(t, err, "Opening the DB with InitialMmapSize > MaxSize should cause an error on Windows")
+	assert.Errorf(t, err, "Opening the DB with InitialMmapSize > MaxSize should cause an error on Windows")
 }
 
 func ExampleDB_Update() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0600, nil)
+	db, err := bolt.Open(tempfile(), 0o600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1589,7 +1349,7 @@ func ExampleDB_Update() {
 
 func ExampleDB_View() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0600, nil)
+	db, err := bolt.Open(tempfile(), 0o600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1632,7 +1392,7 @@ func ExampleDB_View() {
 
 func ExampleDB_Begin() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0600, nil)
+	db, err := bolt.Open(tempfile(), 0o600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1692,12 +1452,11 @@ func ExampleDB_Begin() {
 func BenchmarkDBBatchAutomatic(b *testing.B) {
 	db := btesting.MustCreateDB(b)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucket([]byte("bench"))
 		return err
-	}); err != nil {
-		b.Fatal(err)
-	}
+	})
+	require.NoError(b, err)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -1736,12 +1495,11 @@ func BenchmarkDBBatchAutomatic(b *testing.B) {
 
 func BenchmarkDBBatchSingle(b *testing.B) {
 	db := btesting.MustCreateDB(b)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucket([]byte("bench"))
 		return err
-	}); err != nil {
-		b.Fatal(err)
-	}
+	})
+	require.NoError(b, err)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -1779,12 +1537,11 @@ func BenchmarkDBBatchSingle(b *testing.B) {
 
 func BenchmarkDBBatchManual10x100(b *testing.B) {
 	db := btesting.MustCreateDB(b)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucket([]byte("bench"))
 		return err
-	}); err != nil {
-		b.Fatal(err)
-	}
+	})
+	require.NoError(b, err)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -1821,9 +1578,7 @@ func BenchmarkDBBatchManual10x100(b *testing.B) {
 		wg.Wait()
 		close(errCh)
 		for err := range errCh {
-			if err != nil {
-				b.Fatal(err)
-			}
+			require.NoError(b, err)
 		}
 	}
 
@@ -1832,7 +1587,7 @@ func BenchmarkDBBatchManual10x100(b *testing.B) {
 }
 
 func validateBatchBench(b *testing.B, db *btesting.DB) {
-	var rollback = errors.New("sentinel error to cause rollback")
+	rollback := errors.New("sentinel error to cause rollback")
 	validate := func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte("bench"))
 		h := fnv.New32a()

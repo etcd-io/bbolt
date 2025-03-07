@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	bolt "go.etcd.io/bbolt"
 	"go.etcd.io/bbolt/internal/btesting"
@@ -41,7 +42,7 @@ func TestRevertMetaPage(t *testing.T) {
 	db.Close()
 
 	// This causes the whole tree to be linked to the previous state
-	assert.NoError(t, surgeon.RevertMetaPage(db.Path()))
+	require.NoError(t, surgeon.RevertMetaPage(db.Path()))
 
 	db.MustReopen()
 	db.MustCheck()

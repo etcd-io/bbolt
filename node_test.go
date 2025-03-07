@@ -4,6 +4,8 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/stretchr/testify/require"
+
 	"go.etcd.io/bbolt/internal/common"
 )
 
@@ -17,9 +19,7 @@ func TestNode_put(t *testing.T) {
 	n.put([]byte("bar"), []byte("bar"), []byte("1"), 0, 0)
 	n.put([]byte("foo"), []byte("foo"), []byte("3"), 0, common.LeafPageFlag)
 
-	if len(n.inodes) != 3 {
-		t.Fatalf("exp=3; got=%d", len(n.inodes))
-	}
+	require.Lenf(t, n.inodes, 3, "exp=3; got=%d", len(n.inodes))
 	if k, v := n.inodes[0].Key(), n.inodes[0].Value(); string(k) != "bar" || string(v) != "1" {
 		t.Fatalf("exp=<bar,1>; got=<%s,%s>", k, v)
 	}
@@ -29,9 +29,7 @@ func TestNode_put(t *testing.T) {
 	if k, v := n.inodes[2].Key(), n.inodes[2].Value(); string(k) != "foo" || string(v) != "3" {
 		t.Fatalf("exp=<foo,3>; got=<%s,%s>", k, v)
 	}
-	if n.inodes[2].Flags() != uint32(common.LeafPageFlag) {
-		t.Fatalf("not a leaf: %d", n.inodes[2].Flags())
-	}
+	require.Equalf(t, n.inodes[2].Flags(), uint32(common.LeafPageFlag), "not a leaf: %d", n.inodes[2].Flags())
 }
 
 // Ensure that a node can deserialize from a leaf page.
@@ -58,12 +56,8 @@ func TestNode_read_LeafPage(t *testing.T) {
 	n.read(page)
 
 	// Check that there are two inodes with correct data.
-	if !n.isLeaf {
-		t.Fatal("expected leaf")
-	}
-	if len(n.inodes) != 2 {
-		t.Fatalf("exp=2; got=%d", len(n.inodes))
-	}
+	require.Truef(t, n.isLeaf, "expected leaf")
+	require.Lenf(t, n.inodes, 2, "exp=2; got=%d", len(n.inodes))
 	if k, v := n.inodes[0].Key(), n.inodes[0].Value(); string(k) != "bar" || string(v) != "fooz" {
 		t.Fatalf("exp=<bar,fooz>; got=<%s,%s>", k, v)
 	}
@@ -92,9 +86,7 @@ func TestNode_write_LeafPage(t *testing.T) {
 	n2.read(p)
 
 	// Check that the two pages are the same.
-	if len(n2.inodes) != 3 {
-		t.Fatalf("exp=3; got=%d", len(n2.inodes))
-	}
+	require.Lenf(t, n2.inodes, 3, "exp=3; got=%d", len(n2.inodes))
 	if k, v := n2.inodes[0].Key(), n2.inodes[0].Value(); string(k) != "john" || string(v) != "johnson" {
 		t.Fatalf("exp=<john,johnson>; got=<%s,%s>", k, v)
 	}
@@ -122,15 +114,9 @@ func TestNode_split(t *testing.T) {
 	n.split(100)
 
 	var parent = n.parent
-	if len(parent.children) != 2 {
-		t.Fatalf("exp=2; got=%d", len(parent.children))
-	}
-	if len(parent.children[0].inodes) != 2 {
-		t.Fatalf("exp=2; got=%d", len(parent.children[0].inodes))
-	}
-	if len(parent.children[1].inodes) != 3 {
-		t.Fatalf("exp=3; got=%d", len(parent.children[1].inodes))
-	}
+	require.Lenf(t, parent.children, 2, "exp=2; got=%d", len(parent.children))
+	require.Lenf(t, parent.children[0].inodes, 2, "exp=2; got=%d", len(parent.children[0].inodes))
+	require.Lenf(t, parent.children[1].inodes, 3, "exp=3; got=%d", len(parent.children[1].inodes))
 }
 
 // Ensure that a page with the minimum number of inodes just returns a single node.
@@ -144,9 +130,7 @@ func TestNode_split_MinKeys(t *testing.T) {
 
 	// Split.
 	n.split(20)
-	if n.parent != nil {
-		t.Fatalf("expected nil parent")
-	}
+	require.Nilf(t, n.parent, "expected nil parent")
 }
 
 // Ensure that a node that has keys that all fit on a page just returns one leaf.
@@ -163,7 +147,5 @@ func TestNode_split_SinglePage(t *testing.T) {
 
 	// Split.
 	n.split(4096)
-	if n.parent != nil {
-		t.Fatalf("expected nil parent")
-	}
+	require.Nilf(t, n.parent, "expected nil parent")
 }

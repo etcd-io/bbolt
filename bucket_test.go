@@ -25,61 +25,44 @@ import (
 func TestBucket_Get_NonExistent(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if v := b.Get([]byte("foo")); v != nil {
-			t.Fatal("expected nil value")
-		}
+		require.NoError(t, err)
+		require.Nilf(t, b.Get([]byte("foo")), "expected nil value")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that a bucket can read a value that is not flushed yet.
 func TestBucket_Get_FromNode(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("foo"), []byte("bar")); err != nil {
-			t.Fatal(err)
-		}
-		if v := b.Get([]byte("foo")); !bytes.Equal(v, []byte("bar")) {
-			t.Fatalf("unexpected value: %v", v)
-		}
+		require.NoError(t, err)
+		require.NoError(t, b.Put([]byte("foo"), []byte("bar")))
+		v := b.Get([]byte("foo"))
+		require.Truef(t, bytes.Equal(v, []byte("bar")), "unexpected value: %v", v)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that a bucket retrieved via Get() returns a nil.
 func TestBucket_Get_IncompatibleValue(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
-		if _, err := tx.Bucket([]byte("widgets")).CreateBucket([]byte("foo")); err != nil {
-			t.Fatal(err)
-		}
+		_, err = tx.Bucket([]byte("widgets")).CreateBucket([]byte("foo"))
+		require.NoError(t, err)
 
-		if tx.Bucket([]byte("widgets")).Get([]byte("foo")) != nil {
-			t.Fatal("expected nil value")
-		}
+		require.Nilf(t, tx.Bucket([]byte("widgets")).Get([]byte("foo")), "expected nil value")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that a slice returned from a bucket has a capacity equal to its length.
@@ -90,26 +73,22 @@ func TestBucket_Get_Capacity(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
 	// Write key to a bucket.
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("bucket"))
 		if err != nil {
 			return err
 		}
 		return b.Put([]byte("key"), []byte("val"))
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	// Retrieve value and attempt to append to it.
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *bolt.Tx) error {
 		k, v := tx.Bucket([]byte("bucket")).Cursor().First()
 
 		// Verify capacity.
-		if len(k) != cap(k) {
-			t.Fatalf("unexpected key slice capacity: %d", cap(k))
-		} else if len(v) != cap(v) {
-			t.Fatalf("unexpected value slice capacity: %d", cap(v))
-		}
+		require.Equalf(t, len(k), cap(k), "unexpected key slice capacity: %d", cap(k))
+		require.Equalf(t, len(v), cap(v), "unexpected value slice capacity: %d", cap(v))
 
 		// Ensure slice can be appended to without a segfault.
 		k = append(k, []byte("123")...)
@@ -117,56 +96,39 @@ func TestBucket_Get_Capacity(t *testing.T) {
 		_, _ = k, v // to pass ineffassign
 
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that a bucket can write a key/value.
 func TestBucket_Put(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("foo"), []byte("bar")); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+		require.NoError(t, b.Put([]byte("foo"), []byte("bar")))
 
 		v := tx.Bucket([]byte("widgets")).Get([]byte("foo"))
-		if !bytes.Equal([]byte("bar"), v) {
-			t.Fatalf("unexpected value: %v", v)
-		}
+		require.Truef(t, bytes.Equal([]byte("bar"), v), "unexpected value: %v", v)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that a bucket can rewrite a key in the same transaction.
 func TestBucket_Put_Repeat(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("foo"), []byte("bar")); err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("foo"), []byte("baz")); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+		require.NoError(t, b.Put([]byte("foo"), []byte("bar")))
+		require.NoError(t, b.Put([]byte("foo"), []byte("baz")))
 
 		value := tx.Bucket([]byte("widgets")).Get([]byte("foo"))
-		if !bytes.Equal([]byte("baz"), value) {
-			t.Fatalf("unexpected value: %v", value)
-		}
+		require.Truef(t, bytes.Equal([]byte("baz"), value), "unexpected value: %v", value)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that a bucket can write a bunch of large values.
@@ -174,33 +136,25 @@ func TestBucket_Put_Large(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
 	count, factor := 100, 200
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		for i := 1; i < count; i++ {
-			if err := b.Put([]byte(strings.Repeat("0", i*factor)), []byte(strings.Repeat("X", (count-i)*factor))); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, b.Put([]byte(strings.Repeat("0", i*factor)), []byte(strings.Repeat("X", (count-i)*factor))))
 		}
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
-	if err := db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("widgets"))
 		for i := 1; i < count; i++ {
 			value := b.Get([]byte(strings.Repeat("0", i*factor)))
-			if !bytes.Equal(value, []byte(strings.Repeat("X", (count-i)*factor))) {
-				t.Fatalf("unexpected value: %v", value)
-			}
+			require.Truef(t, bytes.Equal(value, []byte(strings.Repeat("X", (count-i)*factor))), "unexpected value: %v", value)
 		}
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that a database can perform multiple large appends safely.
@@ -215,22 +169,17 @@ func TestDB_Put_VeryLarge(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
 	for i := 0; i < n; i += batchN {
-		if err := db.Update(func(tx *bolt.Tx) error {
+		err := db.Update(func(tx *bolt.Tx) error {
 			b, err := tx.CreateBucketIfNotExists([]byte("widgets"))
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			for j := 0; j < batchN; j++ {
 				k, v := make([]byte, ksize), make([]byte, vsize)
 				binary.BigEndian.PutUint32(k, uint32(i+j))
-				if err := b.Put(k, v); err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, b.Put(k, v))
 			}
 			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
+		require.NoError(t, err)
 	}
 }
 
@@ -238,138 +187,100 @@ func TestDB_Put_VeryLarge(t *testing.T) {
 func TestBucket_Put_IncompatibleValue(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b0, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
-		if _, err := tx.Bucket([]byte("widgets")).CreateBucket([]byte("foo")); err != nil {
-			t.Fatal(err)
-		}
-		if err := b0.Put([]byte("foo"), []byte("bar")); err != berrors.ErrIncompatibleValue {
-			t.Fatalf("unexpected error: %s", err)
-		}
+		_, err = tx.Bucket([]byte("widgets")).CreateBucket([]byte("foo"))
+		require.NoError(t, err)
+		require.Equalf(t, b0.Put([]byte("foo"), []byte("bar")), berrors.ErrIncompatibleValue, "unexpected error")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that a setting a value while the transaction is closed returns an error.
 func TestBucket_Put_Closed(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 	tx, err := db.Begin(true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	b, err := tx.CreateBucket([]byte("widgets"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if err := tx.Rollback(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, tx.Rollback())
 
-	if err := b.Put([]byte("foo"), []byte("bar")); err != berrors.ErrTxClosed {
-		t.Fatalf("unexpected error: %s", err)
-	}
+	require.Equalf(t, b.Put([]byte("foo"), []byte("bar")), berrors.ErrTxClosed, "unexpected error")
 }
 
 // Ensure that setting a value on a read-only bucket returns an error.
 func TestBucket_Put_ReadOnly(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
-			t.Fatal(err)
-		}
+	err := db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucket([]byte("widgets"))
+		require.NoError(t, err)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
-	if err := db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("widgets"))
-		if err := b.Put([]byte("foo"), []byte("bar")); err != berrors.ErrTxNotWritable {
-			t.Fatalf("unexpected error: %s", err)
-		}
+		require.Equalf(t, b.Put([]byte("foo"), []byte("bar")), berrors.ErrTxNotWritable, "unexpected error")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that a bucket can delete an existing key.
 func TestBucket_Delete(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("foo"), []byte("bar")); err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Delete([]byte("foo")); err != nil {
-			t.Fatal(err)
-		}
-		if v := b.Get([]byte("foo")); v != nil {
-			t.Fatalf("unexpected value: %v", v)
-		}
+		require.NoError(t, err)
+		require.NoError(t, b.Put([]byte("foo"), []byte("bar")))
+		require.NoError(t, b.Delete([]byte("foo")))
+		require.Nilf(t, b.Get([]byte("foo")), "expected nil value")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that deleting a large set of keys will work correctly.
 func TestBucket_Delete_Large(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		for i := 0; i < 100; i++ {
-			if err := b.Put([]byte(strconv.Itoa(i)), []byte(strings.Repeat("*", 1024))); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, b.Put([]byte(strconv.Itoa(i)), []byte(strings.Repeat("*", 1024))))
 		}
 
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("widgets"))
 		for i := 0; i < 100; i++ {
-			if err := b.Delete([]byte(strconv.Itoa(i))); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, b.Delete([]byte(strconv.Itoa(i))))
 		}
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
-	if err := db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("widgets"))
 		for i := 0; i < 100; i++ {
-			if v := b.Get([]byte(strconv.Itoa(i))); v != nil {
-				t.Fatalf("unexpected value: %v, i=%d", v, i)
-			}
+			v := b.Get([]byte(strconv.Itoa(i)))
+			require.Nilf(t, v, "unexpected value: %v, i=%d", v, i)
 		}
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Deleting a very large list of keys will cause the freelist to use overflow.
@@ -383,217 +294,165 @@ func TestBucket_Delete_FreelistOverflow(t *testing.T) {
 	k := make([]byte, 16)
 	// The bigger the pages - the more values we need to write.
 	for i := uint64(0); i < 2*uint64(db.Info().PageSize); i++ {
-		if err := db.Update(func(tx *bolt.Tx) error {
+		err := db.Update(func(tx *bolt.Tx) error {
 			b, err := tx.CreateBucketIfNotExists([]byte("0"))
-			if err != nil {
-				t.Fatalf("bucket error: %s", err)
-			}
+			require.NoErrorf(t, err, "bucket error: %s", err)
 
 			for j := uint64(0); j < 1000; j++ {
 				binary.BigEndian.PutUint64(k[:8], i)
 				binary.BigEndian.PutUint64(k[8:], j)
-				if err := b.Put(k, nil); err != nil {
-					t.Fatalf("put error: %s", err)
-				}
+				require.NoErrorf(t, b.Put(k, nil), "put error")
 			}
 
 			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
+		require.NoError(t, err)
 	}
 
 	// Delete all of them in one large transaction
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("0"))
 		c := b.Cursor()
 		for k, _ := c.First(); k != nil; k, _ = c.Next() {
-			if err := c.Delete(); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, c.Delete())
 		}
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	// Check more than an overflow's worth of pages are freed.
 	stats := db.Stats()
 	freePages := stats.FreePageN + stats.PendingPageN
-	if freePages <= 0xFFFF {
-		t.Fatalf("expected more than 0xFFFF free pages, got %v", freePages)
-	}
+	require.Greaterf(t, freePages, 0xFFFF, "expected more than 0xFFFF free pages, got %v", freePages)
 
 	// Free page count should be preserved on reopen.
 	db.MustClose()
 	db.MustReopen()
-	if reopenFreePages := db.Stats().FreePageN; freePages != reopenFreePages {
-		t.Fatalf("expected %d free pages, got %+v", freePages, db.Stats())
-	}
-	if reopenPendingPages := db.Stats().PendingPageN; reopenPendingPages != 0 {
-		t.Fatalf("expected no pending pages, got %+v", db.Stats())
-	}
+	reopenFreePages := db.Stats().FreePageN
+	require.Equalf(t, freePages, reopenFreePages, "expected %d free pages, got %+v", freePages, db.Stats())
+	reopenPendingPages := db.Stats().PendingPageN
+	require.Equalf(t, 0, reopenPendingPages, "expected no pending pages, got %+v", db.Stats())
 }
 
 // Ensure that deleting of non-existing key is a no-op.
 func TestBucket_Delete_NonExisting(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
-		if _, err = b.CreateBucket([]byte("nested")); err != nil {
-			t.Fatal(err)
-		}
+		_, err = b.CreateBucket([]byte("nested"))
+		require.NoError(t, err)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("widgets"))
-		if err := b.Delete([]byte("foo")); err != nil {
-			t.Fatal(err)
-		}
-		if b.Bucket([]byte("nested")) == nil {
-			t.Fatal("nested bucket has been deleted")
-		}
+		require.NoError(t, b.Delete([]byte("foo")))
+		require.NotNilf(t, b.Bucket([]byte("nested")), "nested bucket has been deleted")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that accessing and updating nested buckets is ok across transactions.
 func TestBucket_Nested(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		// Create a widgets bucket.
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		// Create a widgets/foo bucket.
 		_, err = b.CreateBucket([]byte("foo"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		// Create a widgets/bar key.
-		if err := b.Put([]byte("bar"), []byte("0000")); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, b.Put([]byte("bar"), []byte("0000")))
 
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 	db.MustCheck()
 
 	// Update widgets/bar.
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("widgets"))
-		if err := b.Put([]byte("bar"), []byte("xxxx")); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, b.Put([]byte("bar"), []byte("xxxx")))
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 	db.MustCheck()
 
 	// Cause a split.
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *bolt.Tx) error {
 		var b = tx.Bucket([]byte("widgets"))
 		for i := 0; i < 10000; i++ {
-			if err := b.Put([]byte(strconv.Itoa(i)), []byte(strconv.Itoa(i))); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, b.Put([]byte(strconv.Itoa(i)), []byte(strconv.Itoa(i))))
 		}
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 	db.MustCheck()
 
 	// Insert into widgets/foo/baz.
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *bolt.Tx) error {
 		var b = tx.Bucket([]byte("widgets"))
-		if err := b.Bucket([]byte("foo")).Put([]byte("baz"), []byte("yyyy")); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, b.Bucket([]byte("foo")).Put([]byte("baz"), []byte("yyyy")))
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 	db.MustCheck()
 
 	// Verify.
-	if err := db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *bolt.Tx) error {
 		var b = tx.Bucket([]byte("widgets"))
-		if v := b.Bucket([]byte("foo")).Get([]byte("baz")); !bytes.Equal(v, []byte("yyyy")) {
-			t.Fatalf("unexpected value: %v", v)
-		}
-		if v := b.Get([]byte("bar")); !bytes.Equal(v, []byte("xxxx")) {
-			t.Fatalf("unexpected value: %v", v)
-		}
+		v := b.Bucket([]byte("foo")).Get([]byte("baz"))
+		require.Truef(t, bytes.Equal(v, []byte("yyyy")), "unexpected value: %v", v)
+		v = b.Get([]byte("bar"))
+		require.Truef(t, bytes.Equal(v, []byte("xxxx")), "unexpected value: %v", v)
 		for i := 0; i < 10000; i++ {
-			if v := b.Get([]byte(strconv.Itoa(i))); !bytes.Equal(v, []byte(strconv.Itoa(i))) {
-				t.Fatalf("unexpected value: %v", v)
-			}
+			v := b.Get([]byte(strconv.Itoa(i)))
+			require.Truef(t, bytes.Equal(v, []byte(strconv.Itoa(i))), "unexpected value: %v", v)
 		}
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that deleting a bucket using Delete() returns an error.
 func TestBucket_Delete_Bucket(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := b.CreateBucket([]byte("foo")); err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Delete([]byte("foo")); err != berrors.ErrIncompatibleValue {
-			t.Fatalf("unexpected error: %s", err)
-		}
+		require.NoError(t, err)
+		_, err = b.CreateBucket([]byte("foo"))
+		require.NoError(t, err)
+		require.Equalf(t, b.Delete([]byte("foo")), berrors.ErrIncompatibleValue, "unexpected error")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that deleting a key on a read-only bucket returns an error.
 func TestBucket_Delete_ReadOnly(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
-			t.Fatal(err)
-		}
+	err := db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucket([]byte("widgets"))
+		require.NoError(t, err)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
-	if err := db.View(func(tx *bolt.Tx) error {
-		if err := tx.Bucket([]byte("widgets")).Delete([]byte("foo")); err != berrors.ErrTxNotWritable {
-			t.Fatalf("unexpected error: %s", err)
-		}
+	err = db.View(func(tx *bolt.Tx) error {
+		require.Equalf(t, tx.Bucket([]byte("widgets")).Delete([]byte("foo")), berrors.ErrTxNotWritable, "unexpected error")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that a deleting value while the transaction is closed returns an error.
@@ -601,117 +460,76 @@ func TestBucket_Delete_Closed(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
 	tx, err := db.Begin(true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	b, err := tx.CreateBucket([]byte("widgets"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if err := tx.Rollback(); err != nil {
-		t.Fatal(err)
-	}
-	if err := b.Delete([]byte("foo")); err != berrors.ErrTxClosed {
-		t.Fatalf("unexpected error: %s", err)
-	}
+	require.NoError(t, tx.Rollback())
+	require.Equalf(t, b.Delete([]byte("foo")), berrors.ErrTxClosed, "unexpected error")
 }
 
 // Ensure that deleting a bucket causes nested buckets to be deleted.
 func TestBucket_DeleteBucket_Nested(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		widgets, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		foo, err := widgets.CreateBucket([]byte("foo"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		bar, err := foo.CreateBucket([]byte("bar"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := bar.Put([]byte("baz"), []byte("bat")); err != nil {
-			t.Fatal(err)
-		}
-		if err := tx.Bucket([]byte("widgets")).DeleteBucket([]byte("foo")); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+		require.NoError(t, bar.Put([]byte("baz"), []byte("bat")))
+		require.NoError(t, tx.Bucket([]byte("widgets")).DeleteBucket([]byte("foo")))
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that deleting a bucket causes nested buckets to be deleted after they have been committed.
 func TestBucket_DeleteBucket_Nested2(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		widgets, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		foo, err := widgets.CreateBucket([]byte("foo"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		bar, err := foo.CreateBucket([]byte("bar"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
-		if err := bar.Put([]byte("baz"), []byte("bat")); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, bar.Put([]byte("baz"), []byte("bat")))
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *bolt.Tx) error {
 		widgets := tx.Bucket([]byte("widgets"))
-		if widgets == nil {
-			t.Fatal("expected widgets bucket")
-		}
+		require.NotNilf(t, widgets, "expected widgets bucket")
 
 		foo := widgets.Bucket([]byte("foo"))
-		if foo == nil {
-			t.Fatal("expected foo bucket")
-		}
+		require.NotNilf(t, foo, "expected foo bucket")
 
 		bar := foo.Bucket([]byte("bar"))
-		if bar == nil {
-			t.Fatal("expected bar bucket")
-		}
+		require.NotNilf(t, bar, "expected bar bucket")
 
-		if v := bar.Get([]byte("baz")); !bytes.Equal(v, []byte("bat")) {
-			t.Fatalf("unexpected value: %v", v)
-		}
-		if err := tx.DeleteBucket([]byte("widgets")); err != nil {
-			t.Fatal(err)
-		}
+		v := bar.Get([]byte("baz"))
+		require.Truef(t, bytes.Equal(v, []byte("bat")), "unexpected value: %v", v)
+		require.NoError(t, tx.DeleteBucket([]byte("widgets")))
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
-	if err := db.View(func(tx *bolt.Tx) error {
-		if tx.Bucket([]byte("widgets")) != nil {
-			t.Fatal("expected bucket to be deleted")
-		}
+	err = db.View(func(tx *bolt.Tx) error {
+		require.Nilf(t, tx.Bucket([]byte("widgets")), "expected bucket to be deleted")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that deleting a child bucket with multiple pages causes all pages to get collected.
@@ -719,180 +537,129 @@ func TestBucket_DeleteBucket_Nested2(t *testing.T) {
 func TestBucket_DeleteBucket_Large(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		widgets, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		foo, err := widgets.CreateBucket([]byte("foo"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		for i := 0; i < 1000; i++ {
-			if err := foo.Put([]byte(fmt.Sprintf("%d", i)), []byte(fmt.Sprintf("%0100d", i))); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, foo.Put([]byte(fmt.Sprintf("%d", i)), []byte(fmt.Sprintf("%0100d", i))))
 		}
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
-		if err := tx.DeleteBucket([]byte("widgets")); err != nil {
-			t.Fatal(err)
-		}
+	err = db.Update(func(tx *bolt.Tx) error {
+		require.NoError(t, tx.DeleteBucket([]byte("widgets")))
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that a simple value retrieved via Bucket() returns a nil.
 func TestBucket_Bucket_IncompatibleValue(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		widgets, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
-		if err := widgets.Put([]byte("foo"), []byte("bar")); err != nil {
-			t.Fatal(err)
-		}
-		if b := tx.Bucket([]byte("widgets")).Bucket([]byte("foo")); b != nil {
-			t.Fatal("expected nil bucket")
-		}
+		require.NoError(t, widgets.Put([]byte("foo"), []byte("bar")))
+		require.Nilf(t, tx.Bucket([]byte("widgets")).Bucket([]byte("foo")), "expected nil bucket")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that creating a bucket on an existing non-bucket key returns an error.
 func TestBucket_CreateBucket_IncompatibleValue(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		widgets, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
-		if err := widgets.Put([]byte("foo"), []byte("bar")); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := widgets.CreateBucket([]byte("foo")); err != berrors.ErrIncompatibleValue {
-			t.Fatalf("unexpected error: %s", err)
-		}
+		require.NoError(t, widgets.Put([]byte("foo"), []byte("bar")))
+		_, err = widgets.CreateBucket([]byte("foo"))
+		require.Equalf(t, err, berrors.ErrIncompatibleValue, "unexpected error: %s", err)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that deleting a bucket on an existing non-bucket key returns an error.
 func TestBucket_DeleteBucket_IncompatibleValue(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		widgets, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := widgets.Put([]byte("foo"), []byte("bar")); err != nil {
-			t.Fatal(err)
-		}
-		if err := tx.Bucket([]byte("widgets")).DeleteBucket([]byte("foo")); err != berrors.ErrIncompatibleValue {
-			t.Fatalf("unexpected error: %s", err)
-		}
+		require.NoError(t, err)
+		require.NoError(t, widgets.Put([]byte("foo"), []byte("bar")))
+		require.Equalf(t, tx.Bucket([]byte("widgets")).DeleteBucket([]byte("foo")), berrors.ErrIncompatibleValue, "unexpected error")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure bucket can set and update its sequence number.
 func TestBucket_Sequence(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		bkt, err := tx.CreateBucket([]byte("0"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		// Retrieve sequence.
-		if v := bkt.Sequence(); v != 0 {
-			t.Fatalf("unexpected sequence: %d", v)
-		}
+		require.Equalf(t, uint64(0), bkt.Sequence(), "unexpected sequence")
 
 		// Update sequence.
-		if err := bkt.SetSequence(1000); err != nil {
-			t.Fatal(err)
-		}
+		err = bkt.SetSequence(1000)
+		require.NoError(t, err)
 
 		// Read sequence again.
-		if v := bkt.Sequence(); v != 1000 {
-			t.Fatalf("unexpected sequence: %d", v)
-		}
+		require.Equalf(t, uint64(1000), bkt.Sequence(), "unexpected sequence")
 
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	// Verify sequence in separate transaction.
-	if err := db.View(func(tx *bolt.Tx) error {
-		if v := tx.Bucket([]byte("0")).Sequence(); v != 1000 {
-			t.Fatalf("unexpected sequence: %d", v)
-		}
+	err = db.View(func(tx *bolt.Tx) error {
+		v := tx.Bucket([]byte("0")).Sequence()
+		require.Equalf(t, uint64(1000), v, "unexpected sequence: %d", v)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that a bucket can return an autoincrementing sequence.
 func TestBucket_NextSequence(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		widgets, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		woojits, err := tx.CreateBucket([]byte("woojits"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		// Make sure sequence increments.
-		if seq, err := widgets.NextSequence(); err != nil {
-			t.Fatal(err)
-		} else if seq != 1 {
-			t.Fatalf("unexpecte sequence: %d", seq)
-		}
+		seq, err := widgets.NextSequence()
+		require.NoError(t, err)
+		require.Equalf(t, uint64(1), seq, "unexpected sequence: %d", seq)
 
-		if seq, err := widgets.NextSequence(); err != nil {
-			t.Fatal(err)
-		} else if seq != 2 {
-			t.Fatalf("unexpected sequence: %d", seq)
-		}
+		seq, err = widgets.NextSequence()
+		require.NoError(t, err)
+		require.Equalf(t, uint64(2), seq, "unexpected sequence: %d", seq)
 
 		// Buckets should be separate.
-		if seq, err := woojits.NextSequence(); err != nil {
-			t.Fatal(err)
-		} else if seq != 1 {
-			t.Fatalf("unexpected sequence: %d", 1)
-		}
+		seq, err = woojits.NextSequence()
+		require.NoError(t, err)
+		require.Equalf(t, uint64(1), seq, "unexpected sequence: %d", seq)
 
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that a bucket will persist an autoincrementing sequence even if its
@@ -901,78 +668,58 @@ func TestBucket_NextSequence(t *testing.T) {
 func TestBucket_NextSequence_Persist(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
-			t.Fatal(err)
-		}
+	err := db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucket([]byte("widgets"))
+		require.NoError(t, err)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.Bucket([]byte("widgets")).NextSequence(); err != nil {
-			t.Fatal(err)
-		}
+	err = db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.Bucket([]byte("widgets")).NextSequence()
+		require.NoError(t, err)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *bolt.Tx) error {
 		seq, err := tx.Bucket([]byte("widgets")).NextSequence()
-		if err != nil {
-			t.Fatalf("unexpected error: %s", err)
-		} else if seq != 2 {
-			t.Fatalf("unexpected sequence: %d", seq)
-		}
+		require.NoErrorf(t, err, "unexpected error")
+		require.Equalf(t, uint64(2), seq, "unexpected sequence: %d", seq)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that retrieving the next sequence on a read-only bucket returns an error.
 func TestBucket_NextSequence_ReadOnly(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
-			t.Fatal(err)
-		}
+	err := db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucket([]byte("widgets"))
+		require.NoError(t, err)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
-	if err := db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *bolt.Tx) error {
 		_, err := tx.Bucket([]byte("widgets")).NextSequence()
-		if err != berrors.ErrTxNotWritable {
-			t.Fatalf("unexpected error: %s", err)
-		}
+		require.Equalf(t, err, berrors.ErrTxNotWritable, "unexpected error: %s", err)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that retrieving the next sequence for a bucket on a closed database return an error.
 func TestBucket_NextSequence_Closed(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 	tx, err := db.Begin(true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	b, err := tx.CreateBucket([]byte("widgets"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := tx.Rollback(); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := b.NextSequence(); err != berrors.ErrTxClosed {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+	require.NoError(t, tx.Rollback())
+	_, err = b.NextSequence()
+	require.Equal(t, err, berrors.ErrTxClosed)
 }
 
 // Ensure a user can loop over all key/value pairs in a bucket.
@@ -997,13 +744,13 @@ func TestBucket_ForEach(t *testing.T) {
 			items = append(items, kv{k: k, v: v})
 			return nil
 		})
-		assert.NoErrorf(t, err, "b.ForEach failed")
-		assert.Equal(t, expectedItems, items, "what we iterated (ForEach) is not what we put")
+		require.NoErrorf(t, err, "b.ForEach failed")
+		assert.Equalf(t, expectedItems, items, "what we iterated (ForEach) is not what we put")
 	}
 
 	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		require.NoError(t, err, "bucket creation failed")
+		require.NoErrorf(t, err, "bucket creation failed")
 
 		require.NoErrorf(t, b.Put([]byte("foo"), []byte("0000")), "put 'foo' failed")
 		require.NoErrorf(t, b.Put([]byte("baz"), []byte("0001")), "put 'baz' failed")
@@ -1018,7 +765,7 @@ func TestBucket_ForEach(t *testing.T) {
 	require.NoErrorf(t, err, "db.Update failed")
 	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("widgets"))
-		require.NotNil(t, b, "bucket opening failed")
+		require.NotNilf(t, b, "bucket opening failed")
 		verifyReads(b)
 		return nil
 	})
@@ -1039,13 +786,13 @@ func TestBucket_ForEachBucket(t *testing.T) {
 			items = append(items, k)
 			return nil
 		})
-		assert.NoErrorf(t, err, "b.ForEach failed")
-		assert.Equal(t, expectedItems, items, "what we iterated (ForEach) is not what we put")
+		require.NoErrorf(t, err, "b.ForEach failed")
+		assert.Equalf(t, expectedItems, items, "what we iterated (ForEach) is not what we put")
 	}
 
 	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		require.NoError(t, err, "bucket creation failed")
+		require.NoErrorf(t, err, "bucket creation failed")
 
 		require.NoErrorf(t, b.Put([]byte("foo"), []byte("0000")), "put 'foo' failed")
 		_, err = b.CreateBucket([]byte("zsubbucket"))
@@ -1059,10 +806,10 @@ func TestBucket_ForEachBucket(t *testing.T) {
 
 		return nil
 	})
-	assert.NoErrorf(t, err, "db.Update failed")
+	require.NoErrorf(t, err, "db.Update failed")
 	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("widgets"))
-		require.NotNil(t, b, "bucket opening failed")
+		require.NotNilf(t, b, "bucket opening failed")
 		verifyReads(b)
 		return nil
 	})
@@ -1078,13 +825,13 @@ func TestBucket_ForEachBucket_NoBuckets(t *testing.T) {
 			items = append(items, k)
 			return nil
 		})
-		assert.NoErrorf(t, err, "b.ForEach failed")
+		require.NoErrorf(t, err, "b.ForEach failed")
 		assert.Emptyf(t, items, "what we iterated (ForEach) is not what we put")
 	}
 
 	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		require.NoError(t, err, "bucket creation failed")
+		require.NoErrorf(t, err, "bucket creation failed")
 
 		require.NoErrorf(t, b.Put([]byte("foo"), []byte("0000")), "put 'foo' failed")
 		require.NoErrorf(t, err, "creation of subbucket failed")
@@ -1099,7 +846,7 @@ func TestBucket_ForEachBucket_NoBuckets(t *testing.T) {
 
 	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("widgets"))
-		require.NotNil(t, b, "bucket opening failed")
+		require.NotNilf(t, b, "bucket opening failed")
 		verifyReads(b)
 		return nil
 	})
@@ -1109,39 +856,27 @@ func TestBucket_ForEachBucket_NoBuckets(t *testing.T) {
 // Ensure a database can stop iteration early.
 func TestBucket_ForEach_ShortCircuit(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("bar"), []byte("0000")); err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("baz"), []byte("0000")); err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("foo"), []byte("0000")); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+		require.NoError(t, b.Put([]byte("bar"), []byte("0000")))
+		require.NoError(t, b.Put([]byte("baz"), []byte("0000")))
+		require.NoError(t, b.Put([]byte("foo"), []byte("0000")))
 
 		var index int
-		if err := tx.Bucket([]byte("widgets")).ForEach(func(k, v []byte) error {
+		err = tx.Bucket([]byte("widgets")).ForEach(func(k, v []byte) error {
 			index++
 			if bytes.Equal(k, []byte("baz")) {
 				return errors.New("marker")
 			}
 			return nil
-		}); err == nil || err.Error() != "marker" {
-			t.Fatalf("unexpected error: %s", err)
-		}
-		if index != 2 {
-			t.Fatalf("unexpected index: %d", index)
-		}
+		})
+		require.EqualErrorf(t, err, "marker", "unexpected error: %s", err)
+		require.Equalf(t, 2, index, "unexpected index: %d", index)
 
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that looping over a bucket on a closed database returns an error.
@@ -1149,60 +884,40 @@ func TestBucket_ForEach_Closed(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
 	tx, err := db.Begin(true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	b, err := tx.CreateBucket([]byte("widgets"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if err := tx.Rollback(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, tx.Rollback())
 
-	if err := b.ForEach(func(k, v []byte) error { return nil }); err != berrors.ErrTxClosed {
-		t.Fatalf("unexpected error: %s", err)
-	}
+	require.Equalf(t, b.ForEach(func(k, v []byte) error { return nil }), berrors.ErrTxClosed, "unexpected error")
 }
 
 // Ensure that an error is returned when inserting with an empty key.
 func TestBucket_Put_EmptyKey(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte(""), []byte("bar")); err != berrors.ErrKeyRequired {
-			t.Fatalf("unexpected error: %s", err)
-		}
-		if err := b.Put(nil, []byte("bar")); err != berrors.ErrKeyRequired {
-			t.Fatalf("unexpected error: %s", err)
-		}
+		require.NoError(t, err)
+		require.Equalf(t, b.Put([]byte(""), []byte("bar")), berrors.ErrKeyRequired, "unexpected error")
+		require.Equalf(t, b.Put(nil, []byte("bar")), berrors.ErrKeyRequired, "unexpected error")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that an error is returned when inserting with a key that's too large.
 func TestBucket_Put_KeyTooLarge(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put(make([]byte, 32769), []byte("bar")); err != berrors.ErrKeyTooLarge {
-			t.Fatalf("unexpected error: %s", err)
-		}
+		require.NoError(t, err)
+		require.Equalf(t, b.Put(make([]byte, 32769), []byte("bar")), berrors.ErrKeyTooLarge, "unexpected error")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that an error is returned when inserting a value that's too large.
@@ -1214,18 +929,13 @@ func TestBucket_Put_ValueTooLarge(t *testing.T) {
 
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("foo"), make([]byte, bolt.MaxValueSize+1)); err != berrors.ErrValueTooLarge {
-			t.Fatalf("unexpected error: %s", err)
-		}
+		require.NoError(t, err)
+		require.Equalf(t, b.Put([]byte("foo"), make([]byte, bolt.MaxValueSize+1)), berrors.ErrValueTooLarge, "unexpected error")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure a bucket can calculate stats.
@@ -1239,29 +949,21 @@ func TestBucket_Stats(t *testing.T) {
 	// Add bucket with fewer keys but one big value.
 	bigKey := []byte("really-big-value")
 	for i := 0; i < 500; i++ {
-		if err := db.Update(func(tx *bolt.Tx) error {
+		err := db.Update(func(tx *bolt.Tx) error {
 			b, err := tx.CreateBucketIfNotExists([]byte("woojits"))
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
-			if err := b.Put([]byte(fmt.Sprintf("%03d", i)), []byte(strconv.Itoa(i))); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, b.Put([]byte(fmt.Sprintf("%03d", i)), []byte(strconv.Itoa(i))))
 			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
+		require.NoError(t, err)
 	}
 	longKeyLength := 10*db.Info().PageSize + 17
-	if err := db.Update(func(tx *bolt.Tx) error {
-		if err := tx.Bucket([]byte("woojits")).Put(bigKey, []byte(strings.Repeat("*", longKeyLength))); err != nil {
-			t.Fatal(err)
-		}
+	err := db.Update(func(tx *bolt.Tx) error {
+		require.NoError(t, tx.Bucket([]byte("woojits")).Put(bigKey, []byte(strings.Repeat("*", longKeyLength))))
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	db.MustCheck()
 
@@ -1322,18 +1024,17 @@ func TestBucket_Stats(t *testing.T) {
 			InlineBucketInuse: 0},
 	}
 
-	if err := db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *bolt.Tx) error {
 		stats := tx.Bucket([]byte("woojits")).Stats()
 		t.Logf("Stats: %#v", stats)
 		if expected, ok := pageSize2stats[db.Info().PageSize]; ok {
-			assert.EqualValues(t, expected, stats, "stats differs from expectations")
+			assert.Equalf(t, expected, stats, "stats differs from expectations")
 		} else {
 			t.Skipf("No expectations for page size: %d", db.Info().PageSize)
 		}
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure a bucket with random insertion utilizes fill percentage correctly.
@@ -1351,240 +1052,160 @@ func TestBucket_Stats_RandomFill(t *testing.T) {
 	var count int
 	rand := rand.New(rand.NewSource(42))
 	for _, i := range rand.Perm(1000) {
-		if err := db.Update(func(tx *bolt.Tx) error {
+		err := db.Update(func(tx *bolt.Tx) error {
 			b, err := tx.CreateBucketIfNotExists([]byte("woojits"))
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			b.FillPercent = 0.9
 			for _, j := range rand.Perm(100) {
 				index := (j * 10000) + i
-				if err := b.Put([]byte(fmt.Sprintf("%d000000000000000", index)), []byte("0000000000")); err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, b.Put([]byte(fmt.Sprintf("%d000000000000000", index)), []byte("0000000000")))
 				count++
 			}
 			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
+		require.NoError(t, err)
 	}
 
 	db.MustCheck()
 
-	if err := db.View(func(tx *bolt.Tx) error {
+	err := db.View(func(tx *bolt.Tx) error {
 		stats := tx.Bucket([]byte("woojits")).Stats()
-		if stats.KeyN != 100000 {
-			t.Fatalf("unexpected KeyN: %d", stats.KeyN)
-		}
+		require.Equalf(t, 100000, stats.KeyN, "unexpected KeyN: %d", stats.KeyN)
 
-		if stats.BranchPageN != 98 {
-			t.Fatalf("unexpected BranchPageN: %d", stats.BranchPageN)
-		} else if stats.BranchOverflowN != 0 {
-			t.Fatalf("unexpected BranchOverflowN: %d", stats.BranchOverflowN)
-		} else if stats.BranchInuse != 130984 {
-			t.Fatalf("unexpected BranchInuse: %d", stats.BranchInuse)
-		} else if stats.BranchAlloc != 401408 {
-			t.Fatalf("unexpected BranchAlloc: %d", stats.BranchAlloc)
-		}
+		require.Equalf(t, 98, stats.BranchPageN, "unexpected BranchPageN: %d", stats.BranchPageN)
+		require.Equalf(t, 0, stats.BranchOverflowN, "unexpected BranchOverflowN: %d", stats.BranchOverflowN)
+		require.Equalf(t, 130984, stats.BranchInuse, "unexpected BranchInuse: %d", stats.BranchInuse)
+		require.Equalf(t, 401408, stats.BranchAlloc, "unexpected BranchAlloc: %d", stats.BranchAlloc)
 
-		if stats.LeafPageN != 3412 {
-			t.Fatalf("unexpected LeafPageN: %d", stats.LeafPageN)
-		} else if stats.LeafOverflowN != 0 {
-			t.Fatalf("unexpected LeafOverflowN: %d", stats.LeafOverflowN)
-		} else if stats.LeafInuse != 4742482 {
-			t.Fatalf("unexpected LeafInuse: %d", stats.LeafInuse)
-		} else if stats.LeafAlloc != 13975552 {
-			t.Fatalf("unexpected LeafAlloc: %d", stats.LeafAlloc)
-		}
+		require.Equalf(t, 3412, stats.LeafPageN, "unexpected LeafPageN: %d", stats.LeafPageN)
+		require.Equalf(t, 0, stats.LeafOverflowN, "unexpected LeafOverflowN: %d", stats.LeafOverflowN)
+		require.Equalf(t, 4742482, stats.LeafInuse, "unexpected LeafInuse: %d", stats.LeafInuse)
+		require.Equalf(t, 13975552, stats.LeafAlloc, "unexpected LeafAlloc: %d", stats.LeafAlloc)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure a bucket can calculate stats.
 func TestBucket_Stats_Small(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		// Add a bucket that fits on a single root leaf.
 		b, err := tx.CreateBucket([]byte("whozawhats"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("foo"), []byte("bar")); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+		require.NoError(t, b.Put([]byte("foo"), []byte("bar")))
 
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	db.MustCheck()
 
-	if err := db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("whozawhats"))
 		stats := b.Stats()
-		if stats.BranchPageN != 0 {
-			t.Fatalf("unexpected BranchPageN: %d", stats.BranchPageN)
-		} else if stats.BranchOverflowN != 0 {
-			t.Fatalf("unexpected BranchOverflowN: %d", stats.BranchOverflowN)
-		} else if stats.LeafPageN != 0 {
-			t.Fatalf("unexpected LeafPageN: %d", stats.LeafPageN)
-		} else if stats.LeafOverflowN != 0 {
-			t.Fatalf("unexpected LeafOverflowN: %d", stats.LeafOverflowN)
-		} else if stats.KeyN != 1 {
-			t.Fatalf("unexpected KeyN: %d", stats.KeyN)
-		} else if stats.Depth != 1 {
-			t.Fatalf("unexpected Depth: %d", stats.Depth)
-		} else if stats.BranchInuse != 0 {
-			t.Fatalf("unexpected BranchInuse: %d", stats.BranchInuse)
-		} else if stats.LeafInuse != 0 {
-			t.Fatalf("unexpected LeafInuse: %d", stats.LeafInuse)
-		}
+		require.Equalf(t, 0, stats.BranchPageN, "unexpected BranchPageN: %d", stats.BranchPageN)
+		require.Equalf(t, 0, stats.BranchOverflowN, "unexpected BranchOverflowN: %d", stats.BranchOverflowN)
+		require.Equalf(t, 0, stats.LeafPageN, "unexpected LeafPageN: %d", stats.LeafPageN)
+		require.Equalf(t, 0, stats.LeafOverflowN, "unexpected LeafOverflowN: %d", stats.LeafOverflowN)
+		require.Equalf(t, 1, stats.KeyN, "unexpected KeyN: %d", stats.KeyN)
+		require.Equalf(t, 1, stats.Depth, "unexpected Depth: %d", stats.Depth)
+		require.Equalf(t, 0, stats.BranchInuse, "unexpected BranchInuse: %d", stats.BranchInuse)
+		require.Equalf(t, 0, stats.LeafInuse, "unexpected LeafInuse: %d", stats.LeafInuse)
 
 		if db.Info().PageSize == 4096 {
-			if stats.BranchAlloc != 0 {
-				t.Fatalf("unexpected BranchAlloc: %d", stats.BranchAlloc)
-			} else if stats.LeafAlloc != 0 {
-				t.Fatalf("unexpected LeafAlloc: %d", stats.LeafAlloc)
-			}
+			require.Equalf(t, 0, stats.BranchAlloc, "unexpected BranchAlloc: %d", stats.BranchAlloc)
+			require.Equalf(t, 0, stats.LeafAlloc, "unexpected LeafAlloc: %d", stats.LeafAlloc)
 		}
 
-		if stats.BucketN != 1 {
-			t.Fatalf("unexpected BucketN: %d", stats.BucketN)
-		} else if stats.InlineBucketN != 1 {
-			t.Fatalf("unexpected InlineBucketN: %d", stats.InlineBucketN)
-		} else if stats.InlineBucketInuse != 16+16+6 {
-			t.Fatalf("unexpected InlineBucketInuse: %d", stats.InlineBucketInuse)
-		}
+		require.Equalf(t, 1, stats.BucketN, "unexpected BucketN: %d", stats.BucketN)
+		require.Equalf(t, 1, stats.InlineBucketN, "unexpected InlineBucketN: %d", stats.InlineBucketN)
+		require.Equalf(t, 16+16+6, stats.InlineBucketInuse, "unexpected InlineBucketInuse: %d", stats.InlineBucketInuse)
 
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 func TestBucket_Stats_EmptyBucket(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		// Add a bucket that fits on a single root leaf.
-		if _, err := tx.CreateBucket([]byte("whozawhats")); err != nil {
-			t.Fatal(err)
-		}
+		_, err := tx.CreateBucket([]byte("whozawhats"))
+		require.NoError(t, err)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	db.MustCheck()
 
-	if err := db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("whozawhats"))
 		stats := b.Stats()
-		if stats.BranchPageN != 0 {
-			t.Fatalf("unexpected BranchPageN: %d", stats.BranchPageN)
-		} else if stats.BranchOverflowN != 0 {
-			t.Fatalf("unexpected BranchOverflowN: %d", stats.BranchOverflowN)
-		} else if stats.LeafPageN != 0 {
-			t.Fatalf("unexpected LeafPageN: %d", stats.LeafPageN)
-		} else if stats.LeafOverflowN != 0 {
-			t.Fatalf("unexpected LeafOverflowN: %d", stats.LeafOverflowN)
-		} else if stats.KeyN != 0 {
-			t.Fatalf("unexpected KeyN: %d", stats.KeyN)
-		} else if stats.Depth != 1 {
-			t.Fatalf("unexpected Depth: %d", stats.Depth)
-		} else if stats.BranchInuse != 0 {
-			t.Fatalf("unexpected BranchInuse: %d", stats.BranchInuse)
-		} else if stats.LeafInuse != 0 {
-			t.Fatalf("unexpected LeafInuse: %d", stats.LeafInuse)
-		}
+		require.Equalf(t, 0, stats.BranchPageN, "unexpected BranchPageN: %d", stats.BranchPageN)
+		require.Equalf(t, 0, stats.BranchOverflowN, "unexpected BranchOverflowN: %d", stats.BranchOverflowN)
+		require.Equalf(t, 0, stats.LeafPageN, "unexpected LeafPageN: %d", stats.LeafPageN)
+		require.Equalf(t, 0, stats.LeafOverflowN, "unexpected LeafOverflowN: %d", stats.LeafOverflowN)
+		require.Equalf(t, 0, stats.KeyN, "unexpected KeyN: %d", stats.KeyN)
+		require.Equalf(t, 1, stats.Depth, "unexpected Depth: %d", stats.Depth)
+		require.Equalf(t, 0, stats.BranchInuse, "unexpected BranchInuse: %d", stats.BranchInuse)
+		require.Equalf(t, 0, stats.LeafInuse, "unexpected LeafInuse: %d", stats.LeafInuse)
 
 		if db.Info().PageSize == 4096 {
-			if stats.BranchAlloc != 0 {
-				t.Fatalf("unexpected BranchAlloc: %d", stats.BranchAlloc)
-			} else if stats.LeafAlloc != 0 {
-				t.Fatalf("unexpected LeafAlloc: %d", stats.LeafAlloc)
-			}
+			require.Equalf(t, 0, stats.BranchAlloc, "unexpected BranchAlloc: %d", stats.BranchAlloc)
+			require.Equalf(t, 0, stats.LeafAlloc, "unexpected LeafAlloc: %d", stats.LeafAlloc)
 		}
 
-		if stats.BucketN != 1 {
-			t.Fatalf("unexpected BucketN: %d", stats.BucketN)
-		} else if stats.InlineBucketN != 1 {
-			t.Fatalf("unexpected InlineBucketN: %d", stats.InlineBucketN)
-		} else if stats.InlineBucketInuse != 16 {
-			t.Fatalf("unexpected InlineBucketInuse: %d", stats.InlineBucketInuse)
-		}
+		require.Equalf(t, 1, stats.BucketN, "unexpected BucketN: %d", stats.BucketN)
+		require.Equalf(t, 1, stats.InlineBucketN, "unexpected InlineBucketN: %d", stats.InlineBucketN)
+		require.Equalf(t, 16, stats.InlineBucketInuse, "unexpected InlineBucketInuse: %d", stats.InlineBucketInuse)
 
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure a bucket can calculate stats.
 func TestBucket_Stats_Nested(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("foo"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		for i := 0; i < 100; i++ {
-			if err := b.Put([]byte(fmt.Sprintf("%02d", i)), []byte(fmt.Sprintf("%02d", i))); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, b.Put([]byte(fmt.Sprintf("%02d", i)), []byte(fmt.Sprintf("%02d", i))))
 		}
 
 		bar, err := b.CreateBucket([]byte("bar"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		for i := 0; i < 10; i++ {
-			if err := bar.Put([]byte(strconv.Itoa(i)), []byte(strconv.Itoa(i))); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, bar.Put([]byte(strconv.Itoa(i)), []byte(strconv.Itoa(i))))
 		}
 
 		baz, err := bar.CreateBucket([]byte("baz"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		for i := 0; i < 10; i++ {
-			if err := baz.Put([]byte(strconv.Itoa(i)), []byte(strconv.Itoa(i))); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, baz.Put([]byte(strconv.Itoa(i)), []byte(strconv.Itoa(i))))
 		}
 
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	db.MustCheck()
 
-	if err := db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("foo"))
 		stats := b.Stats()
-		if stats.BranchPageN != 0 {
-			t.Fatalf("unexpected BranchPageN: %d", stats.BranchPageN)
-		} else if stats.BranchOverflowN != 0 {
-			t.Fatalf("unexpected BranchOverflowN: %d", stats.BranchOverflowN)
-		} else if stats.LeafPageN != 2 {
-			t.Fatalf("unexpected LeafPageN: %d", stats.LeafPageN)
-		} else if stats.LeafOverflowN != 0 {
-			t.Fatalf("unexpected LeafOverflowN: %d", stats.LeafOverflowN)
-		} else if stats.KeyN != 122 {
-			t.Fatalf("unexpected KeyN: %d", stats.KeyN)
-		} else if stats.Depth != 3 {
-			t.Fatalf("unexpected Depth: %d", stats.Depth)
-		} else if stats.BranchInuse != 0 {
-			t.Fatalf("unexpected BranchInuse: %d", stats.BranchInuse)
-		}
+		require.Equalf(t, 0, stats.BranchPageN, "unexpected BranchPageN: %d", stats.BranchPageN)
+		require.Equalf(t, 0, stats.BranchOverflowN, "unexpected BranchOverflowN: %d", stats.BranchOverflowN)
+		require.Equalf(t, 2, stats.LeafPageN, "unexpected LeafPageN: %d", stats.LeafPageN)
+		require.Equalf(t, 0, stats.LeafOverflowN, "unexpected LeafOverflowN: %d", stats.LeafOverflowN)
+		require.Equalf(t, 122, stats.KeyN, "unexpected KeyN: %d", stats.KeyN)
+		require.Equalf(t, 3, stats.Depth, "unexpected Depth: %d", stats.Depth)
+		require.Equalf(t, 0, stats.BranchInuse, "unexpected BranchInuse: %d", stats.BranchInuse)
 
 		foo := 16            // foo (pghdr)
 		foo += 101 * 16      // foo leaf elements
@@ -1600,30 +1221,20 @@ func TestBucket_Stats_Nested(t *testing.T) {
 		baz += 10 * 16 // baz leaf elements
 		baz += 10 + 10 // baz leaf key/values
 
-		if stats.LeafInuse != foo+bar+baz {
-			t.Fatalf("unexpected LeafInuse: %d", stats.LeafInuse)
-		}
+		require.Equalf(t, stats.LeafInuse, foo+bar+baz, "unexpected LeafInuse: %d", stats.LeafInuse)
 
 		if db.Info().PageSize == 4096 {
-			if stats.BranchAlloc != 0 {
-				t.Fatalf("unexpected BranchAlloc: %d", stats.BranchAlloc)
-			} else if stats.LeafAlloc != 8192 {
-				t.Fatalf("unexpected LeafAlloc: %d", stats.LeafAlloc)
-			}
+			require.Equalf(t, 0, stats.BranchAlloc, "unexpected BranchAlloc: %d", stats.BranchAlloc)
+			require.Equalf(t, 8192, stats.LeafAlloc, "unexpected LeafAlloc: %d", stats.LeafAlloc)
 		}
 
-		if stats.BucketN != 3 {
-			t.Fatalf("unexpected BucketN: %d", stats.BucketN)
-		} else if stats.InlineBucketN != 1 {
-			t.Fatalf("unexpected InlineBucketN: %d", stats.InlineBucketN)
-		} else if stats.InlineBucketInuse != baz {
-			t.Fatalf("unexpected InlineBucketInuse: %d", stats.InlineBucketInuse)
-		}
+		require.Equalf(t, 3, stats.BucketN, "unexpected BucketN: %d", stats.BucketN)
+		require.Equalf(t, 1, stats.InlineBucketN, "unexpected InlineBucketN: %d", stats.InlineBucketN)
+		require.Equalf(t, stats.InlineBucketInuse, baz, "unexpected InlineBucketInuse: %d", stats.InlineBucketInuse)
 
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 func TestBucket_Inspect(t *testing.T) {
@@ -1702,8 +1313,7 @@ func TestBucket_Inspect(t *testing.T) {
 
 			if item.b != nil {
 				for i := 0; i < item.bs.KeyN; i++ {
-					err := item.b.Put([]byte(fmt.Sprintf("%02d", i)), []byte(fmt.Sprintf("%02d", i)))
-					require.NoError(t, err)
+					require.NoError(t, item.b.Put([]byte(fmt.Sprintf("%02d", i)), []byte(fmt.Sprintf("%02d", i))))
 				}
 
 				for _, child := range item.bs.Children {
@@ -1742,21 +1352,16 @@ func TestBucket_Stats_Large(t *testing.T) {
 	var index int
 	for i := 0; i < 100; i++ {
 		// Add bucket with lots of keys.
-		if err := db.Update(func(tx *bolt.Tx) error {
+		err := db.Update(func(tx *bolt.Tx) error {
 			b, err := tx.CreateBucketIfNotExists([]byte("widgets"))
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			for i := 0; i < 1000; i++ {
-				if err := b.Put([]byte(strconv.Itoa(index)), []byte(strconv.Itoa(index))); err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, b.Put([]byte(strconv.Itoa(index)), []byte(strconv.Itoa(index))))
 				index++
 			}
 			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
+		require.NoError(t, err)
 	}
 
 	db.MustCheck()
@@ -1806,18 +1411,17 @@ func TestBucket_Stats_Large(t *testing.T) {
 			InlineBucketInuse: 0},
 	}
 
-	if err := db.View(func(tx *bolt.Tx) error {
+	err := db.View(func(tx *bolt.Tx) error {
 		stats := tx.Bucket([]byte("widgets")).Stats()
 		t.Logf("Stats: %#v", stats)
 		if expected, ok := pageSize2stats[db.Info().PageSize]; ok {
-			assert.EqualValues(t, expected, stats, "stats differs from expectations")
+			assert.Equalf(t, expected, stats, "stats differs from expectations")
 		} else {
 			t.Skipf("No expectations for page size: %d", db.Info().PageSize)
 		}
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that a bucket can write random keys and values across multiple transactions.
@@ -1827,34 +1431,31 @@ func TestBucket_Put_Single(t *testing.T) {
 	}
 
 	index := 0
-	if err := quick.Check(func(items testdata) bool {
+	err := quick.Check(func(items testdata) bool {
 		db := btesting.MustCreateDB(t)
 		defer db.MustClose()
 
 		m := make(map[string][]byte)
 
-		if err := db.Update(func(tx *bolt.Tx) error {
-			if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
-				t.Fatal(err)
-			}
+		err := db.Update(func(tx *bolt.Tx) error {
+			_, err := tx.CreateBucket([]byte("widgets"))
+			require.NoError(t, err)
 			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
+		require.NoError(t, err)
 
 		for _, item := range items {
-			if err := db.Update(func(tx *bolt.Tx) error {
+			err := db.Update(func(tx *bolt.Tx) error {
 				if err := tx.Bucket([]byte("widgets")).Put(item.Key, item.Value); err != nil {
 					panic("put error: " + err.Error())
 				}
 				m[string(item.Key)] = item.Value
 				return nil
-			}); err != nil {
-				t.Fatal(err)
-			}
+			})
+			require.NoError(t, err)
 
 			// Verify all key/values so far.
-			if err := db.View(func(tx *bolt.Tx) error {
+			err = db.View(func(tx *bolt.Tx) error {
 				i := 0
 				for k, v := range m {
 					value := tx.Bucket([]byte("widgets")).Get([]byte(k))
@@ -1866,16 +1467,14 @@ func TestBucket_Put_Single(t *testing.T) {
 					i++
 				}
 				return nil
-			}); err != nil {
-				t.Fatal(err)
-			}
+			})
+			require.NoError(t, err)
 		}
 
 		index++
 		return true
-	}, qconfig()); err != nil {
-		t.Error(err)
-	}
+	}, qconfig())
+	assert.NoError(t, err)
 }
 
 // Ensure that a transaction can insert multiple key/value pairs at once.
@@ -1884,34 +1483,29 @@ func TestBucket_Put_Multiple(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
-	if err := quick.Check(func(items testdata) bool {
+	err := quick.Check(func(items testdata) bool {
 		db := btesting.MustCreateDB(t)
 		defer db.MustClose()
 
 		// Bulk insert all values.
-		if err := db.Update(func(tx *bolt.Tx) error {
-			if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
-				t.Fatal(err)
-			}
+		err := db.Update(func(tx *bolt.Tx) error {
+			_, err := tx.CreateBucket([]byte("widgets"))
+			require.NoError(t, err)
 			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
+		require.NoError(t, err)
 
-		if err := db.Update(func(tx *bolt.Tx) error {
+		err = db.Update(func(tx *bolt.Tx) error {
 			b := tx.Bucket([]byte("widgets"))
 			for _, item := range items {
-				if err := b.Put(item.Key, item.Value); err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, b.Put(item.Key, item.Value))
 			}
 			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
+		require.NoError(t, err)
 
 		// Verify all items exist.
-		if err := db.View(func(tx *bolt.Tx) error {
+		err = db.View(func(tx *bolt.Tx) error {
 			b := tx.Bucket([]byte("widgets"))
 			for _, item := range items {
 				value := b.Get(item.Key)
@@ -1921,14 +1515,12 @@ func TestBucket_Put_Multiple(t *testing.T) {
 				}
 			}
 			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
+		require.NoError(t, err)
 
 		return true
-	}, qconfig()); err != nil {
-		t.Error(err)
-	}
+	}, qconfig())
+	assert.NoError(t, err)
 }
 
 // Ensure that a transaction can delete all key/value pairs and return to a single leaf page.
@@ -1937,58 +1529,49 @@ func TestBucket_Delete_Quick(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
-	if err := quick.Check(func(items testdata) bool {
+	err := quick.Check(func(items testdata) bool {
 		db := btesting.MustCreateDB(t)
 		defer db.MustClose()
 
 		// Bulk insert all values.
-		if err := db.Update(func(tx *bolt.Tx) error {
-			if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
-				t.Fatal(err)
-			}
+		err := db.Update(func(tx *bolt.Tx) error {
+			_, err := tx.CreateBucket([]byte("widgets"))
+			require.NoError(t, err)
 			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
+		require.NoError(t, err)
 
-		if err := db.Update(func(tx *bolt.Tx) error {
+		err = db.Update(func(tx *bolt.Tx) error {
 			b := tx.Bucket([]byte("widgets"))
 			for _, item := range items {
-				if err := b.Put(item.Key, item.Value); err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, b.Put(item.Key, item.Value))
 			}
 			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
+		require.NoError(t, err)
 
 		// Remove items one at a time and check consistency.
 		for _, item := range items {
-			if err := db.Update(func(tx *bolt.Tx) error {
+			err := db.Update(func(tx *bolt.Tx) error {
 				return tx.Bucket([]byte("widgets")).Delete(item.Key)
-			}); err != nil {
-				t.Fatal(err)
-			}
+			})
+			require.NoError(t, err)
 		}
 
 		// Anything before our deletion index should be nil.
-		if err := db.View(func(tx *bolt.Tx) error {
-			if err := tx.Bucket([]byte("widgets")).ForEach(func(k, v []byte) error {
+		err = db.View(func(tx *bolt.Tx) error {
+			err := tx.Bucket([]byte("widgets")).ForEach(func(k, v []byte) error {
 				t.Fatalf("bucket should be empty; found: %06x", trunc(k, 3))
 				return nil
-			}); err != nil {
-				t.Fatal(err)
-			}
+			})
+			require.NoError(t, err)
 			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
+		require.NoError(t, err)
 
 		return true
-	}, qconfig()); err != nil {
-		t.Error(err)
-	}
+	}, qconfig())
+	assert.NoError(t, err)
 }
 
 func BenchmarkBucket_CreateBucketIfNotExists(b *testing.B) {
