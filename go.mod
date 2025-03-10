@@ -1,7 +1,6 @@
 module go.etcd.io/bbolt
 
 go 1.23
-
 toolchain go1.23.6
 
 require (
@@ -10,7 +9,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	go.etcd.io/gofail v0.2.0
 	golang.org/x/sync v0.11.0
-	golang.org/x/sys v0.30.0
+	golang.org/x/sys v0.31.0
 )
 
 require (
