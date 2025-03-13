@@ -33,9 +33,7 @@ func TestInfoCommand_Run(t *testing.T) {
 
 	// Run the info command.
 	m := NewMain()
-	if err := m.Run("info", db.Path()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, m.Run("info", db.Path()))
 }
 
 // Ensure the "stats" command executes correctly with an empty database.
@@ -72,11 +70,8 @@ func TestStatsCommand_Run_EmptyDatabase(t *testing.T) {
 
 	// Run the command.
 	m := NewMain()
-	if err := m.Run("stats", db.Path()); err != nil {
-		t.Fatal(err)
-	} else if m.Stdout.String() != exp {
-		t.Fatalf("unexpected stdout:\n\n%s", m.Stdout.String())
-	}
+	require.NoError(t, m.Run("stats", db.Path()))
+	require.Equalf(t, exp, m.Stdout.String(), "unexpected stdout")
 }
 
 func TestDumpCommand_Run(t *testing.T) {
@@ -88,11 +83,8 @@ func TestDumpCommand_Run(t *testing.T) {
 	exp := `0000010 edda 0ced 0200 0000 0010 0000 0000 0000`
 
 	m := NewMain()
-	err := m.Run("dump", db.Path(), "0")
-	require.NoError(t, err)
-	if !strings.Contains(m.Stdout.String(), exp) {
-		t.Fatalf("unexpected stdout:\n%s\n", m.Stdout.String())
-	}
+	require.NoError(t, m.Run("dump", db.Path(), "0"))
+	require.Containsf(t, m.Stdout.String(), exp, "unexpected stdout")
 }
 
 func TestPageCommand_Run(t *testing.T) {
@@ -115,11 +107,8 @@ func TestPageCommand_Run(t *testing.T) {
 		"Checksum:   07516e114689fdee\n\n"
 
 	m := NewMain()
-	err := m.Run("page", db.Path(), "0")
-	require.NoError(t, err)
-	if m.Stdout.String() != exp {
-		t.Fatalf("unexpected stdout:\n%s\n%s", m.Stdout.String(), exp)
-	}
+	require.NoError(t, m.Run("page", db.Path(), "0"))
+	require.Equalf(t, exp, m.Stdout.String(), "unexpected stdout")
 }
 
 func TestPageItemCommand_Run(t *testing.T) {
@@ -205,7 +194,7 @@ func TestStatsCommand_Run(t *testing.T) {
 
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		// Create "foo" bucket.
 		b, err := tx.CreateBucket([]byte("foo"))
 		if err != nil {
@@ -238,9 +227,8 @@ func TestStatsCommand_Run(t *testing.T) {
 		}
 
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 	db.Close()
 
 	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
@@ -267,18 +255,15 @@ func TestStatsCommand_Run(t *testing.T) {
 
 	// Run the command.
 	m := NewMain()
-	if err := m.Run("stats", db.Path()); err != nil {
-		t.Fatal(err)
-	} else if m.Stdout.String() != exp {
-		t.Fatalf("unexpected stdout:\n\n%s", m.Stdout.String())
-	}
+	require.NoError(t, m.Run("stats", db.Path()))
+	require.Equalf(t, exp, m.Stdout.String(), "unexpected stdout")
 }
 
 // Ensure the "buckets" command can print a list of buckets.
 func TestBucketsCommand_Run(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		for _, name := range []string{"foo", "bar", "baz"} {
 			_, err := tx.CreateBucket([]byte(name))
 			if err != nil {
@@ -286,9 +271,8 @@ func TestBucketsCommand_Run(t *testing.T) {
 			}
 		}
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 	db.Close()
 
 	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
@@ -297,11 +281,8 @@ func TestBucketsCommand_Run(t *testing.T) {
 
 	// Run the command.
 	m := NewMain()
-	if err := m.Run("buckets", db.Path()); err != nil {
-		t.Fatal(err)
-	} else if actual := m.Stdout.String(); actual != expected {
-		t.Fatalf("unexpected stdout:\n\n%s", actual)
-	}
+	require.NoError(t, m.Run("buckets", db.Path()))
+	require.Equalf(t, expected, m.Stdout.String(), "unexpected stdout")
 }
 
 // Ensure the "keys" command can print a list of keys for a bucket.
@@ -363,10 +344,8 @@ func TestKeysCommand_Run(t *testing.T) {
 
 			t.Log("running Keys cmd")
 			m := NewMain()
-			kErr := m.Run("keys", db.Path(), tc.testBucket)
-			require.NoError(t, kErr)
-			actual := m.Stdout.String()
-			assert.Equal(t, tc.expected, actual)
+			require.NoError(t, m.Run("keys", db.Path(), tc.testBucket))
+			assert.Equal(t, tc.expected, m.Stdout.String())
 		})
 	}
 }
@@ -400,7 +379,7 @@ func TestGetCommand_Run(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			db := btesting.MustCreateDB(t)
 
-			if err := db.Update(func(tx *bolt.Tx) error {
+			err := db.Update(func(tx *bolt.Tx) error {
 				b, err := tx.CreateBucket([]byte(tc.testBucket))
 				if err != nil {
 					return err
@@ -416,20 +395,16 @@ func TestGetCommand_Run(t *testing.T) {
 					}
 				}
 				return nil
-			}); err != nil {
-				t.Fatal(err)
-			}
+			})
+			require.NoError(t, err)
 			db.Close()
 
 			defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
 
 			// Run the command.
 			m := NewMain()
-			if err := m.Run("get", db.Path(), tc.testBucket, tc.testKey); err != nil {
-				t.Fatal(err)
-			}
-			actual := m.Stdout.String()
-			assert.Equal(t, tc.expectedValue, actual)
+			require.NoError(t, m.Run("get", db.Path(), tc.testBucket, tc.testKey))
+			assert.Equal(t, tc.expectedValue, m.Stdout.String())
 		})
 	}
 }
@@ -479,9 +454,7 @@ func TestBenchCommand_Run(t *testing.T) {
 			// Run the command.
 			m := NewMain()
 			args := append([]string{"bench"}, test.args...)
-			if err := m.Run(args...); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, m.Run(args...))
 
 			stderr := m.Stderr.String()
 			stdout := m.Stdout.String()
@@ -489,9 +462,7 @@ func TestBenchCommand_Run(t *testing.T) {
 				t.Fatal(fmt.Errorf("benchmark result does not contain read/write start output:\n%s", stderr))
 			}
 
-			if strings.Contains(stderr, "iter mismatch") {
-				t.Fatal(fmt.Errorf("found iter mismatch in stdout:\n%s", stderr))
-			}
+			require.NotContainsf(t, stderr, "iter mismatch", "found iter mismatch in stdout:\n%s", stderr)
 
 			if !strings.Contains(stdout, "# Write") || !strings.Contains(stdout, "# Read") {
 				t.Fatal(fmt.Errorf("benchmark result does not contain read/write output:\n%s", stdout))
@@ -549,7 +520,7 @@ func TestCompactCommand_Run(t *testing.T) {
 
 	// fill the db
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		n := 2 + rand.Intn(5)
 		for i := 0; i < n; i++ {
 			k := []byte(fmt.Sprintf("b%d", i))
@@ -565,12 +536,11 @@ func TestCompactCommand_Run(t *testing.T) {
 			}
 		}
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	// make the db grow by adding large values, and delete them.
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte("large_vals"))
 		if err != nil {
 			return err
@@ -587,10 +557,9 @@ func TestCompactCommand_Run(t *testing.T) {
 			}
 		}
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Update(func(tx *bolt.Tx) error {
+	})
+	require.NoError(t, err)
+	err = db.Update(func(tx *bolt.Tx) error {
 		c := tx.Bucket([]byte("large_vals")).Cursor()
 		for k, _ := c.First(); k != nil; k, _ = c.Next() {
 			if err := c.Delete(); err != nil {
@@ -598,37 +567,24 @@ func TestCompactCommand_Run(t *testing.T) {
 			}
 		}
 		return tx.DeleteBucket([]byte("large_vals"))
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 	db.Close()
 
 	dbChk, err := chkdb(db.Path())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	m := NewMain()
-	if err := m.Run("compact", "-o", dstdb.Path(), db.Path()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, m.Run("compact", "-o", dstdb.Path(), db.Path()))
 
 	dbChkAfterCompact, err := chkdb(db.Path())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	dstdbChk, err := chkdb(dstdb.Path())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if !bytes.Equal(dbChk, dbChkAfterCompact) {
-		t.Error("the original db has been touched")
-	}
-	if !bytes.Equal(dbChk, dstdbChk) {
-		t.Error("the compacted db data isn't the same than the original db")
-	}
+	assert.Truef(t, bytes.Equal(dbChk, dbChkAfterCompact), "the original db has been touched")
+	assert.Truef(t, bytes.Equal(dbChk, dstdbChk), "the compacted db data isn't the same than the original db")
 }
 
 func TestCommands_Run_NoArgs(t *testing.T) {
