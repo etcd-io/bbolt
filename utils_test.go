@@ -12,7 +12,7 @@ func dumpBucket(srcBucketName []byte, srcBucket *bolt.Bucket, dstFilename string
 	common.Assert(srcBucket != nil, "the source bucket can't be nil")
 	common.Assert(len(dstFilename) != 0, "the target file path can't be empty")
 
-	dstDB, err := bolt.Open(dstFilename, 0600, nil)
+	dstDB, err := bolt.Open(dstFilename, 0o600, nil)
 	if err != nil {
 		return err
 	}
