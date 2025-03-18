@@ -39,7 +39,7 @@ func TestTx_Check_CorruptPage(t *testing.T) {
 		for cErr := range errChan {
 			cErrs = append(cErrs, cErr)
 		}
-		require.Greater(t, len(cErrs), 0)
+		require.NotEmpty(t, cErrs)
 
 		t.Log("Check valid pages.")
 		cErrs = cErrs[:0]
@@ -48,7 +48,7 @@ func TestTx_Check_CorruptPage(t *testing.T) {
 			for cErr := range errChan {
 				cErrs = append(cErrs, cErr)
 			}
-			require.Equal(t, 0, len(cErrs))
+			require.Empty(t, cErrs)
 		}
 		return nil
 	})
@@ -108,7 +108,7 @@ func TestTx_Check_WithNestBucket(t *testing.T) {
 		for cErr := range errChan {
 			cErrs = append(cErrs, cErr)
 		}
-		require.Equal(t, 0, len(cErrs))
+		require.Empty(t, cErrs)
 
 		return nil
 	})
@@ -139,7 +139,7 @@ func corruptRandomLeafPageInBucket(t testing.TB, db *bbolt.DB, bucketName []byte
 	victimPage, victimBuf, err := guts_cli.ReadPage(db.Path(), uint64(victimPageId))
 	require.NoError(t, err)
 	require.True(t, victimPage.IsLeafPage())
-	require.True(t, victimPage.Count() > 1)
+	require.Greater(t, victimPage.Count(), uint16(1))
 
 	// intentionally make the second key < the first key.
 	element := victimPage.LeafPageElement(1)
