@@ -1393,7 +1393,8 @@ func TestDB_MaxSizeNotExceeded(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db.Sync()
+	err = db.Sync()
+	assert.NoError(t, err, "Sync should succeed")
 
 	// The data file should be 4 MiB now (expanded once from zero).
 	// It should have space for roughly 16 more entries before trying to grow
