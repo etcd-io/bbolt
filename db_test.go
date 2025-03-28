@@ -1373,8 +1373,8 @@ func TestDBUnmap(t *testing.T) {
 	db.DB = nil
 }
 
-// Ensure that opening a database does not increase its size.
-// https://github.com/boltdb/bolt/issues/291
+// Ensure that a database cannot exceed its maximum size
+// https://github.com/boltdb/bolt/issues/928
 func TestDB_MaxSizeNotExceeded(t *testing.T) {
 	// Open a data file.
 	db := btesting.MustCreateDBWithOption(t, &bolt.Options{
@@ -1414,7 +1414,7 @@ func TestDB_MaxSizeNotExceeded(t *testing.T) {
 
 // Ensure that opening a database that is beyond the maximum size succeeds
 // The maximum size should only apply to growing the data file
-// https://github.com/boltdb/bolt/issues/291
+// https://github.com/boltdb/bolt/issues/928
 func TestDB_MaxSizeExceededCanOpen(t *testing.T) {
 	// Open a data file.
 	db := btesting.MustCreateDB(t)
