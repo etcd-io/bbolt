@@ -1,13 +1,12 @@
-version: "2"
 issues:
   max-same-issues: 0
 linters:
   disable-all: true
   enable: # please keep this alphabetized
     - errcheck
-    # - gofmt
-    # - goimports
-    # - gosimple
+    - gofmt
+    - goimports
+    - gosimple
     - govet
     - ineffassign
     - staticcheck
