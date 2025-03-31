@@ -24,18 +24,15 @@ const TestFreelistType = "TEST_FREELIST_TYPE"
 func TestFreelist_free(t *testing.T) {
 	f := newTestFreelist()
 	f.Free(100, common.NewPage(12, 0, 0, 0))
-	if !reflect.DeepEqual([]common.Pgid{12}, f.pendingPageIds()[100].ids) {
-		t.Fatalf("exp=%v; got=%v", []common.Pgid{12}, f.pendingPageIds()[100].ids)
-	}
+	require.Truef(t, reflect.DeepEqual([]common.Pgid{12}, f.pendingPageIds()[100].ids), "exp=%v; got=%v", []common.Pgid{12}, f.pendingPageIds()[100].ids)
 }
 
 // Ensure that a page and its overflow is added to a transaction's freelist.
 func TestFreelist_free_overflow(t *testing.T) {
 	f := newTestFreelist()
 	f.Free(100, common.NewPage(12, 0, 0, 3))
-	if exp := []common.Pgid{12, 13, 14, 15}; !reflect.DeepEqual(exp, f.pendingPageIds()[100].ids) {
-		t.Fatalf("exp=%v; got=%v", exp, f.pendingPageIds()[100].ids)
-	}
+	exp := []common.Pgid{12, 13, 14, 15}
+	require.Truef(t, reflect.DeepEqual(exp, f.pendingPageIds()[100].ids), "exp=%v; got=%v", exp, f.pendingPageIds()[100].ids)
 }
 
 // Ensure that double freeing a page is causing a panic
@@ -76,15 +73,13 @@ func TestFreelist_free_freelist_alloctx(t *testing.T) {
 
 	f.Free(101, common.NewPage(12, common.FreelistPageFlag, 0, 0))
 	require.True(t, f.Freed(12))
-	if exp := []common.Pgid{12}; !reflect.DeepEqual(exp, f.pendingPageIds()[101].ids) {
-		t.Fatalf("exp=%v; got=%v", exp, f.pendingPageIds()[101].ids)
-	}
+	exp := []common.Pgid{12}
+	require.Truef(t, reflect.DeepEqual(exp, f.pendingPageIds()[101].ids), "exp=%v; got=%v", exp, f.pendingPageIds()[101].ids)
 	f.ReleasePendingPages()
 	require.True(t, f.Freed(12))
 	require.Empty(t, f.pendingPageIds())
-	if exp := common.Pgids([]common.Pgid{12}); !reflect.DeepEqual(exp, f.freePageIds()) {
-		t.Fatalf("exp=%v; got=%v", exp, f.freePageIds())
-	}
+	exp2 := common.Pgids([]common.Pgid{12})
+	require.Truef(t, reflect.DeepEqual(exp2, f.freePageIds()), "exp=%v; got=%v", exp2, f.freePageIds())
 }
 
 // Ensure that a transaction's free pages can be released.
@@ -95,14 +90,12 @@ func TestFreelist_release(t *testing.T) {
 	f.Free(102, common.NewPage(39, 0, 0, 0))
 	f.release(100)
 	f.release(101)
-	if exp := common.Pgids([]common.Pgid{9, 12, 13}); !reflect.DeepEqual(exp, f.freePageIds()) {
-		t.Fatalf("exp=%v; got=%v", exp, f.freePageIds())
-	}
+	exp := common.Pgids([]common.Pgid{9, 12, 13})
+	require.Truef(t, reflect.DeepEqual(exp, f.freePageIds()), "exp=%v; got=%v", exp, f.freePageIds())
 
 	f.release(102)
-	if exp := common.Pgids([]common.Pgid{9, 12, 13, 39}); !reflect.DeepEqual(exp, f.freePageIds()) {
-		t.Fatalf("exp=%v; got=%v", exp, f.freePageIds())
-	}
+	exp = common.Pgids([]common.Pgid{9, 12, 13, 39})
+	require.Truef(t, reflect.DeepEqual(exp, f.freePageIds()), "exp=%v; got=%v", exp, f.freePageIds())
 }
 
 // Ensure that releaseRange handles boundary conditions correctly
@@ -315,9 +308,8 @@ func TestFreelist_read(t *testing.T) {
 	f.Read(page)
 
 	// Ensure that there are two page ids in the freelist.
-	if exp := common.Pgids([]common.Pgid{23, 50}); !reflect.DeepEqual(exp, f.freePageIds()) {
-		t.Fatalf("exp=%v; got=%v", exp, f.freePageIds())
-	}
+	exp := common.Pgids([]common.Pgid{23, 50})
+	require.Truef(t, reflect.DeepEqual(exp, f.freePageIds()), "exp=%v; got=%v", exp, f.freePageIds())
 }
 
 // Ensure that we never read a non-freelist page
@@ -350,9 +342,8 @@ func TestFreelist_write(t *testing.T) {
 
 	// Ensure that the freelist is correct.
 	// All pages should be present and in reverse order.
-	if exp := common.Pgids([]common.Pgid{3, 11, 12, 28, 39}); !reflect.DeepEqual(exp, f2.freePageIds()) {
-		t.Fatalf("exp=%v; got=%v", exp, f2.freePageIds())
-	}
+	exp := common.Pgids([]common.Pgid{3, 11, 12, 28, 39})
+	require.Truef(t, reflect.DeepEqual(exp, f2.freePageIds()), "exp=%v; got=%v", exp, f2.freePageIds())
 }
 
 func TestFreelist_E2E_HappyPath(t *testing.T) {
@@ -382,7 +373,7 @@ func TestFreelist_E2E_HappyPath(t *testing.T) {
 	expectedPgids := map[common.Pgid]struct{}{3: {}, 5: {}, 8: {}}
 	for i := 0; i < 3; i++ {
 		allocated = f.Allocate(common.Txid(4), 1)
-		require.Contains(t, expectedPgids, allocated, "expected to find pgid %d", allocated)
+		require.Containsf(t, expectedPgids, allocated, "expected to find pgid %d", allocated)
 		require.False(t, f.Freed(allocated))
 		delete(expectedPgids, allocated)
 	}
@@ -598,17 +589,15 @@ func Test_freelist_ReadIDs_and_getFreePageIDs(t *testing.T) {
 
 	f.Init(exp)
 
-	if got := f.freePageIds(); !reflect.DeepEqual(exp, got) {
-		t.Fatalf("exp=%v; got=%v", exp, got)
-	}
+	got := f.freePageIds()
+	require.Truef(t, reflect.DeepEqual(exp, got), "exp=%v; got=%v", exp, got)
 
 	f2 := newTestFreelist()
 	exp2 := []common.Pgid{}
 	f2.Init(exp2)
 
-	if got2 := f2.freePageIds(); !reflect.DeepEqual(got2, common.Pgids(exp2)) {
-		t.Fatalf("exp2=%#v; got2=%#v", exp2, got2)
-	}
+	got2 := f2.freePageIds()
+	require.Truef(t, reflect.DeepEqual(got2, common.Pgids(exp2)), "exp2=%#v; got2=%#v", exp2, got2)
 
 }
 
