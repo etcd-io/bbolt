@@ -110,6 +110,12 @@ type DB struct {
 	// of truncate() and fsync() when growing the data file.
 	AllocSize int
 
+	// MaxSize is the maximum amount of space allowed for the data file.
+	// If a caller's attempt to add data results in the need to grow
+	// the data file, an error will be returned and the data file will not grow.
+	// 0 means no maximum.
+	MaxSize int
+
 	// Mlock locks database file in memory when set to true.
 	// It prevents major page faults, however used memory can't be reclaimed.
 	//
@@ -191,6 +197,7 @@ func Open(path string, mode os.FileMode, options *Options) (db *DB, err error) {
 	db.PreLoadFreelist = options.PreLoadFreelist
 	db.FreelistType = options.FreelistType
 	db.Mlock = options.Mlock
+	db.MaxSize = options.MaxSize
 
 	// Set default values for later DB operations.
 	db.MaxBatchSize = common.DefaultMaxBatchSize
@@ -467,6 +474,12 @@ func (db *DB) mmap(minsz int) (err error) {
 	if err != nil {
 		lg.Errorf("getting map size failed: %w", err)
 		return err
+	}
+
+	if db.MaxSize != 0 && fileSize < size && db.MaxSize < size {
+		// if we are mapping past the end of the file, this could cause the file to grow
+		// If the planned size is larger than the max size, then we should error out
+		return berrors.ErrMaxSizeReached
 	}
 
 	if db.Mlock {
@@ -1166,7 +1179,11 @@ func (db *DB) allocate(txid common.Txid, count int) (*common.Page, error) {
 	var minsz = int((p.Id()+common.Pgid(count))+1) * db.pageSize
 	if minsz >= db.datasz {
 		if err := db.mmap(minsz); err != nil {
-			return nil, fmt.Errorf("mmap allocate error: %s", err)
+			if err == berrors.ErrMaxSizeReached {
+				return nil, err
+			} else {
+				return nil, fmt.Errorf("mmap allocate error: %s", err)
+			}
 		}
 	}
 
@@ -1201,6 +1218,11 @@ func (db *DB) grow(sz int) error {
 	// Truncate and fsync to ensure file size metadata is flushed.
 	// https://github.com/boltdb/bolt/issues/284
 	if !db.NoGrowSync && !db.readOnly {
+		if db.MaxSize != 0 && sz > db.MaxSize {
+			lg.Errorf("[GOOS: %s, GOARCH: %s] growing file failed, size: %d, db.MaxSize: %d", runtime.GOOS, runtime.GOARCH, sz, db.MaxSize)
+			return berrors.ErrMaxSizeReached
+		}
+
 		if runtime.GOOS != "windows" {
 			// gofail: var resizeFileError string
 			// return errors.New(resizeFileError)
@@ -1314,6 +1336,9 @@ type Options struct {
 	// PageSize overrides the default OS page size.
 	PageSize int
 
+	// MaxSize sets the maximum size of the data file. 0 means no maximum.
+	MaxSize int
+
 	// NoSync sets the initial value of DB.NoSync. Normally this can just be
 	// set directly on the DB itself when returned from Open(), but this option
 	// is useful in APIs which expose Options but not the underlying DB.
@@ -1337,8 +1362,8 @@ func (o *Options) String() string {
 		return "{}"
 	}
 
-	return fmt.Sprintf("{Timeout: %s, NoGrowSync: %t, NoFreelistSync: %t, PreLoadFreelist: %t, FreelistType: %s, ReadOnly: %t, MmapFlags: %x, InitialMmapSize: %d, PageSize: %d, NoSync: %t, OpenFile: %p, Mlock: %t, Logger: %p}",
-		o.Timeout, o.NoGrowSync, o.NoFreelistSync, o.PreLoadFreelist, o.FreelistType, o.ReadOnly, o.MmapFlags, o.InitialMmapSize, o.PageSize, o.NoSync, o.OpenFile, o.Mlock, o.Logger)
+	return fmt.Sprintf("{Timeout: %s, NoGrowSync: %t, NoFreelistSync: %t, PreLoadFreelist: %t, FreelistType: %s, ReadOnly: %t, MmapFlags: %x, InitialMmapSize: %d, PageSize: %d, MaxSize: %d, NoSync: %t, OpenFile: %p, Mlock: %t, Logger: %p}",
+		o.Timeout, o.NoGrowSync, o.NoFreelistSync, o.PreLoadFreelist, o.FreelistType, o.ReadOnly, o.MmapFlags, o.InitialMmapSize, o.PageSize, o.MaxSize, o.NoSync, o.OpenFile, o.Mlock, o.Logger)
 
 }
 

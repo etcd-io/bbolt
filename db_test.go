@@ -1373,6 +1373,85 @@ func TestDBUnmap(t *testing.T) {
 	db.DB = nil
 }
 
+// Ensure that a database cannot exceed its maximum size
+// https://github.com/boltdb/bolt/issues/928
+func TestDB_MaxSizeNotExceeded(t *testing.T) {
+	// Open a data file.
+	db := btesting.MustCreateDBWithOption(t, &bolt.Options{
+		MaxSize: 5 * 1024 * 1024, // 5 MiB
+	})
+	db.AllocSize = 4 * 1024 * 1024 // adjust allocation jumps to 4 MiB
+
+	path := db.Path()
+
+	// Insert a reasonable amount of data below the max size.
+	err := db.Fill([]byte("data"), 1, 2000,
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
+		func(tx int, k int) []byte { return make([]byte, 1000) },
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = db.Sync()
+	assert.NoError(t, err, "Sync should succeed")
+
+	// The data file should be 4 MiB now (expanded once from zero).
+	// It should have space for roughly 16 more entries before trying to grow
+	// Keep inserting until grow is required
+	err = db.Fill([]byte("data"), 1, 100,
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
+		func(tx int, k int) []byte { return make([]byte, 1000) },
+	)
+	assert.ErrorIs(t, err, berrors.ErrMaxSizeReached)
+
+	newSz := fileSize(path)
+	if newSz == 0 {
+		t.Fatalf("unexpected new file size: %d", newSz)
+	}
+	assert.LessOrEqual(t, newSz, int64(db.MaxSize), "The size of the data file should not exceed db.MaxSize")
+}
+
+// Ensure that opening a database that is beyond the maximum size succeeds
+// The maximum size should only apply to growing the data file
+// https://github.com/boltdb/bolt/issues/928
+func TestDB_MaxSizeExceededCanOpen(t *testing.T) {
+	// Open a data file.
+	db := btesting.MustCreateDB(t)
+	db.AllocSize = 4 * 1024 * 1024 // adjust allocation jumps to 4 MiB
+
+	path := db.Path()
+
+	// Insert a reasonable amount of data below the max size.
+	err := db.Fill([]byte("data"), 1, 2000,
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
+		func(tx int, k int) []byte { return make([]byte, 1000) },
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = db.Close()
+	assert.NoError(t, err, "Close should succeed")
+
+	// The data file should be 4 MiB now (expanded once from zero).
+	minimumSizeForTest := int64(1024 * 1024)
+	newSz := fileSize(path)
+	if newSz < minimumSizeForTest {
+		t.Fatalf("unexpected new file size: %d. Expected at least %d", newSz, minimumSizeForTest)
+	}
+
+	// Now try to re-open the database with an extremely small max size
+	t.Logf("Reopening bbolt DB at: %s", path)
+	db, err = btesting.OpenDBWithOption(t, path, &bolt.Options{
+		MaxSize: 1,
+	})
+	assert.NoError(t, err, "Should be able to open database bigger than MaxSize")
+
+	err = db.Close()
+	assert.NoError(t, err, "Closing the re-opened database should succeed")
+}
+
 func ExampleDB_Update() {
 	// Open the database.
 	db, err := bolt.Open(tempfile(), 0600, nil)
