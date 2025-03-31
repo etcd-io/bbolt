@@ -44,7 +44,7 @@ func TestNode_read_LeafPage(t *testing.T) {
 
 	// Insert 2 elements at the beginning. sizeof(leafPageElement) == 16
 	nodes := page.LeafPageElements()
-	//nodes := (*[3]leafPageElement)(unsafe.Pointer(uintptr(unsafe.Pointer(page)) + unsafe.Sizeof(*page)))
+	// nodes := (*[3]leafPageElement)(unsafe.Pointer(uintptr(unsafe.Pointer(page)) + unsafe.Sizeof(*page)))
 	nodes[0] = *common.NewLeafPageElement(0, 32, 3, 4)  // pos = sizeof(leafPageElement) * 2
 	nodes[1] = *common.NewLeafPageElement(0, 23, 10, 3) // pos = sizeof(leafPageElement) + 3 + 4
 
@@ -121,7 +121,7 @@ func TestNode_split(t *testing.T) {
 	// Split between 2 & 3.
 	n.split(100)
 
-	var parent = n.parent
+	parent := n.parent
 	if len(parent.children) != 2 {
 		t.Fatalf("exp=2; got=%d", len(parent.children))
 	}
