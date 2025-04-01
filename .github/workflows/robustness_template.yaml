@@ -24,11 +24,9 @@ jobs:
     runs-on: ${{ fromJson(inputs.runs-on) }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - id: goversion
-        run: echo "goversion=$(cat .go-version)" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5.4.0
         with:
-          go-version: ${{ steps.goversion.outputs.goversion }}
+          go-version-file: go.mod
       - name: test-robustness
         run: |
           set -euo pipefail
