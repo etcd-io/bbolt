@@ -18,6 +18,66 @@ import (
 	"go.etcd.io/bbolt/internal/btesting"
 )
 
+func TestDeleteBucket(t *testing.T) {
+	var (
+		dbPath     = "/tmp/db" // please change this to the real db path
+		bucketName = []byte("lease")
+	)
+
+	db, err := bolt.Open(dbPath, 0600, nil)
+	require.NoError(t, err)
+
+	err = db.Update(func(tx *bolt.Tx) error {
+		if b := tx.Bucket(bucketName); b == nil {
+			t.Logf("bucket %s doesn't exist", bucketName)
+			return nil
+		}
+		return tx.DeleteBucket(bucketName)
+	})
+	require.NoError(t, err)
+}
+
+func TestDeleteSpecificKeyInBucket(t *testing.T) {
+	var (
+		dbPath     = "/tmp/db" // please change this to the real db path
+		bucketName = []byte("lease")
+	)
+
+	db, err := bolt.Open(dbPath, 0600, nil)
+	require.NoError(t, err)
+
+	err = db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bucketName)
+		if b == nil {
+			t.Logf("bucket %s doesn't exist", bucketName)
+			return nil
+		}
+
+		// get all the keys which aren't 8 bytes
+		var keys [][]byte
+		cnt := 0
+		b.ForEach(func(k, v []byte) error {
+			cnt++
+			if len(k) != 8 {
+				keys = append(keys, k)
+			}
+			return nil
+		})
+
+		t.Logf("Total %d keys, %d of which aren't 8 bytes", cnt, len(keys))
+
+		for _, k := range keys {
+			t.Logf("Deleting key %x", k)
+			if dErr := b.Delete(k); dErr != nil {
+				return fmt.Errorf("failed to delete key %x: %w", k, dErr)
+			}
+		}
+
+		return nil
+	})
+	require.NoError(t, err)
+}
+
 // TestTx_Check_ReadOnly tests consistency checking on a ReadOnly database.
 func TestTx_Check_ReadOnly(t *testing.T) {
 	db := btesting.MustCreateDB(t)
