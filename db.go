@@ -1209,14 +1209,14 @@ func (db *DB) grow(sz int) error {
 		sz += db.AllocSize
 	}
 
+	if !db.readOnly && db.MaxSize != 0 && sz > db.MaxSize {
+		lg.Errorf("[GOOS: %s, GOARCH: %s] maximum db size reached, size: %d, db.MaxSize: %d", runtime.GOOS, runtime.GOARCH, sz, db.MaxSize)
+		return berrors.ErrMaxSizeReached
+	}
+
 	// Truncate and fsync to ensure file size metadata is flushed.
 	// https://github.com/boltdb/bolt/issues/284
 	if !db.NoGrowSync && !db.readOnly {
-		if db.MaxSize != 0 && sz > db.MaxSize {
-			lg.Errorf("[GOOS: %s, GOARCH: %s] growing file failed, size: %d, db.MaxSize: %d", runtime.GOOS, runtime.GOARCH, sz, db.MaxSize)
-			return berrors.ErrMaxSizeReached
-		}
-
 		if runtime.GOOS != "windows" {
 			// gofail: var resizeFileError string
 			// return errors.New(resizeFileError)
