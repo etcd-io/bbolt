@@ -68,9 +68,17 @@ func mmap(db *DB, sz int) error {
 
 	if !db.readOnly {
 		if db.MaxSize != 0 && db.MaxSize < sz {
-			// We need to truncate the file to memory map it on windows,
-			// but we can't do that without growing the file
-			return errors.ErrMaxSizeReached
+			// We need to truncate the file to memory map it on windows
+			// Make sure we are not going to grow the file
+			fileSize, err := db.fileSize()
+			if err != nil {
+				return fmt.Errorf("could not check existing db file size: %s", err)
+			}
+
+			if fileSize < sz {
+				// but we can't do that without growing the file
+				return errors.ErrMaxSizeReached
+			}
 		}
 
 		// Truncate the database to the size of the mmap.
