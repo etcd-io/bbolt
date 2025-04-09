@@ -76,7 +76,7 @@ func mmap(db *DB, sz int) error {
 			}
 
 			if fileSize < sz {
-				// but we can't do that without growing the file
+				// We can't mmap without growing the file
 				return errors.ErrMaxSizeReached
 			}
 		}
