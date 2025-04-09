@@ -167,7 +167,7 @@ func doPowerFailure(t *testing.T, du time.Duration, fsType dmflakey.FSType, mkfs
 	cmd.Stderr = logFd
 	cmd.Env = append(cmd.Env, "GOFAIL_HTTP="+fpURL)
 	t.Logf("start %s", strings.Join(args, " "))
-	require.NoError(t, cmd.Start(), "args: %v", args)
+	require.NoErrorf(t, cmd.Start(), "args: %v", args)
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -192,13 +192,13 @@ func doPowerFailure(t *testing.T, du time.Duration, fsType dmflakey.FSType, mkfs
 		activeFailpoint(t, fpURL, targetFp, "panic")
 	} else {
 		t.Log("kill bbolt")
-		assert.NoError(t, cmd.Process.Kill())
+		require.NoError(t, cmd.Process.Kill())
 	}
 
 	select {
 	case <-time.After(10 * time.Second):
 		t.Log("bbolt is supposed to be already stopped, but actually not yet; forcibly kill it")
-		assert.NoError(t, cmd.Process.Kill())
+		require.NoError(t, cmd.Process.Kill())
 	case err := <-errCh:
 		require.Error(t, err)
 	}
@@ -210,13 +210,13 @@ func doPowerFailure(t *testing.T, du time.Duration, fsType dmflakey.FSType, mkfs
 
 	t.Logf("verify data")
 	output, err := exec.Command("bbolt", "check", dbPath).CombinedOutput()
-	require.NoError(t, err, "bbolt check output: %s", string(output))
+	require.NoErrorf(t, err, "bbolt check output: %s", string(output))
 }
 
 // activeFailpoint actives the failpoint by http.
 func activeFailpoint(t *testing.T, targetUrl string, fpName, fpVal string) {
 	u, err := url.JoinPath(targetUrl, fpName)
-	require.NoError(t, err, "parse url %s", targetUrl)
+	require.NoErrorf(t, err, "parse url %s", targetUrl)
 
 	req, err := http.NewRequest("PUT", u, bytes.NewBuffer([]byte(fpVal)))
 	require.NoError(t, err)
@@ -227,7 +227,7 @@ func activeFailpoint(t *testing.T, targetUrl string, fpName, fpVal string) {
 
 	data, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Equal(t, 204, resp.StatusCode, "response body: %s", string(data))
+	require.Equalf(t, 204, resp.StatusCode, "response body: %s", string(data))
 }
 
 // FlakeyDevice extends dmflakey.Flakey interface.
@@ -246,14 +246,13 @@ func initFlakeyDevice(t *testing.T, name string, fsType dmflakey.FSType, mkfsOpt
 	imgDir := t.TempDir()
 
 	flakey, err := dmflakey.InitFlakey(name, imgDir, fsType, mkfsOpt)
-	require.NoError(t, err, "init flakey %s", name)
+	require.NoErrorf(t, err, "init flakey %s", name)
 	t.Cleanup(func() {
 		assert.NoError(t, flakey.Teardown())
 	})
 
 	rootDir := t.TempDir()
-	err = unix.Mount(flakey.DevicePath(), rootDir, string(fsType), 0, mntOpt)
-	require.NoError(t, err, "init rootfs on %s", rootDir)
+	require.NoErrorf(t, unix.Mount(flakey.DevicePath(), rootDir, string(fsType), 0, mntOpt), "init rootfs on %s", rootDir)
 
 	t.Cleanup(func() { assert.NoError(t, unmountAll(rootDir)) })
 
@@ -321,6 +320,6 @@ func unmountAll(target string) error {
 
 func randomInt(t *testing.T, max int) int {
 	n, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	return int(n.Int64())
 }

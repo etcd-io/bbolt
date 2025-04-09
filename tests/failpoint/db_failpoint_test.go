@@ -49,8 +49,7 @@ func TestFailpoint_UnmapFail_DbClose(t *testing.T) {
 
 	db, err := bolt.Open(f, 0600, &bolt.Options{Timeout: 30 * time.Second})
 	require.NoError(t, err)
-	err = db.Close()
-	require.NoError(t, err)
+	require.NoError(t, db.Close())
 }
 
 func TestFailpoint_mLockFail(t *testing.T) {
@@ -136,13 +135,9 @@ func TestFailpoint_LackOfDiskSpace(t *testing.T) {
 	tx, err := db.Begin(true)
 	require.NoError(t, err)
 
-	err = tx.Commit()
-	require.Error(t, err)
-	require.ErrorContains(t, err, "grow somehow failed")
+	require.ErrorContains(t, tx.Commit(), "grow somehow failed")
 
-	err = tx.Rollback()
-	require.Error(t, err)
-	require.ErrorIs(t, err, errors.ErrTxClosed)
+	require.ErrorIs(t, tx.Rollback(), errors.ErrTxClosed)
 
 	// It should work after disabling the failpoint.
 	err = gofail.Disable("lackOfDiskSpace")
@@ -151,12 +146,9 @@ func TestFailpoint_LackOfDiskSpace(t *testing.T) {
 	tx, err = db.Begin(true)
 	require.NoError(t, err)
 
-	err = tx.Commit()
-	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
 
-	err = tx.Rollback()
-	require.Error(t, err)
-	require.ErrorIs(t, err, errors.ErrTxClosed)
+	require.ErrorIs(t, tx.Rollback(), errors.ErrTxClosed)
 }
 
 // TestIssue72 reproduces issue 72.
@@ -324,7 +316,7 @@ func TestTx_Rollback_Freelist(t *testing.T) {
 
 	beforeFreelistPgids, err := readFreelistPageIds(db.Path())
 	require.NoError(t, err)
-	require.Greater(t, len(beforeFreelistPgids), 0)
+	require.NotEmpty(t, beforeFreelistPgids)
 
 	t.Log("Simulate TXN rollback")
 	err = db.Update(func(tx *bolt.Tx) error {

@@ -3,7 +3,6 @@
 package dmflakey
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -31,7 +30,7 @@ func TestBasic(t *testing.T) {
 			tmpDir := t.TempDir()
 
 			flakey, err := InitFlakey("go-dmflakey", tmpDir, fsType, "")
-			require.NoError(t, err, "init flakey")
+			require.NoErrorf(t, err, "init flakey")
 			defer func() {
 				assert.NoError(t, flakey.Teardown())
 			}()
@@ -79,11 +78,11 @@ func TestDropWritesExt4(t *testing.T) {
 	require.NoError(t, mount(root, flakey.DevicePath(), ""))
 
 	data, err := os.ReadFile(f1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "hello, world from f1", string(data))
 
 	_, err = os.ReadFile(f2)
-	assert.True(t, errors.Is(err, os.ErrNotExist))
+	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func TestErrorWritesExt4(t *testing.T) {
@@ -97,10 +96,10 @@ func TestErrorWritesExt4(t *testing.T) {
 
 	f1 := filepath.Join(root, "f1")
 	err := writeFile(f1, []byte("hello, world during failpoint"), 0600, true)
-	assert.ErrorContains(t, err, "input/output error")
+	require.ErrorContains(t, err, "input/output error")
 
 	// resume
-	assert.NoError(t, flakey.AllowWrites())
+	require.NoError(t, flakey.AllowWrites())
 	err = writeFile(f1, []byte("hello, world"), 0600, true)
 	assert.NoError(t, err)
 
@@ -108,7 +107,7 @@ func TestErrorWritesExt4(t *testing.T) {
 	require.NoError(t, mount(root, flakey.DevicePath(), ""))
 
 	data, err := os.ReadFile(f1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "hello, world", string(data))
 }
 
@@ -119,7 +118,7 @@ func initFlakey(t *testing.T, fsType FSType) (_ Flakey, root string) {
 	require.NoError(t, os.MkdirAll(target, 0600))
 
 	flakey, err := InitFlakey("go-dmflakey", tmpDir, fsType, "")
-	require.NoError(t, err, "init flakey")
+	require.NoErrorf(t, err, "init flakey")
 
 	t.Cleanup(func() {
 		assert.NoError(t, unmount(target))
