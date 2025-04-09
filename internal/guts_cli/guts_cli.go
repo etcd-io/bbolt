@@ -11,10 +11,8 @@ import (
 	"go.etcd.io/bbolt/internal/common"
 )
 
-var (
-	// ErrCorrupt is returned when a checking a data file finds errors.
-	ErrCorrupt = errors.New("invalid value")
-)
+// ErrCorrupt is returned when a checking a data file finds errors.
+var ErrCorrupt = errors.New("invalid value")
 
 // ReadPage reads Page info & full Page data from a path.
 // This is not transactionally safe.
@@ -22,7 +20,7 @@ func ReadPage(path string, pageID uint64) (*common.Page, []byte, error) {
 	// Find Page size.
 	pageSize, hwm, err := ReadPageAndHWMSize(path)
 	if err != nil {
-		return nil, nil, fmt.Errorf("read Page size: %s", err)
+		return nil, nil, fmt.Errorf("read Page size: %w", err)
 	}
 
 	// Open database file.

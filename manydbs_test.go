@@ -17,7 +17,7 @@ func createDb(t *testing.T) (*DB, func()) {
 	}
 	path := filepath.Join(tempDirName, "testdb.db")
 
-	bdb, err := Open(path, 0600, nil)
+	bdb, err := Open(path, 0o600, nil)
 	if err != nil {
 		t.Fatalf("error creating bbolt db: %v", err)
 	}

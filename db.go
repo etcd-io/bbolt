@@ -325,9 +325,7 @@ func Open(path string, mode os.FileMode, options *Options) (db *DB, err error) {
 // to read the first meta page firstly. If the first page is invalid,
 // then it tries to read the second page using the default page size.
 func (db *DB) getPageSize() (int, error) {
-	var (
-		meta0CanRead, meta1CanRead bool
-	)
+	var meta0CanRead, meta1CanRead bool
 
 	// Read the first meta page to determine the page size.
 	if pgSize, canRead, err := db.getPageSizeFromFirstMeta(); err != nil {
@@ -459,7 +457,7 @@ func (db *DB) mmap(minsz int) (err error) {
 		lg.Errorf("getting file size failed: %w", err)
 		return err
 	}
-	var size = fileSize
+	size := fileSize
 	if size < minsz {
 		size = minsz
 	}
@@ -499,7 +497,7 @@ func (db *DB) mmap(minsz int) (err error) {
 	defer func() {
 		if err != nil {
 			if unmapErr := db.munmap(); unmapErr != nil {
-				err = fmt.Errorf("%w; rollback unmap also failed: %v", err, unmapErr)
+				err = fmt.Errorf("%w; rollback unmap also failed: %w", err, unmapErr)
 			}
 		}
 	}()
@@ -1019,7 +1017,7 @@ func (b *batch) run() {
 
 retry:
 	for len(b.calls) > 0 {
-		var failIdx = -1
+		failIdx := -1
 		err := b.db.Update(func(tx *Tx) error {
 			for i, c := range b.calls {
 				if err := safelyCall(c.fn, tx); err != nil {
@@ -1163,10 +1161,10 @@ func (db *DB) allocate(txid common.Txid, count int) (*common.Page, error) {
 
 	// Resize mmap() if we're at the end.
 	p.SetId(db.rwtx.meta.Pgid())
-	var minsz = int((p.Id()+common.Pgid(count))+1) * db.pageSize
+	minsz := int((p.Id()+common.Pgid(count))+1) * db.pageSize
 	if minsz >= db.datasz {
 		if err := db.mmap(minsz); err != nil {
-			return nil, fmt.Errorf("mmap allocate error: %s", err)
+			return nil, fmt.Errorf("mmap allocate error: %w", err)
 		}
 	}
 
@@ -1206,17 +1204,17 @@ func (db *DB) grow(sz int) error {
 			// return errors.New(resizeFileError)
 			if err := db.file.Truncate(int64(sz)); err != nil {
 				lg.Errorf("[GOOS: %s, GOARCH: %s] truncating file failed, size: %d, db.datasz: %d, error: %v", runtime.GOOS, runtime.GOARCH, sz, db.datasz, err)
-				return fmt.Errorf("file resize error: %s", err)
+				return fmt.Errorf("file resize error: %w", err)
 			}
 		}
 		if err := db.file.Sync(); err != nil {
 			lg.Errorf("[GOOS: %s, GOARCH: %s] syncing file failed, db.datasz: %d, error: %v", runtime.GOOS, runtime.GOARCH, db.datasz, err)
-			return fmt.Errorf("file sync error: %s", err)
+			return fmt.Errorf("file sync error: %w", err)
 		}
 		if db.Mlock {
 			// unlock old file and lock new one
 			if err := db.mrelock(fileSize, sz); err != nil {
-				return fmt.Errorf("mlock/munlock error: %s", err)
+				return fmt.Errorf("mlock/munlock error: %w", err)
 			}
 		}
 	}
@@ -1345,7 +1343,6 @@ func (o *Options) String() string {
 
 	return fmt.Sprintf("{Timeout: %s, NoGrowSync: %t, NoFreelistSync: %t, PreLoadFreelist: %t, FreelistType: %s, ReadOnly: %t, MmapFlags: %x, InitialMmapSize: %d, PageSize: %d, NoSync: %t, OpenFile: %p, Mlock: %t, Logger: %p}",
 		o.Timeout, o.NoGrowSync, o.NoFreelistSync, o.PreLoadFreelist, o.FreelistType, o.ReadOnly, o.MmapFlags, o.InitialMmapSize, o.PageSize, o.NoSync, o.OpenFile, o.Mlock, o.Logger)
-
 }
 
 // DefaultOptions represent the options used if nil options are passed into Open().
