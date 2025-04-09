@@ -1,6 +1,7 @@
 package bbolt
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -9,6 +10,23 @@ import (
 
 	"go.etcd.io/bbolt/errors"
 )
+
+func TestOpenFile(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "db")
+
+	db, err := Open(dbPath, 0600, &Options{InitialMmapSize: 2 * 1024 * 1024 * 1024})
+	require.NoError(t, err)
+
+	sz, err := db.fileSize()
+	require.NoError(t, err)
+	t.Logf("###### IN TestOpenFile, file size before close: %d", sz)
+
+	require.NoError(t, db.Close())
+
+	fi, err := os.Stat(dbPath)
+	require.NoError(t, err)
+	t.Logf("###### IN TestOpenFile, file size after close: %d", fi.Size())
+}
 
 func TestOpenWithPreLoadFreelist(t *testing.T) {
 	testCases := []struct {
