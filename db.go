@@ -1173,7 +1173,11 @@ func (db *DB) allocate(txid common.Txid, count int) (*common.Page, error) {
 	var minsz = int((p.Id()+common.Pgid(count))+1) * db.pageSize
 	if minsz >= db.datasz {
 		if err := db.mmap(minsz); err != nil {
-			return nil, fmt.Errorf("mmap allocate error: %s", err)
+			if err == berrors.ErrMaxSizeReached {
+				return nil, err
+			} else {
+				return nil, fmt.Errorf("mmap allocate error: %s", err)
+			}
 		}
 	}
 

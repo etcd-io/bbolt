@@ -1411,6 +1411,9 @@ func TestDB_MaxSizeNotExceeded(t *testing.T) {
 		t.Fatalf("unexpected new file size: %d", newSz)
 	}
 	assert.LessOrEqual(t, newSz, int64(db.MaxSize), "The size of the data file should not exceed db.MaxSize")
+
+	err = db.Close()
+	assert.NoError(t, err, "Closing the re-opened database should succeed")
 }
 
 // Ensure that opening a database that is beyond the maximum size succeeds
@@ -1536,13 +1539,19 @@ func TestDB_MaxSizeExceededDoesNotGrow(t *testing.T) {
 		t.Fatalf("unexpected new file size: %d. Expected at least %d", newSz, minimumSizeForTest)
 	}
 
-	// Now try to re-open the database with an extremely small max size
+	// Now try to re-open the database with an extremely small max size and
+	// an initial mmap size to be greater than the actual file size, forcing an illegal grow on open
 	t.Logf("Reopening bbolt DB at: %s", path)
 	db, err = btesting.OpenDBWithOption(t, path, &bolt.Options{
 		MaxSize:         1,
-		InitialMmapSize: int(minimumSizeForTest) * 2,
+		InitialMmapSize: int(newSz) * 2,
 	})
 	assert.Error(t, err, "Opening the DB with InitialMmapSize > MaxSize should cause an error on Windows")
+
+	if err == nil {
+		err = db.Close()
+		assert.NoError(t, err, "Closing the re-opened database should succeed")
+	}
 }
 
 func ExampleDB_Update() {
