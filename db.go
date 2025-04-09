@@ -476,12 +476,6 @@ func (db *DB) mmap(minsz int) (err error) {
 		return err
 	}
 
-	if db.MaxSize != 0 && fileSize < size && db.MaxSize < size {
-		// if we are mapping past the end of the file, this could cause the file to grow
-		// If the planned size is larger than the max size, then we should error out
-		return berrors.ErrMaxSizeReached
-	}
-
 	if db.Mlock {
 		// Unlock db memory
 		if err := db.munlock(fileSize); err != nil {
@@ -1179,11 +1173,7 @@ func (db *DB) allocate(txid common.Txid, count int) (*common.Page, error) {
 	var minsz = int((p.Id()+common.Pgid(count))+1) * db.pageSize
 	if minsz >= db.datasz {
 		if err := db.mmap(minsz); err != nil {
-			if err == berrors.ErrMaxSizeReached {
-				return nil, err
-			} else {
-				return nil, fmt.Errorf("mmap allocate error: %s", err)
-			}
+			return nil, fmt.Errorf("mmap allocate error: %s", err)
 		}
 	}
 
