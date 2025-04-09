@@ -1259,6 +1259,12 @@ type Options struct {
 	// If <=0, the initial map size is 0.
 	// If initialMmapSize is smaller than the previous database size,
 	// it takes no effect.
+	//
+	// Note: On Windows, due to platform limitations, the database file size
+	// will be immediately resized to match `InitialMmapSize` (aligned to page size)
+	// when the DB is opened. On non-Windows platforms, the file size will grow
+	// dynamically based on the actual amount of written data, regardless of `InitialMmapSize`.
+	// Refer to https://github.com/etcd-io/bbolt/issues/378#issuecomment-1378121966.
 	InitialMmapSize int
 
 	// PageSize overrides the default OS page size.
