@@ -68,7 +68,7 @@ func mmap(db *DB, sz int) error {
 
 	if !db.readOnly {
 		if db.MaxSize != 0 && db.MaxSize < sz {
-			// We need to truncate the file to memory map it on windows
+			// We need to truncate the file to memory map it on windows if fileSize < sz
 			// Make sure we are not going to grow the file
 			fileSize, err := db.fileSize()
 			if err != nil {
