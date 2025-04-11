@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -1371,6 +1372,168 @@ func TestDBUnmap(t *testing.T) {
 
 	// Set db.DB to nil to prevent MustCheck from panicking.
 	db.DB = nil
+}
+
+// Ensure that a database cannot exceed its maximum size
+// https://github.com/etcd-io/bbolt/issues/928
+func TestDB_MaxSizeNotExceeded(t *testing.T) {
+	db := btesting.CreateFilledDB(t,
+		&bolt.Options{
+			MaxSize:  5 * 1024 * 1024, // 5 MiB
+			PageSize: 4096,
+		},
+		4*1024*1024, // adjust allocation jumps to 4 MiB
+		2000,
+	)
+
+	path := db.Path()
+
+	// The data file should be 4 MiB now (expanded once from zero).
+	// It should have space for roughly 16 more entries before trying to grow
+	// Keep inserting until grow is required
+	err := db.FillWithKeys(100)
+	assert.ErrorIs(t, err, berrors.ErrMaxSizeReached)
+
+	newSz := fileSize(path)
+	assert.Greater(t, newSz, int64(0), "unexpected new file size: %d", newSz)
+	assert.LessOrEqual(t, newSz, int64(db.MaxSize), "The size of the data file should not exceed db.MaxSize")
+
+	err = db.Close()
+	assert.NoError(t, err, "Closing the re-opened database should succeed")
+}
+
+// Ensure that a database cannot exceed its maximum size even if NoGrowSync is enabled
+// https://github.com/etcd-io/bbolt/issues/928
+func TestDB_MaxSizeNotExceededOnNoGrowSync(t *testing.T) {
+	db := btesting.CreateFilledDB(
+		t,
+		&bolt.Options{
+			MaxSize:    5 * 1024 * 1024, // 5 MiB
+			PageSize:   4096,
+			NoGrowSync: true,
+		},
+		4*1024*1024, // adjust allocation jumps to 4 MiB
+		2000)
+
+	path := db.Path()
+
+	// The data file should be 4 MiB now (expanded once from zero).
+	// It should have space for roughly 16 more entries before trying to grow
+	// Keep inserting until grow is required
+	err := db.FillWithKeys(100)
+	assert.ErrorIs(t, err, berrors.ErrMaxSizeReached)
+
+	newSz := fileSize(path)
+	assert.Greater(t, newSz, int64(0), "unexpected new file size: %d", newSz)
+	assert.LessOrEqual(t, newSz, int64(db.MaxSize), "The size of the data file should not exceed db.MaxSize")
+
+	err = db.Close()
+	assert.NoError(t, err, "Closing the re-opened database should succeed")
+}
+
+// Ensure that opening a database that is beyond the maximum size succeeds
+// The maximum size should only apply to growing the data file
+// https://github.com/etcd-io/bbolt/issues/928
+func TestDB_MaxSizeExceededCanOpen(t *testing.T) {
+	// Open a data file.
+	db := btesting.CreateFilledDB(t, nil, 4*1024*1024, 2000) // adjust allocation jumps to 4 MiB, fill with 2000, 1KB keys
+	path := db.Path()
+
+	// Insert a reasonable amount of data below the max size.
+	err := db.FillWithKeys(2000)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = db.Close()
+	assert.NoError(t, err, "Close should succeed")
+
+	// The data file should be 4 MiB now (expanded once from zero).
+	minimumSizeForTest := int64(1024 * 1024)
+	newSz := fileSize(path)
+	assert.GreaterOrEqual(t, newSz, minimumSizeForTest, "unexpected new file size: %d. Expected at least %d", newSz, minimumSizeForTest)
+
+	// Now try to re-open the database with an extremely small max size
+	t.Logf("Reopening bbolt DB at: %s", path)
+	db, err = btesting.OpenDBWithOption(t, path, &bolt.Options{
+		MaxSize: 1,
+	})
+	assert.NoError(t, err, "Should be able to open database bigger than MaxSize")
+
+	err = db.Close()
+	assert.NoError(t, err, "Closing the re-opened database should succeed")
+}
+
+// Ensure that opening a database that is beyond the maximum size succeeds,
+// even when InitialMmapSize is above the limit (mmaps should not affect file size)
+// This test exists for platforms where Truncate should not be called during mmap
+// https://github.com/etcd-io/bbolt/issues/928
+func TestDB_MaxSizeExceededCanOpenWithHighMmap(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// In Windows, the file must be expanded to the mmap initial size,
+		// so this test doesn't run in Windows.
+		t.SkipNow()
+	}
+
+	// Open a data file.
+	db := btesting.CreateFilledDB(t, nil, 4*1024*1024, 2000) // adjust allocation jumps to 4 MiB, fill with 2000 1KB entries
+	path := db.Path()
+
+	err := db.Close()
+	assert.NoError(t, err, "Close should succeed")
+
+	// The data file should be 4 MiB now (expanded once from zero).
+	minimumSizeForTest := int64(1024 * 1024)
+	newSz := fileSize(path)
+	assert.GreaterOrEqual(t, newSz, minimumSizeForTest, "unexpected new file size: %d. Expected at least %d", newSz, minimumSizeForTest)
+
+	// Now try to re-open the database with an extremely small max size
+	t.Logf("Reopening bbolt DB at: %s", path)
+	db, err = btesting.OpenDBWithOption(t, path, &bolt.Options{
+		MaxSize:         1,
+		InitialMmapSize: int(minimumSizeForTest) * 2,
+	})
+	assert.NoError(t, err, "Should be able to open database bigger than MaxSize when InitialMmapSize set high")
+
+	err = db.Close()
+	assert.NoError(t, err, "Closing the re-opened database should succeed")
+}
+
+// Ensure that when InitialMmapSize is above the limit, opening a database
+// that is beyond the maximum size fails in Windows.
+// In Windows, the file must be expanded to the mmap initial size.
+// https://github.com/etcd-io/bbolt/issues/928
+func TestDB_MaxSizeExceededDoesNotGrow(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		// This test is only relevant on Windows
+		t.SkipNow()
+	}
+
+	// Open a data file.
+	db := btesting.CreateFilledDB(t, nil, 4*1024*1024, 2000) // adjust allocation jumps to 4 MiB, fill with 2000 1KB entries
+	path := db.Path()
+
+	err := db.Close()
+	assert.NoError(t, err, "Close should succeed")
+
+	// The data file should be 4 MiB now (expanded once from zero).
+	minimumSizeForTest := int64(1024 * 1024)
+	newSz := fileSize(path)
+	assert.GreaterOrEqual(t, newSz, minimumSizeForTest, "unexpected new file size: %d. Expected at least %d", newSz, minimumSizeForTest)
+
+	// Now try to re-open the database with an extremely small max size and
+	// an initial mmap size to be greater than the actual file size, forcing an illegal grow on open
+	t.Logf("Reopening bbolt DB at: %s", path)
+	db, err = btesting.OpenDBWithOption(t, path, &bolt.Options{
+		MaxSize:         1,
+		InitialMmapSize: int(newSz) * 2,
+	})
+	assert.Error(t, err, "Opening the DB with InitialMmapSize > MaxSize should cause an error on Windows")
+
+	if err == nil {
+		err = db.Close()
+		assert.NoError(t, err, "Closing the re-opened database should succeed")
+	}
 }
 
 func ExampleDB_Update() {
