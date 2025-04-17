@@ -78,23 +78,6 @@ func OpenDBWithOption(t testing.TB, f string, o *bolt.Options) (*DB, error) {
 	return resDB, nil
 }
 
-// Creates a new database size, forces a specific allocation size jump, and fills it with the number of keys specified
-func CreateFilledDB(t testing.TB, o *bolt.Options, allocSize int, numKeys int) *DB {
-	// Open a data file.
-	db := MustCreateDBWithOption(t, o)
-	db.AllocSize = allocSize
-
-	// Insert a reasonable amount of data below the max size.
-	err := db.Fill([]byte("data"), 1, numKeys,
-		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
-		func(tx int, k int) []byte { return make([]byte, 1000) },
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return db
-}
-
 func (db *DB) PostTestCleanup() {
 	// Check database consistency after every test.
 	if db.DB != nil {
@@ -202,14 +185,6 @@ func (db *DB) Fill(bucket []byte, numTx int, numKeysPerTx int,
 		}
 	}
 	return nil
-}
-
-// Convenience function for inserting a bunch of keys with 1000 byte values
-func (db *DB) FillWithKeys(numKeys int) error {
-	return db.Fill([]byte("data"), 1, numKeys,
-		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
-		func(tx int, k int) []byte { return make([]byte, 1000) },
-	)
 }
 
 func (db *DB) Path() string {

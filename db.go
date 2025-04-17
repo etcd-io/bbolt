@@ -110,10 +110,10 @@ type DB struct {
 	// of truncate() and fsync() when growing the data file.
 	AllocSize int
 
-	// MaxSize is the maximum amount of space allowed for the data file.
+	// MaxSize is the maximum size (in bytes) allowed for the data file.
 	// If a caller's attempt to add data results in the need to grow
 	// the data file, an error will be returned and the data file will not grow.
-	// 0 means no maximum.
+	// 0 means no limit.
 	MaxSize int
 
 	// Mlock locks database file in memory when set to true.

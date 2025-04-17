@@ -1374,10 +1374,35 @@ func TestDBUnmap(t *testing.T) {
 	db.DB = nil
 }
 
+// Convenience function for inserting a bunch of keys with 1000 byte values
+func FillDBWithKeys(db *btesting.DB, numKeys int) error {
+	return db.Fill([]byte("data"), 1, numKeys,
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
+		func(tx int, k int) []byte { return make([]byte, 1000) },
+	)
+}
+
+// Creates a new database size, forces a specific allocation size jump, and fills it with the number of keys specified
+func CreateFilledDB(t testing.TB, o *bolt.Options, allocSize int, numKeys int) *btesting.DB {
+	// Open a data file.
+	db := btesting.MustCreateDBWithOption(t, o)
+	db.AllocSize = allocSize
+
+	// Insert a reasonable amount of data below the max size.
+	err := db.Fill([]byte("data"), 1, numKeys,
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
+		func(tx int, k int) []byte { return make([]byte, 1000) },
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+
 // Ensure that a database cannot exceed its maximum size
 // https://github.com/etcd-io/bbolt/issues/928
 func TestDB_MaxSizeNotExceeded(t *testing.T) {
-	db := btesting.CreateFilledDB(t,
+	db := CreateFilledDB(t,
 		&bolt.Options{
 			MaxSize:  5 * 1024 * 1024, // 5 MiB
 			PageSize: 4096,
@@ -1391,7 +1416,7 @@ func TestDB_MaxSizeNotExceeded(t *testing.T) {
 	// The data file should be 4 MiB now (expanded once from zero).
 	// It should have space for roughly 16 more entries before trying to grow
 	// Keep inserting until grow is required
-	err := db.FillWithKeys(100)
+	err := FillDBWithKeys(db, 100)
 	assert.ErrorIs(t, err, berrors.ErrMaxSizeReached)
 
 	newSz := fileSize(path)
@@ -1405,7 +1430,7 @@ func TestDB_MaxSizeNotExceeded(t *testing.T) {
 // Ensure that a database cannot exceed its maximum size even if NoGrowSync is enabled
 // https://github.com/etcd-io/bbolt/issues/928
 func TestDB_MaxSizeNotExceededOnNoGrowSync(t *testing.T) {
-	db := btesting.CreateFilledDB(
+	db := CreateFilledDB(
 		t,
 		&bolt.Options{
 			MaxSize:    5 * 1024 * 1024, // 5 MiB
@@ -1420,7 +1445,7 @@ func TestDB_MaxSizeNotExceededOnNoGrowSync(t *testing.T) {
 	// The data file should be 4 MiB now (expanded once from zero).
 	// It should have space for roughly 16 more entries before trying to grow
 	// Keep inserting until grow is required
-	err := db.FillWithKeys(100)
+	err := FillDBWithKeys(db, 100)
 	assert.ErrorIs(t, err, berrors.ErrMaxSizeReached)
 
 	newSz := fileSize(path)
@@ -1436,11 +1461,11 @@ func TestDB_MaxSizeNotExceededOnNoGrowSync(t *testing.T) {
 // https://github.com/etcd-io/bbolt/issues/928
 func TestDB_MaxSizeExceededCanOpen(t *testing.T) {
 	// Open a data file.
-	db := btesting.CreateFilledDB(t, nil, 4*1024*1024, 2000) // adjust allocation jumps to 4 MiB, fill with 2000, 1KB keys
+	db := CreateFilledDB(t, nil, 4*1024*1024, 2000) // adjust allocation jumps to 4 MiB, fill with 2000, 1KB keys
 	path := db.Path()
 
 	// Insert a reasonable amount of data below the max size.
-	err := db.FillWithKeys(2000)
+	err := FillDBWithKeys(db, 2000)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1476,7 +1501,7 @@ func TestDB_MaxSizeExceededCanOpenWithHighMmap(t *testing.T) {
 	}
 
 	// Open a data file.
-	db := btesting.CreateFilledDB(t, nil, 4*1024*1024, 2000) // adjust allocation jumps to 4 MiB, fill with 2000 1KB entries
+	db := CreateFilledDB(t, nil, 4*1024*1024, 2000) // adjust allocation jumps to 4 MiB, fill with 2000 1KB entries
 	path := db.Path()
 
 	err := db.Close()
@@ -1510,7 +1535,7 @@ func TestDB_MaxSizeExceededDoesNotGrow(t *testing.T) {
 	}
 
 	// Open a data file.
-	db := btesting.CreateFilledDB(t, nil, 4*1024*1024, 2000) // adjust allocation jumps to 4 MiB, fill with 2000 1KB entries
+	db := CreateFilledDB(t, nil, 4*1024*1024, 2000) // adjust allocation jumps to 4 MiB, fill with 2000 1KB entries
 	path := db.Path()
 
 	err := db.Close()
