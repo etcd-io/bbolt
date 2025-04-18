@@ -1375,7 +1375,7 @@ func TestDBUnmap(t *testing.T) {
 }
 
 // Convenience function for inserting a bunch of keys with 1000 byte values
-func FillDBWithKeys(db *btesting.DB, numKeys int) error {
+func fillDBWithKeys(db *btesting.DB, numKeys int) error {
 	return db.Fill([]byte("data"), 1, numKeys,
 		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
 		func(tx int, k int) []byte { return make([]byte, 1000) },
@@ -1383,7 +1383,7 @@ func FillDBWithKeys(db *btesting.DB, numKeys int) error {
 }
 
 // Creates a new database size, forces a specific allocation size jump, and fills it with the number of keys specified
-func CreateFilledDB(t testing.TB, o *bolt.Options, allocSize int, numKeys int) *btesting.DB {
+func createFilledDB(t testing.TB, o *bolt.Options, allocSize int, numKeys int) *btesting.DB {
 	// Open a data file.
 	db := btesting.MustCreateDBWithOption(t, o)
 	db.AllocSize = allocSize
@@ -1402,58 +1402,51 @@ func CreateFilledDB(t testing.TB, o *bolt.Options, allocSize int, numKeys int) *
 // Ensure that a database cannot exceed its maximum size
 // https://github.com/etcd-io/bbolt/issues/928
 func TestDB_MaxSizeNotExceeded(t *testing.T) {
-	db := CreateFilledDB(t,
-		&bolt.Options{
-			MaxSize:  5 * 1024 * 1024, // 5 MiB
-			PageSize: 4096,
+	testCases := []struct {
+		name    string
+		options bolt.Options
+	}{
+		{
+			name: "Standard case",
+			options: bolt.Options{
+				MaxSize:  5 * 1024 * 1024, // 5 MiB
+				PageSize: 4096,
+			},
 		},
-		4*1024*1024, // adjust allocation jumps to 4 MiB
-		2000,
-	)
-
-	path := db.Path()
-
-	// The data file should be 4 MiB now (expanded once from zero).
-	// It should have space for roughly 16 more entries before trying to grow
-	// Keep inserting until grow is required
-	err := FillDBWithKeys(db, 100)
-	assert.ErrorIs(t, err, berrors.ErrMaxSizeReached)
-
-	newSz := fileSize(path)
-	assert.Greater(t, newSz, int64(0), "unexpected new file size: %d", newSz)
-	assert.LessOrEqual(t, newSz, int64(db.MaxSize), "The size of the data file should not exceed db.MaxSize")
-
-	err = db.Close()
-	assert.NoError(t, err, "Closing the re-opened database should succeed")
-}
-
-// Ensure that a database cannot exceed its maximum size even if NoGrowSync is enabled
-// https://github.com/etcd-io/bbolt/issues/928
-func TestDB_MaxSizeNotExceededOnNoGrowSync(t *testing.T) {
-	db := CreateFilledDB(
-		t,
-		&bolt.Options{
-			MaxSize:    5 * 1024 * 1024, // 5 MiB
-			PageSize:   4096,
-			NoGrowSync: true,
+		{
+			name: "NoGrowSync",
+			options: bolt.Options{
+				MaxSize:    5 * 1024 * 1024, // 5 MiB
+				PageSize:   4096,
+				NoGrowSync: true,
+			},
 		},
-		4*1024*1024, // adjust allocation jumps to 4 MiB
-		2000)
+	}
 
-	path := db.Path()
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			db := createFilledDB(t,
+				&testCase.options,
+				4*1024*1024, // adjust allocation jumps to 4 MiB
+				2000,
+			)
 
-	// The data file should be 4 MiB now (expanded once from zero).
-	// It should have space for roughly 16 more entries before trying to grow
-	// Keep inserting until grow is required
-	err := FillDBWithKeys(db, 100)
-	assert.ErrorIs(t, err, berrors.ErrMaxSizeReached)
+			path := db.Path()
 
-	newSz := fileSize(path)
-	assert.Greater(t, newSz, int64(0), "unexpected new file size: %d", newSz)
-	assert.LessOrEqual(t, newSz, int64(db.MaxSize), "The size of the data file should not exceed db.MaxSize")
+			// The data file should be 4 MiB now (expanded once from zero).
+			// It should have space for roughly 16 more entries before trying to grow
+			// Keep inserting until grow is required
+			err := fillDBWithKeys(db, 100)
+			assert.ErrorIs(t, err, berrors.ErrMaxSizeReached)
 
-	err = db.Close()
-	assert.NoError(t, err, "Closing the re-opened database should succeed")
+			newSz := fileSize(path)
+			require.Greater(t, newSz, int64(0), "unexpected new file size: %d", newSz)
+			assert.LessOrEqual(t, newSz, int64(db.MaxSize), "The size of the data file should not exceed db.MaxSize")
+
+			err = db.Close()
+			require.NoError(t, err, "Closing the re-opened database should succeed")
+		})
+	}
 }
 
 // Ensure that opening a database that is beyond the maximum size succeeds
@@ -1461,22 +1454,20 @@ func TestDB_MaxSizeNotExceededOnNoGrowSync(t *testing.T) {
 // https://github.com/etcd-io/bbolt/issues/928
 func TestDB_MaxSizeExceededCanOpen(t *testing.T) {
 	// Open a data file.
-	db := CreateFilledDB(t, nil, 4*1024*1024, 2000) // adjust allocation jumps to 4 MiB, fill with 2000, 1KB keys
+	db := createFilledDB(t, nil, 4*1024*1024, 2000) // adjust allocation jumps to 4 MiB, fill with 2000, 1KB keys
 	path := db.Path()
 
 	// Insert a reasonable amount of data below the max size.
-	err := FillDBWithKeys(db, 2000)
-	if err != nil {
-		t.Fatal(err)
-	}
+	err := fillDBWithKeys(db, 2000)
+	require.NoError(t, err, "fillDbWithKeys should succeed")
 
 	err = db.Close()
-	assert.NoError(t, err, "Close should succeed")
+	require.NoError(t, err, "Close should succeed")
 
 	// The data file should be 4 MiB now (expanded once from zero).
 	minimumSizeForTest := int64(1024 * 1024)
 	newSz := fileSize(path)
-	assert.GreaterOrEqual(t, newSz, minimumSizeForTest, "unexpected new file size: %d. Expected at least %d", newSz, minimumSizeForTest)
+	require.GreaterOrEqual(t, newSz, minimumSizeForTest, "unexpected new file size: %d. Expected at least %d", newSz, minimumSizeForTest)
 
 	// Now try to re-open the database with an extremely small max size
 	t.Logf("Reopening bbolt DB at: %s", path)
@@ -1486,7 +1477,7 @@ func TestDB_MaxSizeExceededCanOpen(t *testing.T) {
 	assert.NoError(t, err, "Should be able to open database bigger than MaxSize")
 
 	err = db.Close()
-	assert.NoError(t, err, "Closing the re-opened database should succeed")
+	require.NoError(t, err, "Closing the re-opened database should succeed")
 }
 
 // Ensure that opening a database that is beyond the maximum size succeeds,
@@ -1501,16 +1492,16 @@ func TestDB_MaxSizeExceededCanOpenWithHighMmap(t *testing.T) {
 	}
 
 	// Open a data file.
-	db := CreateFilledDB(t, nil, 4*1024*1024, 2000) // adjust allocation jumps to 4 MiB, fill with 2000 1KB entries
+	db := createFilledDB(t, nil, 4*1024*1024, 2000) // adjust allocation jumps to 4 MiB, fill with 2000 1KB entries
 	path := db.Path()
 
 	err := db.Close()
-	assert.NoError(t, err, "Close should succeed")
+	require.NoError(t, err, "Close should succeed")
 
 	// The data file should be 4 MiB now (expanded once from zero).
 	minimumSizeForTest := int64(1024 * 1024)
 	newSz := fileSize(path)
-	assert.GreaterOrEqual(t, newSz, minimumSizeForTest, "unexpected new file size: %d. Expected at least %d", newSz, minimumSizeForTest)
+	require.GreaterOrEqual(t, newSz, minimumSizeForTest, "unexpected new file size: %d. Expected at least %d", newSz, minimumSizeForTest)
 
 	// Now try to re-open the database with an extremely small max size
 	t.Logf("Reopening bbolt DB at: %s", path)
@@ -1521,7 +1512,7 @@ func TestDB_MaxSizeExceededCanOpenWithHighMmap(t *testing.T) {
 	assert.NoError(t, err, "Should be able to open database bigger than MaxSize when InitialMmapSize set high")
 
 	err = db.Close()
-	assert.NoError(t, err, "Closing the re-opened database should succeed")
+	require.NoError(t, err, "Closing the re-opened database should succeed")
 }
 
 // Ensure that when InitialMmapSize is above the limit, opening a database
@@ -1535,11 +1526,11 @@ func TestDB_MaxSizeExceededDoesNotGrow(t *testing.T) {
 	}
 
 	// Open a data file.
-	db := CreateFilledDB(t, nil, 4*1024*1024, 2000) // adjust allocation jumps to 4 MiB, fill with 2000 1KB entries
+	db := createFilledDB(t, nil, 4*1024*1024, 2000) // adjust allocation jumps to 4 MiB, fill with 2000 1KB entries
 	path := db.Path()
 
 	err := db.Close()
-	assert.NoError(t, err, "Close should succeed")
+	require.NoError(t, err, "Close should succeed")
 
 	// The data file should be 4 MiB now (expanded once from zero).
 	minimumSizeForTest := int64(1024 * 1024)
@@ -1549,16 +1540,11 @@ func TestDB_MaxSizeExceededDoesNotGrow(t *testing.T) {
 	// Now try to re-open the database with an extremely small max size and
 	// an initial mmap size to be greater than the actual file size, forcing an illegal grow on open
 	t.Logf("Reopening bbolt DB at: %s", path)
-	db, err = btesting.OpenDBWithOption(t, path, &bolt.Options{
+	_, err = btesting.OpenDBWithOption(t, path, &bolt.Options{
 		MaxSize:         1,
 		InitialMmapSize: int(newSz) * 2,
 	})
 	assert.Error(t, err, "Opening the DB with InitialMmapSize > MaxSize should cause an error on Windows")
-
-	if err == nil {
-		err = db.Close()
-		assert.NoError(t, err, "Closing the re-opened database should succeed")
-	}
 }
 
 func ExampleDB_Update() {
