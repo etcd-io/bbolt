@@ -35,3 +35,16 @@ jobs:
           sudo apt-get install -y dmsetup xfsprogs
 
           ROBUSTNESS_TESTFLAGS="--count ${{ inputs.count }} --timeout ${{ inputs.testTimeout }} -failfast" make test-robustness
+
+      - name: Host Status
+        if: always()
+        run: |
+          set -x
+          mount
+          df
+          losetup -l
+      - name: Kernel Message
+        if: failure()
+        run: |
+          sudo lsmod
+          sudo dmesg -T -f kern
