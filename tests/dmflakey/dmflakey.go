@@ -261,11 +261,28 @@ func (f *flakey) ErrorWrites(opts ...FeatOpt) error {
 
 // Teardown releases the flakey device.
 func (f *flakey) Teardown() error {
-	if err := deleteFlakeyDevice(f.flakeyDevice); err != nil {
-		if !strings.Contains(err.Error(), "No such device or address") {
-			return err
+	// FIXME(XXX): Even though we umount device successfully, it's still
+	// possible to run into `Device or resource busy` issue. It's easy to
+	// reproduce it in slow storage or 2-4 cores ARM64 host with xfs. We
+	// should retry it to fix transisent issue.
+	var derr error
+	for i := 0; i < 10; i++ {
+		derr = deleteFlakeyDevice(f.flakeyDevice)
+		if derr != nil {
+			if strings.Contains(derr.Error(), "Device or resource busy") {
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			if strings.Contains(derr.Error(), "No such device or address") {
+				derr = nil
+			}
 		}
+		break
 	}
+	if derr != nil {
+		return derr
+	}
+
 	if err := detachLoopDevice(f.loopDevice); err != nil {
 		if !errors.Is(err, unix.ENXIO) {
 			return err
