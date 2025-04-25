@@ -44,6 +44,13 @@ func MustCreateDBWithOption(t testing.TB, o *bolt.Options) *DB {
 }
 
 func MustOpenDBWithOption(t testing.TB, f string, o *bolt.Options) *DB {
+	db, err := OpenDBWithOption(t, f, o)
+	require.NoError(t, err)
+	require.NotNil(t, db)
+	return db
+}
+
+func OpenDBWithOption(t testing.TB, f string, o *bolt.Options) (*DB, error) {
 	t.Logf("Opening bbolt DB at: %s", f)
 	if o == nil {
 		o = bolt.DefaultOptions
@@ -57,7 +64,9 @@ func MustOpenDBWithOption(t testing.TB, f string, o *bolt.Options) *DB {
 	o.FreelistType = freelistType
 
 	db, err := bolt.Open(f, 0600, o)
-	require.NoError(t, err)
+	if err != nil {
+		return nil, err
+	}
 	resDB := &DB{
 		DB: db,
 		f:  f,
@@ -66,7 +75,7 @@ func MustOpenDBWithOption(t testing.TB, f string, o *bolt.Options) *DB {
 	}
 	resDB.strictModeEnabledDefault()
 	t.Cleanup(resDB.PostTestCleanup)
-	return resDB
+	return resDB, nil
 }
 
 func (db *DB) PostTestCleanup() {
