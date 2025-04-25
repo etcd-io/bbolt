@@ -67,7 +67,7 @@ func mmap(db *DB, sz int) error {
 	var sizelo, sizehi uint32
 
 	if !db.readOnly {
-		if db.MaxSize != 0 && sz > db.MaxSize {
+		if db.MaxSize > 0 && sz > db.MaxSize {
 			// The max size only limits future writes; however, we don’t block opening
 			// and mapping the database if it already exceeds the limit.
 			fileSize, err := db.fileSize()

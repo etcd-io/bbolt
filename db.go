@@ -113,7 +113,7 @@ type DB struct {
 	// MaxSize is the maximum size (in bytes) allowed for the data file.
 	// If a caller's attempt to add data results in the need to grow
 	// the data file, an error will be returned and the data file will not grow.
-	// 0 means no limit.
+	// <=0 means no limit.
 	MaxSize int
 
 	// Mlock locks database file in memory when set to true.
@@ -1209,7 +1209,7 @@ func (db *DB) grow(sz int) error {
 		sz += db.AllocSize
 	}
 
-	if !db.readOnly && db.MaxSize != 0 && sz > db.MaxSize {
+	if !db.readOnly && db.MaxSize > 0 && sz > db.MaxSize {
 		lg.Errorf("[GOOS: %s, GOARCH: %s] maximum db size reached, size: %d, db.MaxSize: %d", runtime.GOOS, runtime.GOARCH, sz, db.MaxSize)
 		return berrors.ErrMaxSizeReached
 	}
@@ -1336,7 +1336,7 @@ type Options struct {
 	// PageSize overrides the default OS page size.
 	PageSize int
 
-	// MaxSize sets the maximum size of the data file. 0 means no maximum.
+	// MaxSize sets the maximum size of the data file. <=0 means no maximum.
 	MaxSize int
 
 	// NoSync sets the initial value of DB.NoSync. Normally this can just be
