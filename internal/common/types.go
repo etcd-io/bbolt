@@ -17,8 +17,8 @@ const Magic uint32 = 0xED0CDAED
 
 const PgidNoFreelist Pgid = 0xffffffffffffffff
 
-// DO NOT EDIT. Copied from the "bolt" package.
-const pageMaxAllocSize = 0xFFFFFFF
+// maxAllocSize is the size used when creating array pointers.
+const maxAllocSize = 0x7FFFFFFF
 
 // IgnoreNoSync specifies whether the NoSync field of a DB is ignored when
 // syncing changes to a file.  This is required as some operating systems,
