@@ -11,10 +11,8 @@ import (
 	"go.etcd.io/bbolt/internal/common"
 )
 
-var (
-	// ErrCorrupt is returned when a checking a data file finds errors.
-	ErrCorrupt = errors.New("invalid value")
-)
+// ErrCorrupt is returned when a checking a data file finds errors.
+var ErrCorrupt = errors.New("invalid value")
 
 // ReadPage reads Page info & full Page data from a path.
 // This is not transactionally safe.

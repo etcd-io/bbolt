@@ -151,7 +151,7 @@ func (f *flakey) Filesystem() FSType {
 
 // AllowWrites allows write I/O.
 func (f *flakey) AllowWrites(opts ...FeatOpt) error {
-	var o = defaultFeatCfg
+	o := defaultFeatCfg
 	for _, opt := range opts {
 		opt(&o)
 	}
@@ -182,7 +182,7 @@ func (f *flakey) AllowWrites(opts ...FeatOpt) error {
 
 // DropWrites drops all write I/O silently.
 func (f *flakey) DropWrites(opts ...FeatOpt) error {
-	var o = defaultFeatCfg
+	o := defaultFeatCfg
 	for _, opt := range opts {
 		opt(&o)
 	}
@@ -224,7 +224,7 @@ func (f *flakey) DropWrites(opts ...FeatOpt) error {
 
 // ErrorWrites drops all write I/O and returns error.
 func (f *flakey) ErrorWrites(opts ...FeatOpt) error {
-	var o = defaultFeatCfg
+	o := defaultFeatCfg
 	for _, opt := range opts {
 		opt(&o)
 	}
@@ -307,7 +307,7 @@ func createEmptyFSImage(imgPath string, fsType FSType, mkfsOpt string) error {
 		return fmt.Errorf("failed to create image because %s already exists", imgPath)
 	}
 
-	if err := os.MkdirAll(path.Dir(imgPath), 0600); err != nil {
+	if err := os.MkdirAll(path.Dir(imgPath), 0o600); err != nil {
 		return fmt.Errorf("failed to ensure parent directory %s: %w", path.Dir(imgPath), err)
 	}
 

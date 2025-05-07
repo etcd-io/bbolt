@@ -50,7 +50,7 @@ func TestOpen(t *testing.T) {
 	path := tempfile()
 	defer os.RemoveAll(path)
 
-	db, err := bolt.Open(path, 0600, nil)
+	db, err := bolt.Open(path, 0o600, nil)
 	if err != nil {
 		t.Fatal(err)
 	} else if db == nil {
@@ -86,7 +86,7 @@ func TestOpen_MultipleGoroutines(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				db, err := bolt.Open(path, 0600, nil)
+				db, err := bolt.Open(path, 0o600, nil)
 				if err != nil {
 					errCh <- err
 					return
@@ -109,7 +109,7 @@ func TestOpen_MultipleGoroutines(t *testing.T) {
 
 // Ensure that opening a database with a blank path returns an error.
 func TestOpen_ErrPathRequired(t *testing.T) {
-	_, err := bolt.Open("", 0600, nil)
+	_, err := bolt.Open("", 0o600, nil)
 	if err == nil {
 		t.Fatalf("expected error")
 	}
@@ -117,7 +117,7 @@ func TestOpen_ErrPathRequired(t *testing.T) {
 
 // Ensure that opening a database with a bad path returns an error.
 func TestOpen_ErrNotExists(t *testing.T) {
-	_, err := bolt.Open(filepath.Join(tempfile(), "bad-path"), 0600, nil)
+	_, err := bolt.Open(filepath.Join(tempfile(), "bad-path"), 0o600, nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -139,7 +139,7 @@ func TestOpen_ErrInvalid(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := bolt.Open(path, 0600, nil); err != berrors.ErrInvalid {
+	if _, err := bolt.Open(path, 0o600, nil); err != berrors.ErrInvalid {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }
@@ -170,12 +170,12 @@ func TestOpen_ErrVersionMismatch(t *testing.T) {
 	meta0.version++
 	meta1 := (*meta)(unsafe.Pointer(&buf[pageSize+pageHeaderSize]))
 	meta1.version++
-	if err := os.WriteFile(path, buf, 0666); err != nil {
+	if err := os.WriteFile(path, buf, 0o666); err != nil {
 		t.Fatal(err)
 	}
 
 	// Reopen data file.
-	if _, err := bolt.Open(path, 0600, nil); err != berrors.ErrVersionMismatch {
+	if _, err := bolt.Open(path, 0o600, nil); err != berrors.ErrVersionMismatch {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }
@@ -206,12 +206,12 @@ func TestOpen_ErrChecksum(t *testing.T) {
 	meta0.pgid++
 	meta1 := (*meta)(unsafe.Pointer(&buf[pageSize+pageHeaderSize]))
 	meta1.pgid++
-	if err := os.WriteFile(path, buf, 0666); err != nil {
+	if err := os.WriteFile(path, buf, 0o666); err != nil {
 		t.Fatal(err)
 	}
 
 	// Reopen data file.
-	if _, err := bolt.Open(path, 0600, nil); err != berrors.ErrChecksum {
+	if _, err := bolt.Open(path, 0o600, nil); err != berrors.ErrChecksum {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }
@@ -234,7 +234,7 @@ func TestOpen_ReadPageSize_FromMeta1_OS(t *testing.T) {
 	// Rewrite first meta page.
 	meta0 := (*meta)(unsafe.Pointer(&buf[pageHeaderSize]))
 	meta0.pgid++
-	if err := os.WriteFile(path, buf, 0666); err != nil {
+	if err := os.WriteFile(path, buf, 0o666); err != nil {
 		t.Fatal(err)
 	}
 
@@ -265,7 +265,7 @@ func TestOpen_ReadPageSize_FromMeta1_Given(t *testing.T) {
 			t.Logf("#%d: Intentionally corrupt the first meta page for pageSize %d", i, givenPageSize)
 			meta0 := (*meta)(unsafe.Pointer(&buf[pageHeaderSize]))
 			meta0.pgid++
-			err = os.WriteFile(path, buf, 0666)
+			err = os.WriteFile(path, buf, 0o666)
 			require.NoError(t, err)
 		}
 
@@ -367,7 +367,7 @@ func TestOpen_Size_Large(t *testing.T) {
 	}
 
 	// Reopen database, update, and check size again.
-	db0, err := bolt.Open(path, 0600, nil)
+	db0, err := bolt.Open(path, 0o600, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -397,7 +397,7 @@ func TestOpen_Check(t *testing.T) {
 	path := tempfile()
 	defer os.RemoveAll(path)
 
-	db, err := bolt.Open(path, 0600, nil)
+	db, err := bolt.Open(path, 0o600, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -408,7 +408,7 @@ func TestOpen_Check(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db, err = bolt.Open(path, 0600, nil)
+	db, err = bolt.Open(path, 0o600, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -430,7 +430,7 @@ func TestOpen_FileTooSmall(t *testing.T) {
 	path := tempfile()
 	defer os.RemoveAll(path)
 
-	db, err := bolt.Open(path, 0600, nil)
+	db, err := bolt.Open(path, 0o600, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -444,7 +444,7 @@ func TestOpen_FileTooSmall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = bolt.Open(path, 0600, nil)
+	_, err = bolt.Open(path, 0o600, nil)
 	if err == nil || !strings.Contains(err.Error(), "file size too small") {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -461,7 +461,7 @@ func TestDB_Open_InitialMmapSize(t *testing.T) {
 	initMmapSize := 1 << 30  // 1GB
 	testWriteSize := 1 << 27 // 134MB
 
-	db, err := bolt.Open(path, 0600, &bolt.Options{InitialMmapSize: initMmapSize})
+	db, err := bolt.Open(path, 0o600, &bolt.Options{InitialMmapSize: initMmapSize})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -534,7 +534,7 @@ func TestDB_Open_ReadOnly(t *testing.T) {
 
 	f := db.Path()
 	o := &bolt.Options{ReadOnly: true}
-	readOnlyDB, err := bolt.Open(f, 0600, o)
+	readOnlyDB, err := bolt.Open(f, 0o600, o)
 	if err != nil {
 		panic(err)
 	}
@@ -566,7 +566,7 @@ func TestDB_Open_ReadOnly(t *testing.T) {
 
 func TestDB_Open_ReadOnly_NoCreate(t *testing.T) {
 	f := filepath.Join(t.TempDir(), "db")
-	_, err := bolt.Open(f, 0600, &bolt.Options{ReadOnly: true})
+	_, err := bolt.Open(f, 0o600, &bolt.Options{ReadOnly: true})
 	require.ErrorIs(t, err, os.ErrNotExist)
 }
 
@@ -691,7 +691,7 @@ func TestDB_Concurrent_WriteTo_and_ConsistentRead(t *testing.T) {
 		defer wg.Done()
 		time.Sleep(time.Duration(rand.Intn(200)+10) * time.Millisecond)
 		f := filepath.Join(t.TempDir(), fmt.Sprintf("%d-bolt-", round))
-		err := tx.CopyFile(f, 0600)
+		err := tx.CopyFile(f, 0o600)
 		require.NoError(t, err)
 
 		// read all the data
@@ -1222,7 +1222,7 @@ func TestDB_Batch_Panic(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
 	var sentinel int
-	var bork = &sentinel
+	bork := &sentinel
 	var problem interface{}
 	var err error
 
@@ -1549,7 +1549,7 @@ func TestDB_MaxSizeExceededDoesNotGrow(t *testing.T) {
 
 func ExampleDB_Update() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0600, nil)
+	db, err := bolt.Open(tempfile(), 0o600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1589,7 +1589,7 @@ func ExampleDB_Update() {
 
 func ExampleDB_View() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0600, nil)
+	db, err := bolt.Open(tempfile(), 0o600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1632,7 +1632,7 @@ func ExampleDB_View() {
 
 func ExampleDB_Begin() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0600, nil)
+	db, err := bolt.Open(tempfile(), 0o600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1832,7 +1832,7 @@ func BenchmarkDBBatchManual10x100(b *testing.B) {
 }
 
 func validateBatchBench(b *testing.B, db *btesting.DB) {
-	var rollback = errors.New("sentinel error to cause rollback")
+	rollback := errors.New("sentinel error to cause rollback")
 	validate := func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte("bench"))
 		h := fnv.New32a()

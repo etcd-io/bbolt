@@ -42,7 +42,7 @@ func TestOpenWithPreLoadFreelist(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			db, err := Open(fileName, 0666, &Options{
+			db, err := Open(fileName, 0o666, &Options{
 				ReadOnly:        tc.readonly,
 				PreLoadFreelist: tc.preLoadFreePage,
 			})
@@ -88,7 +88,7 @@ func TestMethodPage(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			db, err := Open(fileName, 0666, &Options{
+			db, err := Open(fileName, 0o666, &Options{
 				ReadOnly:        tc.readonly,
 				PreLoadFreelist: tc.preLoadFreePage,
 			})
@@ -114,7 +114,7 @@ func TestMethodPage(t *testing.T) {
 
 func prepareData(t *testing.T) (string, error) {
 	fileName := filepath.Join(t.TempDir(), "db")
-	db, err := Open(fileName, 0666, nil)
+	db, err := Open(fileName, 0o666, nil)
 	if err != nil {
 		return "", err
 	}

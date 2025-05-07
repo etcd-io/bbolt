@@ -213,7 +213,7 @@ func (f *hashMap) mergeWithExistingSpan(pid common.Pgid) {
 	newSize := uint64(1)
 
 	if mergeWithPrev {
-		//merge with previous span
+		// merge with previous span
 		start := prev + 1 - common.Pgid(preSize)
 		f.delSpan(start, preSize)
 

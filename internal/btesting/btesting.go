@@ -63,7 +63,7 @@ func OpenDBWithOption(t testing.TB, f string, o *bolt.Options) (*DB, error) {
 
 	o.FreelistType = freelistType
 
-	db, err := bolt.Open(f, 0600, o)
+	db, err := bolt.Open(f, 0o600, o)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +124,7 @@ func (db *DB) MustReopen() {
 		panic("Please call Close() before MustReopen()")
 	}
 	db.t.Logf("Reopening bbolt DB at: %s", db.f)
-	indb, err := bolt.Open(db.Path(), 0600, db.o)
+	indb, err := bolt.Open(db.Path(), 0o600, db.o)
 	require.NoError(db.t, err)
 	db.DB = indb
 	db.strictModeEnabledDefault()
@@ -144,8 +144,8 @@ func (db *DB) MustCheck() {
 
 		// If errors occurred, copy the DB and print the errors.
 		if len(errors) > 0 {
-			var path = filepath.Join(db.t.TempDir(), "db.backup")
-			err := tx.CopyFile(path, 0600)
+			path := filepath.Join(db.t.TempDir(), "db.backup")
+			err := tx.CopyFile(path, 0o600)
 			require.NoError(db.t, err)
 
 			// Print errors.
@@ -169,7 +169,8 @@ func (db *DB) MustCheck() {
 // Fill - fills the DB using numTx transactions and numKeysPerTx.
 func (db *DB) Fill(bucket []byte, numTx int, numKeysPerTx int,
 	keyGen func(tx int, key int) []byte,
-	valueGen func(tx int, key int) []byte) error {
+	valueGen func(tx int, key int) []byte,
+) error {
 	for tr := 0; tr < numTx; tr++ {
 		err := db.Update(func(tx *bolt.Tx) error {
 			b, _ := tx.CreateBucketIfNotExists(bucket)
@@ -195,7 +196,7 @@ func (db *DB) Path() string {
 func (db *DB) CopyTempFile() {
 	path := filepath.Join(db.t.TempDir(), "db.copy")
 	err := db.View(func(tx *bolt.Tx) error {
-		return tx.CopyFile(path, 0600)
+		return tx.CopyFile(path, 0o600)
 	})
 	require.NoError(db.t, err)
 	fmt.Println("db copied to: ", path)
@@ -203,7 +204,7 @@ func (db *DB) CopyTempFile() {
 
 // PrintStats prints the database stats
 func (db *DB) PrintStats() {
-	var stats = db.Stats()
+	stats := db.Stats()
 	fmt.Printf("[db] %-20s %-20s %-20s\n",
 		fmt.Sprintf("pg(%d/%d)", stats.TxStats.GetPageCount(), stats.TxStats.GetPageAlloc()),
 		fmt.Sprintf("cur(%d)", stats.TxStats.GetCursorCount()),

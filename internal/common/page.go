@@ -11,9 +11,11 @@ const PageHeaderSize = unsafe.Sizeof(Page{})
 
 const MinKeysPerPage = 2
 
-const BranchPageElementSize = unsafe.Sizeof(branchPageElement{})
-const LeafPageElementSize = unsafe.Sizeof(leafPageElement{})
-const pgidSize = unsafe.Sizeof(Pgid(0))
+const (
+	BranchPageElementSize = unsafe.Sizeof(branchPageElement{})
+	LeafPageElementSize   = unsafe.Sizeof(leafPageElement{})
+	pgidSize              = unsafe.Sizeof(Pgid(0))
+)
 
 const (
 	BranchPageFlag   = 0x01
@@ -126,7 +128,7 @@ func (p *Page) FreelistPageCount() (int, int) {
 
 	// If the page.count is at the max uint16 value (64k) then it's considered
 	// an overflow and the size of the freelist is stored as the first element.
-	var idx, count = 0, int(p.count)
+	idx, count := 0, int(p.count)
 	if count == 0xFFFF {
 		idx = 1
 		c := *(*Pgid)(UnsafeAdd(unsafe.Pointer(p), unsafe.Sizeof(*p)))

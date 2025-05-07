@@ -42,7 +42,6 @@ func TestMlock_DbCanGrow_Small(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-
 }
 
 // Test crossing of 16MB (AllocSize) of db size

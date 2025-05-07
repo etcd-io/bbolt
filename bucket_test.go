@@ -509,7 +509,7 @@ func TestBucket_Nested(t *testing.T) {
 
 	// Cause a split.
 	if err := db.Update(func(tx *bolt.Tx) error {
-		var b = tx.Bucket([]byte("widgets"))
+		b := tx.Bucket([]byte("widgets"))
 		for i := 0; i < 10000; i++ {
 			if err := b.Put([]byte(strconv.Itoa(i)), []byte(strconv.Itoa(i))); err != nil {
 				t.Fatal(err)
@@ -523,7 +523,7 @@ func TestBucket_Nested(t *testing.T) {
 
 	// Insert into widgets/foo/baz.
 	if err := db.Update(func(tx *bolt.Tx) error {
-		var b = tx.Bucket([]byte("widgets"))
+		b := tx.Bucket([]byte("widgets"))
 		if err := b.Bucket([]byte("foo")).Put([]byte("baz"), []byte("yyyy")); err != nil {
 			t.Fatal(err)
 		}
@@ -535,7 +535,7 @@ func TestBucket_Nested(t *testing.T) {
 
 	// Verify.
 	if err := db.View(func(tx *bolt.Tx) error {
-		var b = tx.Bucket([]byte("widgets"))
+		b := tx.Bucket([]byte("widgets"))
 		if v := b.Bucket([]byte("foo")).Get([]byte("baz")); !bytes.Equal(v, []byte("yyyy")) {
 			t.Fatalf("unexpected value: %v", v)
 		}
@@ -1283,7 +1283,8 @@ func TestBucket_Stats(t *testing.T) {
 				1*10 + 2*90 + 3*400 + longKeyLength, // leaf values: 10 * 1digit, 90*2digits, ...
 			BucketN:           1,
 			InlineBucketN:     0,
-			InlineBucketInuse: 0},
+			InlineBucketInuse: 0,
+		},
 		16384: {
 			BranchPageN:     1,
 			BranchOverflowN: 0,
@@ -1301,7 +1302,8 @@ func TestBucket_Stats(t *testing.T) {
 				1*10 + 2*90 + 3*400 + longKeyLength, // leaf values: 10 * 1digit, 90*2digits, ...
 			BucketN:           1,
 			InlineBucketN:     0,
-			InlineBucketInuse: 0},
+			InlineBucketInuse: 0,
+		},
 		65536: {
 			BranchPageN:     1,
 			BranchOverflowN: 0,
@@ -1319,7 +1321,8 @@ func TestBucket_Stats(t *testing.T) {
 				1*10 + 2*90 + 3*400 + longKeyLength, // leaf values: 10 * 1digit, 90*2digits, ...
 			BucketN:           1,
 			InlineBucketN:     0,
-			InlineBucketInuse: 0},
+			InlineBucketInuse: 0,
+		},
 	}
 
 	if err := db.View(func(tx *bolt.Tx) error {
@@ -1775,7 +1778,8 @@ func TestBucket_Stats_Large(t *testing.T) {
 			LeafInuse:         2596916,
 			BucketN:           1,
 			InlineBucketN:     0,
-			InlineBucketInuse: 0},
+			InlineBucketInuse: 0,
+		},
 		16384: {
 			BranchPageN:       1,
 			BranchOverflowN:   0,
@@ -1789,7 +1793,8 @@ func TestBucket_Stats_Large(t *testing.T) {
 			LeafInuse:         2582452,
 			BucketN:           1,
 			InlineBucketN:     0,
-			InlineBucketInuse: 0},
+			InlineBucketInuse: 0,
+		},
 		65536: {
 			BranchPageN:       1,
 			BranchOverflowN:   0,
@@ -1803,7 +1808,8 @@ func TestBucket_Stats_Large(t *testing.T) {
 			LeafInuse:         2578948,
 			BucketN:           1,
 			InlineBucketN:     0,
-			InlineBucketInuse: 0},
+			InlineBucketInuse: 0,
+		},
 	}
 
 	if err := db.View(func(tx *bolt.Tx) error {
@@ -2021,7 +2027,7 @@ func BenchmarkBucket_CreateBucketIfNotExists(b *testing.B) {
 
 func ExampleBucket_Put() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0600, nil)
+	db, err := bolt.Open(tempfile(), 0o600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -2064,7 +2070,7 @@ func ExampleBucket_Put() {
 
 func ExampleBucket_Delete() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0600, nil)
+	db, err := bolt.Open(tempfile(), 0o600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -2122,7 +2128,7 @@ func ExampleBucket_Delete() {
 
 func ExampleBucket_ForEach() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0600, nil)
+	db, err := bolt.Open(tempfile(), 0o600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}

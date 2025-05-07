@@ -162,8 +162,8 @@ func concurrentTestDuration(t *testing.T) time.Duration {
 func concurrentReadAndWrite(t *testing.T,
 	workerCount int,
 	conf concurrentConfig,
-	testDuration time.Duration) {
-
+	testDuration time.Duration,
+) {
 	t.Log("Preparing db.")
 	db := mustCreateDB(t, &bolt.Options{
 		PageSize: 4096,
@@ -244,7 +244,7 @@ func mustOpenDB(t *testing.T, dbPath string, o *bolt.Options) *bolt.DB {
 
 	o.FreelistType = freelistType
 
-	db, err := bolt.Open(dbPath, 0600, o)
+	db, err := bolt.Open(dbPath, 0o600, o)
 	require.NoError(t, err)
 
 	return db
@@ -275,7 +275,8 @@ func runWorkers(t *testing.T,
 	db *bolt.DB,
 	workerCount int,
 	conf concurrentConfig,
-	testDuration time.Duration) historyRecords {
+	testDuration time.Duration,
+) historyRecords {
 	stopCh := make(chan struct{}, 1)
 	errCh := make(chan error, workerCount)
 
@@ -611,7 +612,7 @@ func copyFile(srcPath, dstPath string) error {
 func persistHistoryRecords(t *testing.T, rs historyRecords, path string) {
 	recordFilePath := filepath.Join(path, "history_records.json")
 	t.Logf("Saving history records to %s", recordFilePath)
-	recordFile, err := os.OpenFile(recordFilePath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+	recordFile, err := os.OpenFile(recordFilePath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o755)
 	require.NoError(t, err)
 	defer recordFile.Close()
 	encoder := json.NewEncoder(recordFile)
@@ -637,7 +638,7 @@ func testResultsDirectory(t *testing.T) string {
 	err = os.RemoveAll(path)
 	require.NoError(t, err)
 
-	err = os.MkdirAll(path, 0700)
+	err = os.MkdirAll(path, 0o700)
 	require.NoError(t, err)
 
 	return path
@@ -798,7 +799,6 @@ func TestConcurrentRepeatableRead(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-
 			t.Log("Preparing db.")
 			var (
 				bucket = []byte("data")

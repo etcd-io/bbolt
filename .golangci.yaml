@@ -4,13 +4,55 @@ linters:
   disable-all: true
   enable: # please keep this alphabetized
     - errcheck
-    - gofmt
+    - gofumpt
     - goimports
     - gosimple
     - govet
     - ineffassign
+    - nakedret
+    - revive
     - staticcheck
     - unused
 linters-settings: # please keep this alphabetized
   goimports:
     local-prefixes: go.etcd.io # Put imports beginning with prefix after 3rd-party packages.
+  revive:
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: early-return
+        disabled: true
+        arguments:
+          - "preserveScope"
+      - name: error-return
+      - name: error-naming
+        disabled: true
+      - name: error-strings
+        disabled: true
+      - name: errorf
+      - name: exported
+      - name: if-return
+        disabled: true
+      - name: increment-decrement
+        disabled: true
+      - name: indent-error-flow
+        disabled: true
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+        disabled: true
+      - name: superfluous-else
+        disabled: true
+        arguments:
+          - "preserveScope"
+      - name: time-naming
+      - name: unexported-return
+        disabled: true
+      - name: use-any
+        disabled: true
+      - name: var-declaration
+        disabled: true
+      - name: var-naming
+        disabled: true

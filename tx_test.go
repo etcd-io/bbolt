@@ -37,7 +37,7 @@ func TestTx_Check_ReadOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	readOnlyDB, err := bolt.Open(db.Path(), 0600, &bolt.Options{ReadOnly: true})
+	readOnlyDB, err := bolt.Open(db.Path(), 0o600, &bolt.Options{ReadOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -541,12 +541,12 @@ func TestTx_CopyFile(t *testing.T) {
 	}
 
 	if err := db.View(func(tx *bolt.Tx) error {
-		return tx.CopyFile(path, 0600)
+		return tx.CopyFile(path, 0o600)
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	db2, err := bolt.Open(path, 0600, nil)
+	db2, err := bolt.Open(path, 0o600, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -645,7 +645,7 @@ func TestTx_CopyFile_Error_Normal(t *testing.T) {
 func TestTx_Rollback(t *testing.T) {
 	for _, isSyncFreelist := range []bool{false, true} {
 		// Open the database.
-		db, err := bolt.Open(tempfile(), 0600, nil)
+		db, err := bolt.Open(tempfile(), 0o600, nil)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -688,7 +688,6 @@ func TestTx_Rollback(t *testing.T) {
 		if err := tx.Rollback(); err != nil {
 			t.Fatalf("Error on rollback: %v", err)
 		}
-
 	}
 }
 
@@ -798,7 +797,7 @@ func TestTx_releaseRange(t *testing.T) {
 
 func ExampleTx_Rollback() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0600, nil)
+	db, err := bolt.Open(tempfile(), 0o600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -852,7 +851,7 @@ func ExampleTx_Rollback() {
 
 func ExampleTx_CopyFile() {
 	// Open the database.
-	db, err := bolt.Open(tempfile(), 0600, nil)
+	db, err := bolt.Open(tempfile(), 0o600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -875,14 +874,14 @@ func ExampleTx_CopyFile() {
 	// Copy the database to another file.
 	toFile := tempfile()
 	if err := db.View(func(tx *bolt.Tx) error {
-		return tx.CopyFile(toFile, 0666)
+		return tx.CopyFile(toFile, 0o666)
 	}); err != nil {
 		log.Fatal(err)
 	}
 	defer os.Remove(toFile)
 
 	// Open the cloned database.
-	db2, err := bolt.Open(toFile, 0600, nil)
+	db2, err := bolt.Open(toFile, 0o600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
