@@ -140,7 +140,7 @@ func TestRestartFromPowerFailureXFS(t *testing.T) {
 }
 
 func doPowerFailure(t *testing.T, du time.Duration, fsType dmflakey.FSType, mkfsOpt string, fsMountOpt string, useFailpoint bool) {
-	flakey := initFlakeyDevice(t, strings.Replace(t.Name(), "/", "_", -1), fsType, mkfsOpt, fsMountOpt)
+	flakey := initFlakeyDevice(t, strings.ReplaceAll(t.Name(), "/", "_"), fsType, mkfsOpt, fsMountOpt)
 	root := flakey.RootFS()
 
 	dbPath := filepath.Join(root, "boltdb")
