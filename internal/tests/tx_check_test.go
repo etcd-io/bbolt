@@ -25,12 +25,12 @@ func TestTx_RecursivelyCheckPages_MisplacedPage(t *testing.T) {
 	xRay := surgeon.NewXRay(db.Path())
 
 	path1, err := xRay.FindPathsToKey([]byte("0451"))
-	require.NoError(t, err, "cannot find page that contains key:'0451'")
-	require.Len(t, path1, 1, "Expected only one page that contains key:'0451'")
+	require.NoErrorf(t, err, "cannot find page that contains key:'0451'")
+	require.Lenf(t, path1, 1, "Expected only one page that contains key:'0451'")
 
 	path2, err := xRay.FindPathsToKey([]byte("7563"))
-	require.NoError(t, err, "cannot find page that contains key:'7563'")
-	require.Len(t, path2, 1, "Expected only one page that contains key:'7563'")
+	require.NoErrorf(t, err, "cannot find page that contains key:'7563'")
+	require.Lenf(t, path2, 1, "Expected only one page that contains key:'7563'")
 
 	srcPage := path1[0][len(path1[0])-1]
 	targetPage := path2[0][len(path2[0])-1]
@@ -64,13 +64,13 @@ func TestTx_RecursivelyCheckPages_CorruptedLeaf(t *testing.T) {
 	xray := surgeon.NewXRay(db.Path())
 
 	path1, err := xray.FindPathsToKey([]byte("0451"))
-	require.NoError(t, err, "cannot find page that contains key:'0451'")
-	require.Len(t, path1, 1, "Expected only one page that contains key:'0451'")
+	require.NoErrorf(t, err, "cannot find page that contains key:'0451'")
+	require.Lenf(t, path1, 1, "Expected only one page that contains key:'0451'")
 
 	srcPage := path1[0][len(path1[0])-1]
 	p, pbuf, err := guts_cli.ReadPage(db.Path(), uint64(srcPage))
 	require.NoError(t, err)
-	require.Positive(t, p.Count(), "page must be not empty")
+	require.Positivef(t, p.Count(), "page must be not empty")
 	p.LeafPageElement(p.Count() / 2).Key()[0] = 'z'
 	require.NoError(t, guts_cli.WritePage(db.Path(), pbuf))
 

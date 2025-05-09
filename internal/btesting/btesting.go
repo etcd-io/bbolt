@@ -105,8 +105,7 @@ func (db *DB) Close() error {
 
 // MustClose closes the database but does NOT delete the underlying file.
 func (db *DB) MustClose() {
-	err := db.Close()
-	require.NoError(db.t, err)
+	require.NoError(db.t, db.Close())
 }
 
 func (db *DB) MustDeleteFile() {

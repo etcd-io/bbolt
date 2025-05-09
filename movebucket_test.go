@@ -364,13 +364,13 @@ func openBucket(tx *bbolt.Tx, bk *bbolt.Bucket, bucketToOpen string) *bbolt.Buck
 func createBucketAndPopulateData(t testing.TB, tx *bbolt.Tx, bk *bbolt.Bucket, bucketName string) *bbolt.Bucket {
 	if bk == nil {
 		newBucket, err := tx.CreateBucket([]byte(bucketName))
-		require.NoError(t, err, "failed to create bucket %s", bucketName)
+		require.NoErrorf(t, err, "failed to create bucket %s", bucketName)
 		populateSampleDataInBucket(t, newBucket, rand.Intn(4096))
 		return newBucket
 	}
 
 	newBucket, err := bk.CreateBucket([]byte(bucketName))
-	require.NoError(t, err, "failed to create bucket %s", bucketName)
+	require.NoErrorf(t, err, "failed to create bucket %s", bucketName)
 	populateSampleDataInBucket(t, newBucket, rand.Intn(4096))
 	return newBucket
 }

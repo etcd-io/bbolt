@@ -15,6 +15,7 @@ linters:
     - govet
     - ineffassign
     - staticcheck
+    - testifylint
     - unused
   exclusions:
     presets:
@@ -36,4 +37,10 @@ linters:
         - -ST1012 # Poorly chosen name for error variable
         - -ST1016 # Use consistent method receiver names
         - -ST1023 # Redundant type in variable declaration
+    testifylint:
+      disable:
+        - go-require
+      enable-all: true
+      formatter:
+        require-f-funcs: true
 version: "2"

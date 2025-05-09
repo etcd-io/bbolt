@@ -14,43 +14,31 @@ func TestFreelistArray_allocate(t *testing.T) {
 	f := NewArrayFreelist()
 	ids := []common.Pgid{3, 4, 5, 6, 7, 9, 12, 13, 18}
 	f.Init(ids)
-	if id := int(f.Allocate(1, 3)); id != 3 {
-		t.Fatalf("exp=3; got=%v", id)
-	}
-	if id := int(f.Allocate(1, 1)); id != 6 {
-		t.Fatalf("exp=6; got=%v", id)
-	}
-	if id := int(f.Allocate(1, 3)); id != 0 {
-		t.Fatalf("exp=0; got=%v", id)
-	}
-	if id := int(f.Allocate(1, 2)); id != 12 {
-		t.Fatalf("exp=12; got=%v", id)
-	}
-	if id := int(f.Allocate(1, 1)); id != 7 {
-		t.Fatalf("exp=7; got=%v", id)
-	}
-	if id := int(f.Allocate(1, 0)); id != 0 {
-		t.Fatalf("exp=0; got=%v", id)
-	}
-	if id := int(f.Allocate(1, 0)); id != 0 {
-		t.Fatalf("exp=0; got=%v", id)
-	}
-	if exp := common.Pgids([]common.Pgid{9, 18}); !reflect.DeepEqual(exp, f.freePageIds()) {
-		t.Fatalf("exp=%v; got=%v", exp, f.freePageIds())
-	}
+	id := int(f.Allocate(1, 3))
+	require.Equalf(t, 3, id, "exp=3; got=%v", id)
+	id = int(f.Allocate(1, 1))
+	require.Equalf(t, 6, id, "exp=6; got=%v", id)
+	id = int(f.Allocate(1, 3))
+	require.Equalf(t, 0, id, "exp=0; got=%v", id)
+	id = int(f.Allocate(1, 2))
+	require.Equalf(t, 12, id, "exp=12; got=%v", id)
+	id = int(f.Allocate(1, 1))
+	require.Equalf(t, 7, id, "exp=7; got=%v", id)
+	id = int(f.Allocate(1, 0))
+	require.Equalf(t, 0, id, "exp=0; got=%v", id)
+	id = int(f.Allocate(1, 0))
+	require.Equalf(t, 0, id, "exp=0; got=%v", id)
+	exp := common.Pgids([]common.Pgid{9, 18})
+	require.Truef(t, reflect.DeepEqual(exp, f.freePageIds()), "exp=%v; got=%v", exp, f.freePageIds())
 
-	if id := int(f.Allocate(1, 1)); id != 9 {
-		t.Fatalf("exp=9; got=%v", id)
-	}
-	if id := int(f.Allocate(1, 1)); id != 18 {
-		t.Fatalf("exp=18; got=%v", id)
-	}
-	if id := int(f.Allocate(1, 1)); id != 0 {
-		t.Fatalf("exp=0; got=%v", id)
-	}
-	if exp := common.Pgids([]common.Pgid{}); !reflect.DeepEqual(exp, f.freePageIds()) {
-		t.Fatalf("exp=%v; got=%v", exp, f.freePageIds())
-	}
+	id = int(f.Allocate(1, 1))
+	require.Equalf(t, 9, id, "exp=9; got=%v", id)
+	id = int(f.Allocate(1, 1))
+	require.Equalf(t, 18, id, "exp=18; got=%v", id)
+	id = int(f.Allocate(1, 1))
+	require.Equalf(t, 0, id, "exp=0; got=%v", id)
+	exp = common.Pgids([]common.Pgid{})
+	require.Truef(t, reflect.DeepEqual(exp, f.freePageIds()), "exp=%v; got=%v", exp, f.freePageIds())
 }
 
 func TestInvalidArrayAllocation(t *testing.T) {

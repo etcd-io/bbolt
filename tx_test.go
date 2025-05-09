@@ -21,32 +21,21 @@ import (
 // TestTx_Check_ReadOnly tests consistency checking on a ReadOnly database.
 func TestTx_Check_ReadOnly(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("foo"), []byte("bar")); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+		require.NoError(t, b.Put([]byte("foo"), []byte("bar")))
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
 
 	readOnlyDB, err := bolt.Open(db.Path(), 0600, &bolt.Options{ReadOnly: true})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer readOnlyDB.Close()
 
 	tx, err := readOnlyDB.Begin(false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	// ReadOnly DB will load freelist on Check call.
 	numChecks := 2
 	errc := make(chan error, numChecks)
@@ -58,36 +47,25 @@ func TestTx_Check_ReadOnly(t *testing.T) {
 		go check()
 	}
 	for i := 0; i < numChecks; i++ {
-		if err := <-errc; err != nil {
-			t.Fatal(err)
-		}
+		err := <-errc
+		require.NoError(t, err)
 	}
 	// Close the view transaction
-	err = tx.Rollback()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, tx.Rollback())
 }
 
 // Ensure that committing a closed transaction returns an error.
 func TestTx_Commit_ErrTxClosed(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 	tx, err := db.Begin(true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if _, err := tx.CreateBucket([]byte("foo")); err != nil {
-		t.Fatal(err)
-	}
+	_, err = tx.CreateBucket([]byte("foo"))
+	require.NoError(t, err)
 
-	if err := tx.Commit(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, tx.Commit())
 
-	if err := tx.Commit(); err != berrors.ErrTxClosed {
-		t.Fatalf("unexpected error: %s", err)
-	}
+	require.Equalf(t, tx.Commit(), berrors.ErrTxClosed, "unexpected error")
 }
 
 // Ensure that rolling back a closed transaction returns an error.
@@ -95,137 +73,96 @@ func TestTx_Rollback_ErrTxClosed(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
 	tx, err := db.Begin(true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if err := tx.Rollback(); err != nil {
-		t.Fatal(err)
-	}
-	if err := tx.Rollback(); err != berrors.ErrTxClosed {
-		t.Fatalf("unexpected error: %s", err)
-	}
+	require.NoError(t, tx.Rollback())
+	require.Equalf(t, tx.Rollback(), berrors.ErrTxClosed, "unexpected error")
 }
 
 // Ensure that committing a read-only transaction returns an error.
 func TestTx_Commit_ErrTxNotWritable(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 	tx, err := db.Begin(false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := tx.Commit(); err != berrors.ErrTxNotWritable {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+	require.Equal(t, tx.Commit(), berrors.ErrTxNotWritable)
 	// Close the view transaction
-	err = tx.Rollback()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, tx.Rollback())
 }
 
 // Ensure that a transaction can retrieve a cursor on the root bucket.
 func TestTx_Cursor(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
-			t.Fatal(err)
-		}
+	err := db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucket([]byte("widgets"))
+		require.NoError(t, err)
 
-		if _, err := tx.CreateBucket([]byte("woojits")); err != nil {
-			t.Fatal(err)
-		}
+		_, err = tx.CreateBucket([]byte("woojits"))
+		require.NoError(t, err)
 
 		c := tx.Cursor()
-		if k, v := c.First(); !bytes.Equal(k, []byte("widgets")) {
-			t.Fatalf("unexpected key: %v", k)
-		} else if v != nil {
-			t.Fatalf("unexpected value: %v", v)
-		}
+		k, v := c.First()
+		require.Truef(t, bytes.Equal(k, []byte("widgets")), "unexpected key: %v", k)
+		require.Nilf(t, v, "unexpected value: %v", v)
 
-		if k, v := c.Next(); !bytes.Equal(k, []byte("woojits")) {
-			t.Fatalf("unexpected key: %v", k)
-		} else if v != nil {
-			t.Fatalf("unexpected value: %v", v)
-		}
+		k, v = c.Next()
+		require.Truef(t, bytes.Equal(k, []byte("woojits")), "unexpected key: %v", k)
+		require.Nilf(t, v, "unexpected value: %v", v)
 
-		if k, v := c.Next(); k != nil {
-			t.Fatalf("unexpected key: %v", k)
-		} else if v != nil {
-			t.Fatalf("unexpected value: %v", k)
-		}
+		k, v = c.Next()
+		require.Nilf(t, k, "unexpected key: %v", k)
+		require.Nilf(t, v, "unexpected value: %v", k)
 
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that creating a bucket with a read-only transaction returns an error.
 func TestTx_CreateBucket_ErrTxNotWritable(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.View(func(tx *bolt.Tx) error {
+	err := db.View(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucket([]byte("foo"))
-		if err != berrors.ErrTxNotWritable {
-			t.Fatalf("unexpected error: %s", err)
-		}
+		require.Equalf(t, err, berrors.ErrTxNotWritable, "unexpected error: %s", err)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that creating a bucket on a closed transaction returns an error.
 func TestTx_CreateBucket_ErrTxClosed(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 	tx, err := db.Begin(true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := tx.Commit(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
 
-	if _, err := tx.CreateBucket([]byte("foo")); err != berrors.ErrTxClosed {
-		t.Fatalf("unexpected error: %s", err)
-	}
+	_, err = tx.CreateBucket([]byte("foo"))
+	require.Equalf(t, err, berrors.ErrTxClosed, "unexpected error: %s", err)
 }
 
 // Ensure that a Tx can retrieve a bucket.
 func TestTx_Bucket(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
-			t.Fatal(err)
-		}
-		if tx.Bucket([]byte("widgets")) == nil {
-			t.Fatal("expected bucket")
-		}
+	err := db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucket([]byte("widgets"))
+		require.NoError(t, err)
+		require.NotNilf(t, tx.Bucket([]byte("widgets")), "expected bucket")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that a Tx retrieving a non-existent key returns nil.
 func TestTx_Get_NotFound(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
-		if err := b.Put([]byte("foo"), []byte("bar")); err != nil {
-			t.Fatal(err)
-		}
-		if b.Get([]byte("no_such_key")) != nil {
-			t.Fatal("expected nil value")
-		}
+		require.NoError(t, b.Put([]byte("foo"), []byte("bar")))
+		require.Nilf(t, b.Get([]byte("no_such_key")), "expected nil value")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that a bucket can be created and retrieved.
@@ -233,79 +170,61 @@ func TestTx_CreateBucket(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
 	// Create a bucket.
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		} else if b == nil {
-			t.Fatal("expected bucket")
-		}
+		require.NoError(t, err)
+		require.NotNilf(t, b, "expected bucket")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	// Read the bucket through a separate transaction.
-	if err := db.View(func(tx *bolt.Tx) error {
-		if tx.Bucket([]byte("widgets")) == nil {
-			t.Fatal("expected bucket")
-		}
+	err = db.View(func(tx *bolt.Tx) error {
+		require.NotNilf(t, tx.Bucket([]byte("widgets")), "expected bucket")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that a bucket can be created if it doesn't already exist.
 func TestTx_CreateBucketIfNotExists(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		// Create bucket.
-		if b, err := tx.CreateBucketIfNotExists([]byte("widgets")); err != nil {
-			t.Fatal(err)
-		} else if b == nil {
-			t.Fatal("expected bucket")
-		}
+		b, err := tx.CreateBucketIfNotExists([]byte("widgets"))
+		require.NoError(t, err)
+		require.NotNilf(t, b, "expected bucket")
 
 		// Create bucket again.
-		if b, err := tx.CreateBucketIfNotExists([]byte("widgets")); err != nil {
-			t.Fatal(err)
-		} else if b == nil {
-			t.Fatal("expected bucket")
-		}
+		b, err = tx.CreateBucketIfNotExists([]byte("widgets"))
+		require.NoError(t, err)
+		require.NotNilf(t, b, "expected bucket")
 
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	// Read the bucket through a separate transaction.
-	if err := db.View(func(tx *bolt.Tx) error {
-		if tx.Bucket([]byte("widgets")) == nil {
-			t.Fatal("expected bucket")
-		}
+	err = db.View(func(tx *bolt.Tx) error {
+		require.NotNilf(t, tx.Bucket([]byte("widgets")), "expected bucket")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure transaction returns an error if creating an unnamed bucket.
 func TestTx_CreateBucketIfNotExists_ErrBucketNameRequired(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucketIfNotExists([]byte{}); err != berrors.ErrBucketNameRequired {
-			t.Fatalf("unexpected error: %s", err)
-		}
+	err := db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte{})
+		require.Equalf(t, err, berrors.ErrBucketNameRequired, "unexpected error: %s", err)
 
-		if _, err := tx.CreateBucketIfNotExists(nil); err != berrors.ErrBucketNameRequired {
-			t.Fatalf("unexpected error: %s", err)
-		}
+		_, err = tx.CreateBucketIfNotExists(nil)
+		require.Equalf(t, err, berrors.ErrBucketNameRequired, "unexpected error: %s", err)
 
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that a bucket cannot be created twice.
@@ -313,37 +232,31 @@ func TestTx_CreateBucket_ErrBucketExists(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
 	// Create a bucket.
-	if err := db.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
-			t.Fatal(err)
-		}
+	err := db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucket([]byte("widgets"))
+		require.NoError(t, err)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	// Create the same bucket again.
-	if err := db.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucket([]byte("widgets")); err != berrors.ErrBucketExists {
-			t.Fatalf("unexpected error: %s", err)
-		}
+	err = db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucket([]byte("widgets"))
+		require.Equalf(t, err, berrors.ErrBucketExists, "unexpected error: %s", err)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that a bucket is created with a non-blank name.
 func TestTx_CreateBucket_ErrBucketNameRequired(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucket(nil); err != berrors.ErrBucketNameRequired {
-			t.Fatalf("unexpected error: %s", err)
-		}
+	err := db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucket(nil)
+		require.Equalf(t, err, berrors.ErrBucketNameRequired, "unexpected error: %s", err)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that a bucket can be deleted.
@@ -351,134 +264,95 @@ func TestTx_DeleteBucket(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
 	// Create a bucket and add a value.
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("foo"), []byte("bar")); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+		require.NoError(t, b.Put([]byte("foo"), []byte("bar")))
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	// Delete the bucket and make sure we can't get the value.
-	if err := db.Update(func(tx *bolt.Tx) error {
-		if err := tx.DeleteBucket([]byte("widgets")); err != nil {
-			t.Fatal(err)
-		}
-		if tx.Bucket([]byte("widgets")) != nil {
-			t.Fatal("unexpected bucket")
-		}
+	err = db.Update(func(tx *bolt.Tx) error {
+		require.NoError(t, tx.DeleteBucket([]byte("widgets")))
+		require.Nilf(t, tx.Bucket([]byte("widgets")), "unexpected bucket")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *bolt.Tx) error {
 		// Create the bucket again and make sure there's not a phantom value.
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if v := b.Get([]byte("foo")); v != nil {
-			t.Fatalf("unexpected phantom value: %v", v)
-		}
+		require.NoError(t, err)
+		require.Nilf(t, b.Get([]byte("foo")), "unexpected phantom value")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that deleting a bucket on a closed transaction returns an error.
 func TestTx_DeleteBucket_ErrTxClosed(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 	tx, err := db.Begin(true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := tx.Commit(); err != nil {
-		t.Fatal(err)
-	}
-	if err := tx.DeleteBucket([]byte("foo")); err != berrors.ErrTxClosed {
-		t.Fatalf("unexpected error: %s", err)
-	}
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+	require.Equalf(t, tx.DeleteBucket([]byte("foo")), berrors.ErrTxClosed, "unexpected error")
 }
 
 // Ensure that deleting a bucket with a read-only transaction returns an error.
 func TestTx_DeleteBucket_ReadOnly(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.View(func(tx *bolt.Tx) error {
-		if err := tx.DeleteBucket([]byte("foo")); err != berrors.ErrTxNotWritable {
-			t.Fatalf("unexpected error: %s", err)
-		}
+	err := db.View(func(tx *bolt.Tx) error {
+		require.Equalf(t, tx.DeleteBucket([]byte("foo")), berrors.ErrTxNotWritable, "unexpected error")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that nothing happens when deleting a bucket that doesn't exist.
 func TestTx_DeleteBucket_NotFound(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
-		if err := tx.DeleteBucket([]byte("widgets")); err != berrors.ErrBucketNotFound {
-			t.Fatalf("unexpected error: %s", err)
-		}
+	err := db.Update(func(tx *bolt.Tx) error {
+		require.Equalf(t, tx.DeleteBucket([]byte("widgets")), berrors.ErrBucketNotFound, "unexpected error")
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that no error is returned when a tx.ForEach function does not return
 // an error.
 func TestTx_ForEach_NoError(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("foo"), []byte("bar")); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+		require.NoError(t, b.Put([]byte("foo"), []byte("bar")))
 
-		if err := tx.ForEach(func(name []byte, b *bolt.Bucket) error {
+		err = tx.ForEach(func(name []byte, b *bolt.Bucket) error {
 			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
+		require.NoError(t, err)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that an error is returned when a tx.ForEach function returns an error.
 func TestTx_ForEach_WithError(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("foo"), []byte("bar")); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+		require.NoError(t, b.Put([]byte("foo"), []byte("bar")))
 
 		marker := errors.New("marker")
-		if err := tx.ForEach(func(name []byte, b *bolt.Bucket) error {
+		err = tx.ForEach(func(name []byte, b *bolt.Bucket) error {
 			return marker
-		}); err != marker {
-			t.Fatalf("unexpected error: %s", err)
-		}
+		})
+		require.Equalf(t, err, marker, "unexpected error: %s", err)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 // Ensure that Tx commit handlers are called after a transaction successfully commits.
@@ -486,18 +360,15 @@ func TestTx_OnCommit(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
 	var x int
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		tx.OnCommit(func() { x += 1 })
 		tx.OnCommit(func() { x += 2 })
-		if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
-			t.Fatal(err)
-		}
+		_, err := tx.CreateBucket([]byte("widgets"))
+		require.NoError(t, err)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	} else if x != 3 {
-		t.Fatalf("unexpected x: %d", x)
-	}
+	})
+	require.NoError(t, err)
+	require.Equalf(t, 3, x, "unexpected x: %d", x)
 }
 
 // Ensure that Tx commit handlers are NOT called after a transaction rolls back.
@@ -505,18 +376,15 @@ func TestTx_OnCommit_Rollback(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
 	var x int
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		tx.OnCommit(func() { x += 1 })
 		tx.OnCommit(func() { x += 2 })
-		if _, err := tx.CreateBucket([]byte("widgets")); err != nil {
-			t.Fatal(err)
-		}
+		_, err := tx.CreateBucket([]byte("widgets"))
+		require.NoError(t, err)
 		return errors.New("rollback this commit")
-	}); err == nil || err.Error() != "rollback this commit" {
-		t.Fatalf("unexpected error: %s", err)
-	} else if x != 0 {
-		t.Fatalf("unexpected x: %d", x)
-	}
+	})
+	require.EqualErrorf(t, err, "rollback this commit", "unexpected error: %s", err)
+	require.Equalf(t, 0, x, "unexpected x: %d", x)
 }
 
 // Ensure that the database can be copied to a file path.
@@ -524,48 +392,32 @@ func TestTx_CopyFile(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
 	path := tempfile()
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("foo"), []byte("bar")); err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("baz"), []byte("bat")); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+		require.NoError(t, b.Put([]byte("foo"), []byte("bar")))
+		require.NoError(t, b.Put([]byte("baz"), []byte("bat")))
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
-	if err := db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *bolt.Tx) error {
 		return tx.CopyFile(path, 0600)
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	db2, err := bolt.Open(path, 0600, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if err := db2.View(func(tx *bolt.Tx) error {
-		if v := tx.Bucket([]byte("widgets")).Get([]byte("foo")); !bytes.Equal(v, []byte("bar")) {
-			t.Fatalf("unexpected value: %v", v)
-		}
-		if v := tx.Bucket([]byte("widgets")).Get([]byte("baz")); !bytes.Equal(v, []byte("bat")) {
-			t.Fatalf("unexpected value: %v", v)
-		}
+	err = db2.View(func(tx *bolt.Tx) error {
+		v := tx.Bucket([]byte("widgets")).Get([]byte("foo"))
+		require.Truef(t, bytes.Equal(v, []byte("bar")), "unexpected value: %v", v)
+		v = tx.Bucket([]byte("widgets")).Get([]byte("baz"))
+		require.Truef(t, bytes.Equal(v, []byte("bat")), "unexpected value: %v", v)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := db2.Close(); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
+	require.NoError(t, db2.Close())
 }
 
 type failWriterError struct{}
@@ -592,53 +444,37 @@ func (f *failWriter) Write(p []byte) (n int, err error) {
 // Ensure that Copy handles write errors right.
 func TestTx_CopyFile_Error_Meta(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("foo"), []byte("bar")); err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("baz"), []byte("bat")); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+		require.NoError(t, b.Put([]byte("foo"), []byte("bar")))
+		require.NoError(t, b.Put([]byte("baz"), []byte("bat")))
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
-	if err := db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *bolt.Tx) error {
 		return tx.Copy(&failWriter{})
-	}); err == nil || err.Error() != "meta 0 copy: error injected for tests" {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	})
+	require.EqualErrorf(t, err, "meta 0 copy: error injected for tests", "unexpected error: %v", err)
 }
 
 // Ensure that Copy handles write errors right.
 func TestTx_CopyFile_Error_Normal(t *testing.T) {
 	db := btesting.MustCreateDB(t)
-	if err := db.Update(func(tx *bolt.Tx) error {
+	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte("widgets"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("foo"), []byte("bar")); err != nil {
-			t.Fatal(err)
-		}
-		if err := b.Put([]byte("baz"), []byte("bat")); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+		require.NoError(t, b.Put([]byte("foo"), []byte("bar")))
+		require.NoError(t, b.Put([]byte("baz"), []byte("bat")))
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
-	if err := db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *bolt.Tx) error {
 		return tx.Copy(&failWriter{3 * db.Info().PageSize})
-	}); err == nil || err.Error() != "error injected for tests" {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	})
+	require.EqualErrorf(t, err, "error injected for tests", "unexpected error: %v", err)
 }
 
 // TestTx_Rollback ensures there is no error when tx rollback whether we sync freelist or not.
@@ -653,41 +489,24 @@ func TestTx_Rollback(t *testing.T) {
 		db.NoFreelistSync = isSyncFreelist
 
 		tx, err := db.Begin(true)
-		if err != nil {
-			t.Fatalf("Error starting tx: %v", err)
-		}
+		require.NoErrorf(t, err, "Error starting tx: %v", err)
 		bucket := []byte("mybucket")
-		if _, err := tx.CreateBucket(bucket); err != nil {
-			t.Fatalf("Error creating bucket: %v", err)
-		}
-		if err := tx.Commit(); err != nil {
-			t.Fatalf("Error on commit: %v", err)
-		}
+		_, err = tx.CreateBucket(bucket)
+		require.NoErrorf(t, err, "Error creating bucket: %v", err)
+		require.NoErrorf(t, tx.Commit(), "Error on commit")
 
 		tx, err = db.Begin(true)
-		if err != nil {
-			t.Fatalf("Error starting tx: %v", err)
-		}
+		require.NoErrorf(t, err, "Error starting tx: %v", err)
 		b := tx.Bucket(bucket)
-		if err := b.Put([]byte("k"), []byte("v")); err != nil {
-			t.Fatalf("Error on put: %v", err)
-		}
+		require.NoErrorf(t, b.Put([]byte("k"), []byte("v")), "Error on put")
 		// Imagine there is an error and tx needs to be rolled-back
-		if err := tx.Rollback(); err != nil {
-			t.Fatalf("Error on rollback: %v", err)
-		}
+		require.NoErrorf(t, tx.Rollback(), "Error on rollback")
 
 		tx, err = db.Begin(false)
-		if err != nil {
-			t.Fatalf("Error starting tx: %v", err)
-		}
+		require.NoErrorf(t, err, "Error starting tx: %v", err)
 		b = tx.Bucket(bucket)
-		if v := b.Get([]byte("k")); v != nil {
-			t.Fatalf("Value for k should not have been stored")
-		}
-		if err := tx.Rollback(); err != nil {
-			t.Fatalf("Error on rollback: %v", err)
-		}
+		require.Nilf(t, b.Get([]byte("k")), "Value for k should not have been stored")
+		require.NoErrorf(t, tx.Rollback(), "Error on rollback")
 
 	}
 }
@@ -706,27 +525,21 @@ func TestTx_releaseRange(t *testing.T) {
 	bucket := "bucket"
 
 	put := func(key, value string) {
-		if err := db.Update(func(tx *bolt.Tx) error {
+		err := db.Update(func(tx *bolt.Tx) error {
 			b, err := tx.CreateBucketIfNotExists([]byte(bucket))
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			return b.Put([]byte(key), []byte(value))
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
+		require.NoError(t, err)
 	}
 
 	del := func(key string) {
-		if err := db.Update(func(tx *bolt.Tx) error {
+		err := db.Update(func(tx *bolt.Tx) error {
 			b, err := tx.CreateBucketIfNotExists([]byte(bucket))
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			return b.Delete([]byte(key))
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
+		require.NoError(t, err)
 	}
 
 	getWithTxn := func(txn *bolt.Tx, key string) []byte {
@@ -735,23 +548,17 @@ func TestTx_releaseRange(t *testing.T) {
 
 	openReadTxn := func() *bolt.Tx {
 		readTx, err := db.Begin(false)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		return readTx
 	}
 
 	checkWithReadTxn := func(txn *bolt.Tx, key string, wantValue []byte) {
 		value := getWithTxn(txn, key)
-		if !bytes.Equal(value, wantValue) {
-			t.Errorf("Wanted value to be %s for key %s, but got %s", wantValue, key, string(value))
-		}
+		assert.Truef(t, bytes.Equal(value, wantValue), "Wanted value to be %s for key %s, but got %s", wantValue, key, string(value))
 	}
 
 	rollback := func(txn *bolt.Tx) {
-		if err := txn.Rollback(); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, txn.Rollback())
 	}
 
 	put("k1", "v1")
@@ -1035,8 +842,7 @@ func TestTx_TruncateBeforeWrite(t *testing.T) {
 				require.NoError(t, err)
 				err = b.Put([]byte{byte(count)}, bigvalue)
 				require.NoError(t, err)
-				err = tx.Commit()
-				require.NoError(t, err)
+				require.NoError(t, tx.Commit())
 
 				size := fileSize(db.Path())
 

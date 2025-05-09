@@ -26,23 +26,19 @@ func TestFreelistHashmap_allocate(t *testing.T) {
 	f.Init(ids)
 
 	f.Allocate(1, 3)
-	if x := f.FreeCount(); x != 6 {
-		t.Fatalf("exp=6; got=%v", x)
-	}
+	x := f.FreeCount()
+	require.Equalf(t, 6, x, "exp=6; got=%v", x)
 
 	f.Allocate(1, 2)
-	if x := f.FreeCount(); x != 4 {
-		t.Fatalf("exp=4; got=%v", x)
-	}
+	x = f.FreeCount()
+	require.Equalf(t, 4, x, "exp=4; got=%v", x)
 	f.Allocate(1, 1)
-	if x := f.FreeCount(); x != 3 {
-		t.Fatalf("exp=3; got=%v", x)
-	}
+	x = f.FreeCount()
+	require.Equalf(t, 3, x, "exp=3; got=%v", x)
 
 	f.Allocate(1, 0)
-	if x := f.FreeCount(); x != 3 {
-		t.Fatalf("exp=3; got=%v", x)
-	}
+	x = f.FreeCount()
+	require.Equalf(t, 3, x, "exp=3; got=%v", x)
 }
 
 func TestFreelistHashmap_mergeWithExist(t *testing.T) {
@@ -101,18 +97,10 @@ func TestFreelistHashmap_mergeWithExist(t *testing.T) {
 
 		f.mergeWithExistingSpan(tt.pgid)
 
-		if got := f.freePageIds(); !reflect.DeepEqual(tt.want, got) {
-			t.Fatalf("name %s; exp=%v; got=%v", tt.name, tt.want, got)
-		}
-		if got := f.forwardMap; !reflect.DeepEqual(tt.wantForwardmap, got) {
-			t.Fatalf("name %s; exp=%v; got=%v", tt.name, tt.wantForwardmap, got)
-		}
-		if got := f.backwardMap; !reflect.DeepEqual(tt.wantBackwardmap, got) {
-			t.Fatalf("name %s; exp=%v; got=%v", tt.name, tt.wantBackwardmap, got)
-		}
-		if got := f.freemaps; !reflect.DeepEqual(tt.wantfreemap, got) {
-			t.Fatalf("name %s; exp=%v; got=%v", tt.name, tt.wantfreemap, got)
-		}
+		require.Truef(t, reflect.DeepEqual(tt.want, f.freePageIds()), "name %s; exp=%v; got=%v", tt.name, tt.want, f.freePageIds())
+		require.Truef(t, reflect.DeepEqual(tt.wantForwardmap, f.forwardMap), "name %s; exp=%v; got=%v", tt.name, tt.wantForwardmap, f.forwardMap)
+		require.Truef(t, reflect.DeepEqual(tt.wantBackwardmap, f.backwardMap), "name %s; exp=%v; got=%v", tt.name, tt.wantBackwardmap, f.backwardMap)
+		require.Truef(t, reflect.DeepEqual(tt.wantfreemap, f.freemaps), "name %s; exp=%v; got=%v", tt.name, tt.wantfreemap, f.freemaps)
 	}
 }
 
@@ -133,9 +121,7 @@ func TestFreelistHashmap_GetFreePageIDs(t *testing.T) {
 	f.forwardMap = fm
 	res := f.freePageIds()
 
-	if !sort.SliceIsSorted(res, func(i, j int) bool { return res[i] < res[j] }) {
-		t.Fatalf("pgids not sorted")
-	}
+	require.Truef(t, sort.SliceIsSorted(res, func(i, j int) bool { return res[i] < res[j] }), "pgids not sorted")
 }
 
 func Test_Freelist_Hashmap_Rollback(t *testing.T) {
