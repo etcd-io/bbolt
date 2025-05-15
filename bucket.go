@@ -20,6 +20,9 @@ const (
 const (
 	minFillPercent = 0.1
 	maxFillPercent = 1.0
+
+	minRebalancePercent = 0.1
+	maxRebalancePercent = 1.0
 )
 
 // DefaultFillPercent is the percentage that split pages are filled.
@@ -41,11 +44,14 @@ type Bucket struct {
 	//
 	// This is non-persisted across transactions so it must be set in every Tx.
 	FillPercent float64
+
+	// The threshold to rebalance a node. By default, it's 50% of FillPercent
+	RebalancePercent float64
 }
 
 // newBucket returns a new bucket associated with a transaction.
 func newBucket(tx *Tx) Bucket {
-	var b = Bucket{tx: tx, FillPercent: DefaultFillPercent}
+	var b = Bucket{tx: tx, FillPercent: DefaultFillPercent, RebalancePercent: DefaultFillPercent / 2}
 	if tx.writable {
 		b.buckets = make(map[string]*Bucket)
 		b.nodes = make(map[common.Pgid]*node)
@@ -183,9 +189,10 @@ func (b *Bucket) CreateBucket(key []byte) (rb *Bucket, err error) {
 
 	// Create empty, inline bucket.
 	var bucket = Bucket{
-		InBucket:    &common.InBucket{},
-		rootNode:    &node{isLeaf: true},
-		FillPercent: DefaultFillPercent,
+		InBucket:         &common.InBucket{},
+		rootNode:         &node{isLeaf: true},
+		FillPercent:      DefaultFillPercent,
+		RebalancePercent: DefaultFillPercent / 2,
 	}
 	var value = bucket.write()
 
@@ -252,9 +259,10 @@ func (b *Bucket) CreateBucketIfNotExists(key []byte) (rb *Bucket, err error) {
 
 	// Create empty, inline bucket.
 	var bucket = Bucket{
-		InBucket:    &common.InBucket{},
-		rootNode:    &node{isLeaf: true},
-		FillPercent: DefaultFillPercent,
+		InBucket:         &common.InBucket{},
+		rootNode:         &node{isLeaf: true},
+		FillPercent:      DefaultFillPercent,
+		RebalancePercent: DefaultFillPercent / 2,
 	}
 	var value = bucket.write()
 

@@ -371,8 +371,16 @@ func (n *node) rebalance() {
 	// Update statistics.
 	n.bucket.tx.stats.IncRebalance(1)
 
-	// Ignore if node is above threshold (25% when FillPercent is set to DefaultFillPercent) and has enough keys.
-	var threshold = int(float64(n.bucket.tx.db.pageSize)*n.bucket.FillPercent) / 2
+	// Determine the threshold before starting to rebalance.
+	var rebalancePercent = n.bucket.RebalancePercent
+	if rebalancePercent < minRebalancePercent {
+		rebalancePercent = minRebalancePercent
+	} else if rebalancePercent > maxRebalancePercent {
+		rebalancePercent = maxRebalancePercent
+	}
+	threshold := int(float64(n.bucket.tx.db.pageSize) * rebalancePercent)
+
+	// Ignore if node is above threshold (25% by default) and has enough keys.
 	if n.size() > threshold && len(n.inodes) > n.minKeys() {
 		return
 	}
