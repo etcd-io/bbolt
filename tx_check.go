@@ -281,10 +281,10 @@ func HexKVStringer() KVStringer {
 
 type hexKvStringer struct{}
 
-func (_ hexKvStringer) KeyToString(key []byte) string {
+func (hexKvStringer) KeyToString(key []byte) string {
 	return hex.EncodeToString(key)
 }
 
-func (_ hexKvStringer) ValueToString(value []byte) string {
+func (hexKvStringer) ValueToString(value []byte) string {
 	return hex.EncodeToString(value)
 }
