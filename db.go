@@ -36,12 +36,6 @@ const (
 // All data access is performed through transactions which can be obtained through the DB.
 // All the functions on DB will return a ErrDatabaseNotOpen if accessed before Open() is called.
 type DB struct {
-	// Put `stats` at the first field to ensure it's 64-bit aligned. Note that
-	// the first word in an allocated struct can be relied upon to be 64-bit
-	// aligned. Refer to https://pkg.go.dev/sync/atomic#pkg-note-BUG. Also
-	// refer to discussion in https://github.com/etcd-io/bbolt/issues/577.
-	stats Stats
-
 	// When enabled, the database will perform a Check() after every commit.
 	// A panic is issued if the database is in an inconsistent state. This
 	// flag has a large performance impact so it should only be used for
@@ -132,6 +126,7 @@ type DB struct {
 	pageSize int
 	opened   bool
 	rwtx     *Tx
+	stats    *Stats
 
 	freelist     fl.Interface
 	freelistLoad sync.Once
@@ -195,6 +190,10 @@ func Open(path string, mode os.FileMode, options *Options) (db *DB, err error) {
 	db.MaxBatchSize = common.DefaultMaxBatchSize
 	db.MaxBatchDelay = common.DefaultMaxBatchDelay
 	db.AllocSize = common.DefaultAllocSize
+
+	if !options.NoStatistics {
+		db.stats = new(Stats)
+	}
 
 	if options.Logger == nil {
 		db.logger = getDiscardLogger()
@@ -423,7 +422,9 @@ func (db *DB) loadFreelist() {
 			// Read free list from freelist page.
 			db.freelist.Read(db.page(db.meta().Freelist()))
 		}
-		db.stats.FreePageN = db.freelist.FreeCount()
+		if db.stats != nil {
+			db.stats.FreePageN = db.freelist.FreeCount()
+		}
 	})
 }
 
@@ -801,10 +802,12 @@ func (db *DB) beginTx() (*Tx, error) {
 	db.metalock.Unlock()
 
 	// Update the transaction stats.
-	db.statlock.Lock()
-	db.stats.TxN++
-	db.stats.OpenTxN++
-	db.statlock.Unlock()
+	if db.stats != nil {
+		db.statlock.Lock()
+		db.stats.TxN++
+		db.stats.OpenTxN++
+		db.statlock.Unlock()
+	}
 
 	return t, nil
 }
@@ -860,10 +863,12 @@ func (db *DB) removeTx(tx *Tx) {
 	db.metalock.Unlock()
 
 	// Merge statistics.
-	db.statlock.Lock()
-	db.stats.OpenTxN--
-	db.stats.TxStats.add(&tx.stats)
-	db.statlock.Unlock()
+	if db.stats != nil {
+		db.statlock.Lock()
+		db.stats.OpenTxN--
+		db.stats.TxStats.add(&tx.stats)
+		db.statlock.Unlock()
+	}
 }
 
 // Update executes a function within the context of a read-write managed transaction.
@@ -1081,9 +1086,13 @@ func (db *DB) Sync() (err error) {
 // Stats retrieves ongoing performance stats for the database.
 // This is only updated when a transaction closes.
 func (db *DB) Stats() Stats {
-	db.statlock.RLock()
-	defer db.statlock.RUnlock()
-	return db.stats
+	var s Stats
+	if db.stats != nil {
+		db.statlock.RLock()
+		s = *db.stats
+		db.statlock.RUnlock()
+	}
+	return s
 }
 
 // This is for internal access to the raw data bytes from the C cursor, use
@@ -1321,6 +1330,11 @@ type Options struct {
 
 	// Logger is the logger used for bbolt.
 	Logger Logger
+
+	// NoStatistics turns off statistics collection, Stats method will
+	// return empty structure in this case. This can be beneficial for
+	// performance in some cases.
+	NoStatistics bool
 }
 
 func (o *Options) String() string {
@@ -1328,8 +1342,8 @@ func (o *Options) String() string {
 		return "{}"
 	}
 
-	return fmt.Sprintf("{Timeout: %s, NoGrowSync: %t, NoFreelistSync: %t, PreLoadFreelist: %t, FreelistType: %s, ReadOnly: %t, MmapFlags: %x, InitialMmapSize: %d, PageSize: %d, NoSync: %t, OpenFile: %p, Mlock: %t, Logger: %p}",
-		o.Timeout, o.NoGrowSync, o.NoFreelistSync, o.PreLoadFreelist, o.FreelistType, o.ReadOnly, o.MmapFlags, o.InitialMmapSize, o.PageSize, o.NoSync, o.OpenFile, o.Mlock, o.Logger)
+	return fmt.Sprintf("{Timeout: %s, NoGrowSync: %t, NoFreelistSync: %t, PreLoadFreelist: %t, FreelistType: %s, ReadOnly: %t, MmapFlags: %x, InitialMmapSize: %d, PageSize: %d, NoSync: %t, OpenFile: %p, Mlock: %t, Logger: %p, NoStatistics: %t}",
+		o.Timeout, o.NoGrowSync, o.NoFreelistSync, o.PreLoadFreelist, o.FreelistType, o.ReadOnly, o.MmapFlags, o.InitialMmapSize, o.PageSize, o.NoSync, o.OpenFile, o.Mlock, o.Logger, o.NoStatistics)
 
 }
 

@@ -971,7 +971,8 @@ func TestConcurrentView(t *testing.T) {
 	)
 
 	db := mustCreateDB(t, &bolt.Options{
-		PageSize: 4096,
+		PageSize:     4096,
+		NoStatistics: true,
 	})
 	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte(bucketPrefix))
