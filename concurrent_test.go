@@ -10,10 +10,13 @@ import (
 	mrand "math/rand"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"text/tabwriter"
 	"time"
 	"unicode/utf8"
 
@@ -953,4 +956,79 @@ func executeLongRunningRead(t *testing.T, name string, db *bolt.DB, bucket []byt
 	})
 
 	return err
+}
+
+// TestConcurrentView is a sort of benchmark really, not a functional test,
+// it simulates a number of concurrent DB readers trying to open a transaction
+// and do something. It can't be a Go benchmark since worst-case times are even
+// more interesting here than any averages. It can be helpful for transaction
+// management optimization.
+func TestConcurrentView(t *testing.T) {
+	t.Skip("intended for manual runs")
+	const (
+		numOfEntries = 10000
+		iters        = 10
+	)
+
+	db := mustCreateDB(t, &bolt.Options{
+		PageSize: 4096,
+	})
+	err := db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte(bucketPrefix))
+		if err != nil {
+			return err
+		}
+		for i := range numOfEntries {
+			err = b.Put([]byte(strconv.Itoa(i)), []byte(strconv.Itoa(i)))
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	require.NoError(t, err)
+
+	w := new(tabwriter.Writer)
+	w.Init(os.Stdout, 0, 8, 1, '\t', 0)
+	fmt.Fprintln(w, "workers\tsamples\tmin\tavg\t50%\t80%\t90%\tmax")
+	for _, workers := range []int{1, 10, 100, 1000, 10000} {
+		t.Run("workers"+strconv.Itoa(workers), func(t *testing.T) {
+			tChan := make(chan time.Duration, workers*iters)
+			res := make([]time.Duration, 0, workers*iters)
+
+			for range workers {
+				go func() {
+					for range iters {
+						start := time.Now()
+						err := db.View(func(tx *bolt.Tx) error {
+							b := tx.Bucket([]byte(bucketPrefix))
+							_ = b.Get([]byte(strconv.Itoa(numOfEntries / 2)))
+							time.Sleep(30 * time.Microsecond)
+							return nil
+						})
+						dur := time.Since(start)
+						require.NoError(t, err)
+						tChan <- dur
+					}
+				}()
+			}
+			for t := range tChan {
+				res = append(res, t)
+				if len(res) == cap(res) {
+					break
+				}
+			}
+			slices.Sort(res)
+			var avg time.Duration
+			for i := range res {
+				avg += res[i]
+			}
+			avg /= time.Duration(len(res))
+			fmt.Fprintf(w, "%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\n", workers, len(res), res[0], avg, res[len(res)/2], res[len(res)*8/10], res[len(res)*9/10], res[len(res)-1])
+		})
+	}
+	w.Flush()
+	err = db.Close()
+	require.NoError(t, err)
+	t.Fail() // Deliberately to see the result easily.
 }
