@@ -79,7 +79,7 @@ func TestFreelist_free_freelist_alloctx(t *testing.T) {
 	if exp := []common.Pgid{12}; !reflect.DeepEqual(exp, f.pendingPageIds()[101].ids) {
 		t.Fatalf("exp=%v; got=%v", exp, f.pendingPageIds()[101].ids)
 	}
-	f.ReleasePendingPages()
+	f.ReleasePendingPages(102)
 	require.True(t, f.Freed(12))
 	require.Empty(t, f.pendingPageIds())
 	if exp := common.Pgids([]common.Pgid{12}); !reflect.DeepEqual(exp, f.freePageIds()) {
@@ -372,7 +372,7 @@ func TestFreelist_E2E_HappyPath(t *testing.T) {
 	// someone wants to do a read on top of the next tx id
 	f.AddReadonlyTXID(common.Txid(3))
 	// this should free the above pages for tx 2 entirely
-	f.ReleasePendingPages()
+	f.ReleasePendingPages(4)
 	requirePages(t, f, common.Pgids{3, 5, 8}, common.Pgids{})
 
 	// no span of two pages available should yield a zero-page result
@@ -400,7 +400,7 @@ func TestFreelist_E2E_MultiSpanOverflows(t *testing.T) {
 	f.Free(common.Txid(10), common.NewPage(39, common.LeafPageFlag, 0, 2))
 	f.Free(common.Txid(10), common.NewPage(45, common.LeafPageFlag, 0, 4))
 	requirePages(t, f, common.Pgids{}, common.Pgids{20, 21, 25, 26, 27, 35, 36, 37, 38, 39, 40, 41, 45, 46, 47, 48, 49})
-	f.ReleasePendingPages()
+	f.ReleasePendingPages(11)
 	requirePages(t, f, common.Pgids{20, 21, 25, 26, 27, 35, 36, 37, 38, 39, 40, 41, 45, 46, 47, 48, 49}, common.Pgids{})
 
 	// that sequence, regardless of implementation, should always yield the same blocks of pages
@@ -428,7 +428,7 @@ func TestFreelist_E2E_Rollbacks(t *testing.T) {
 	// unknown transaction should not trigger anything
 	freelist.Free(common.Txid(4), common.NewPage(13, common.LeafPageFlag, 0, 3))
 	requirePages(t, freelist, common.Pgids{}, common.Pgids{13, 14, 15, 16})
-	freelist.ReleasePendingPages()
+	freelist.ReleasePendingPages(5)
 	requirePages(t, freelist, common.Pgids{13, 14, 15, 16}, common.Pgids{})
 	freelist.Rollback(common.Txid(1337))
 	requirePages(t, freelist, common.Pgids{13, 14, 15, 16}, common.Pgids{})
@@ -453,7 +453,7 @@ func TestFreelist_E2E_Reload(t *testing.T) {
 	freelist.Init([]common.Pgid{})
 	freelist.Free(common.Txid(2), common.NewPage(5, common.LeafPageFlag, 0, 1))
 	freelist.Free(common.Txid(2), common.NewPage(8, common.LeafPageFlag, 0, 0))
-	freelist.ReleasePendingPages()
+	freelist.ReleasePendingPages(3)
 	requirePages(t, freelist, common.Pgids{5, 6, 8}, common.Pgids{})
 	buf := make([]byte, 4096)
 	p := common.LoadPage(buf)
@@ -489,7 +489,7 @@ func TestFreelist_E2E_SerDe_HappyPath(t *testing.T) {
 	freelist.Init([]common.Pgid{})
 	freelist.Free(common.Txid(2), common.NewPage(5, common.LeafPageFlag, 0, 1))
 	freelist.Free(common.Txid(2), common.NewPage(8, common.LeafPageFlag, 0, 0))
-	freelist.ReleasePendingPages()
+	freelist.ReleasePendingPages(3)
 	requirePages(t, freelist, common.Pgids{5, 6, 8}, common.Pgids{})
 
 	freelist.Free(common.Txid(3), common.NewPage(3, common.LeafPageFlag, 0, 1))
@@ -519,7 +519,7 @@ func TestFreelist_E2E_SerDe_AcrossImplementations(t *testing.T) {
 				freelist.Free(common.Txid(1), common.NewPage(pgid, common.LeafPageFlag, 0, 0))
 				expectedFreePgids = append(expectedFreePgids, pgid)
 			}
-			freelist.ReleasePendingPages()
+			freelist.ReleasePendingPages(2)
 			requirePages(t, freelist, expectedFreePgids, common.Pgids{})
 			buf := make([]byte, freelist.EstimatedWritePageSize())
 			p := common.LoadPage(buf)

@@ -137,7 +137,7 @@ type DB struct {
 	batch   *batch
 
 	rwlock   sync.Mutex   // Allows only one writer at a time.
-	metalock sync.Mutex   // Protects meta page access.
+	metalock sync.RWMutex // Protects meta page access.
 	mmaplock sync.RWMutex // Protects mmap access during remapping.
 	statlock sync.RWMutex // Protects stats access.
 
@@ -769,7 +769,7 @@ func (db *DB) beginTx() (*Tx, error) {
 	// Lock the meta pages while we initialize the transaction. We obtain
 	// the meta lock before the mmap lock because that's the order that the
 	// write transaction will obtain them.
-	db.metalock.Lock()
+	db.metalock.RLock()
 
 	// Obtain a read-only lock on the mmap. When the mmap is remapped it will
 	// obtain a write lock so all transactions must finish before it can be
@@ -779,14 +779,14 @@ func (db *DB) beginTx() (*Tx, error) {
 	// Exit if the database is not open yet.
 	if !db.opened {
 		db.mmaplock.RUnlock()
-		db.metalock.Unlock()
+		db.metalock.RUnlock()
 		return nil, berrors.ErrDatabaseNotOpen
 	}
 
 	// Exit if the database is not correctly mapped.
 	if db.data == nil {
 		db.mmaplock.RUnlock()
-		db.metalock.Unlock()
+		db.metalock.RUnlock()
 		return nil, berrors.ErrInvalidMapping
 	}
 
@@ -794,12 +794,12 @@ func (db *DB) beginTx() (*Tx, error) {
 	t := &Tx{}
 	t.init(db)
 
+	// Unlock the meta pages.
+	db.metalock.RUnlock()
+
 	if db.freelist != nil {
 		db.freelist.AddReadonlyTXID(t.meta.Txid())
 	}
-
-	// Unlock the meta pages.
-	db.metalock.Unlock()
 
 	// Update the transaction stats.
 	if db.stats != nil {
@@ -824,8 +824,8 @@ func (db *DB) beginRWTx() (*Tx, error) {
 
 	// Once we have the writer lock then we can lock the meta pages so that
 	// we can set up the transaction.
-	db.metalock.Lock()
-	defer db.metalock.Unlock()
+	db.metalock.RLock()
+	defer db.metalock.RUnlock()
 
 	// Exit if the database is not open yet.
 	if !db.opened {
@@ -843,7 +843,7 @@ func (db *DB) beginRWTx() (*Tx, error) {
 	t := &Tx{writable: true}
 	t.init(db)
 	db.rwtx = t
-	db.freelist.ReleasePendingPages()
+	db.freelist.ReleasePendingPages(t.meta.Txid())
 	return t, nil
 }
 
@@ -852,15 +852,9 @@ func (db *DB) removeTx(tx *Tx) {
 	// Release the read lock on the mmap.
 	db.mmaplock.RUnlock()
 
-	// Use the meta lock to restrict access to the DB object.
-	db.metalock.Lock()
-
 	if db.freelist != nil {
 		db.freelist.RemoveReadonlyTXID(tx.meta.Txid())
 	}
-
-	// Unlock the meta pages.
-	db.metalock.Unlock()
 
 	// Merge statistics.
 	if db.stats != nil {
