@@ -560,7 +560,9 @@ func (tx *Tx) writeMeta() error {
 	lg := tx.db.Logger()
 	buf := make([]byte, tx.db.pageSize)
 	p := tx.db.pageInBuffer(buf, 0)
+	tx.db.metalock.Lock()
 	tx.meta.Write(p)
+	tx.db.metalock.Unlock()
 
 	// Write the meta page to file.
 	if _, err := tx.db.ops.writeAt(buf, int64(p.Id())*int64(tx.db.pageSize)); err != nil {
