@@ -569,6 +569,7 @@ func (tx *Tx) writeMeta() error {
 		lg.Errorf("writeAt failed, pgid: %d, pageSize: %d, error: %v", p.Id(), tx.db.pageSize, err)
 		return err
 	}
+	tx.db.freelist.AddCurrentTXID(tx.meta.Txid())
 	tx.db.metalock.Unlock()
 	if !tx.db.NoSync || common.IgnoreNoSync {
 		// gofail: var beforeSyncMetaPage struct{}
