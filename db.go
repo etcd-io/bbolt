@@ -131,7 +131,7 @@ type DB struct {
 	// always fails on Windows platform.
 	//nolint
 	dataref  []byte // mmap'ed readonly, write throws SEGV
-	data     *[maxMapSize]byte
+	data     *[common.MaxMapSize]byte
 	datasz   int
 	meta0    *common.Meta
 	meta1    *common.Meta
@@ -570,7 +570,7 @@ func (db *DB) mmapSize(size int) (int, error) {
 	}
 
 	// Verify the requested size is not above the maximum allowed.
-	if size > maxMapSize {
+	if size > common.MaxMapSize {
 		return 0, errors.New("mmap too large")
 	}
 
@@ -588,8 +588,8 @@ func (db *DB) mmapSize(size int) (int, error) {
 	}
 
 	// If we've exceeded the max size then only grow up to the max size.
-	if sz > maxMapSize {
-		sz = maxMapSize
+	if sz > common.MaxMapSize {
+		sz = common.MaxMapSize
 	}
 
 	return int(sz), nil
