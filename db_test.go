@@ -1547,6 +1547,27 @@ func TestDB_MaxSizeExceededDoesNotGrow(t *testing.T) {
 	assert.Error(t, err, "Opening the DB with InitialMmapSize > MaxSize should cause an error on Windows")
 }
 
+func TestDB_HugeValue(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "db")
+	db, err := bolt.Open(dbPath, 0600, nil)
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
+
+	data := make([]byte, 0xFFFFFFF+1)
+
+	_ = db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("data"))
+		require.NoError(t, err)
+
+		err = b.Put([]byte("key"), data)
+		require.NoError(t, err)
+
+		return nil
+	})
+}
+
 func ExampleDB_Update() {
 	// Open the database.
 	db, err := bolt.Open(tempfile(), 0600, nil)
