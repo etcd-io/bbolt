@@ -1,6 +1,15 @@
 
 <hr>
 
+## v1.4.1(2025-06-10)
+
+### BoltDB
+- [Correct the incorrect usage of debug method](https://github.com/etcd-io/bbolt/pull/905)
+- [Add clarification on the option `InitialMmapSize`](https://github.com/etcd-io/bbolt/pull/943)
+- [Fix the crash when writing huge values](https://github.com/etcd-io/bbolt/pull/978)
+
+<hr>
+
 ## v1.4.0(2025-02-05)
 There isn't any production code change since v1.4.0-beta.0. Only some dependencies
 are bumped, also updated some typos in comment and readme, and removed the legacy
