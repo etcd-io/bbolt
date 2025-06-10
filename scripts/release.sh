@@ -39,6 +39,19 @@ if [ "${remote_tag_exists}" -gt 0 ]; then
    exit 1
 fi
 
+# Checkout release branch and ensure to return to the current reference after
+# the release finishes.
+PREVIOUS_REF=$(git rev-parse HEAD)
+if git symbolic-ref HEAD &>/dev/null; then
+  PREVIOUS_REF=$(git symbolic-ref HEAD | rev | cut -d/ -f1 | rev)
+fi
+RELEASE_BRANCH="release-${MINOR_VERSION}"
+echo "Switching to ${RELEASE_BRANCH} branch."
+git fetch "${REMOTE}" "${RELEASE_BRANCH}"
+git checkout "${RELEASE_BRANCH}"
+# shellcheck disable=SC2064 # Intentionally expanding PREVIOUS_REF now.
+trap "git checkout ${PREVIOUS_REF}" EXIT
+
 # ensuring the minor-version is identical.
 source_version=$(grep -E "\s+Version\s*=" ./version/version.go | sed -e "s/.*\"\(.*\)\".*/\1/g")
 if [[ "${source_version}" != "${RELEASE_VERSION}" ]]; then
@@ -57,7 +70,7 @@ sed -i "s/${source_version}/${RELEASE_VERSION}/g" ./version/version.go
 echo "committing 'version.go'"
 git add ./version/version.go
 git commit -s -m "Update version to ${VERSION}"
-git push "${REMOTE}" "${INPUT}"
+git push "${REMOTE}" "${RELEASE_BRANCH}"
 echo "'version.go' has been committed to remote repo."
 
 # create tag and push to remote.
