@@ -132,6 +132,7 @@ type DB struct {
 	pageSize int
 	opened   bool
 	rwtx     *Tx
+	txs      []*Tx
 
 	freelist     fl.Interface
 	freelistLoad sync.Once
@@ -793,6 +794,9 @@ func (db *DB) beginTx() (*Tx, error) {
 	t := &Tx{}
 	t.init(db)
 
+	// Keep track of transaction until it closes.
+	db.txs = append(db.txs, t)
+	n := len(db.txs)
 	if db.freelist != nil {
 		db.freelist.AddReadonlyTXID(t.meta.Txid())
 	}
@@ -803,7 +807,7 @@ func (db *DB) beginTx() (*Tx, error) {
 	// Update the transaction stats.
 	db.statlock.Lock()
 	db.stats.TxN++
-	db.stats.OpenTxN++
+	db.stats.OpenTxN = n
 	db.statlock.Unlock()
 
 	return t, nil
@@ -852,6 +856,17 @@ func (db *DB) removeTx(tx *Tx) {
 	// Use the meta lock to restrict access to the DB object.
 	db.metalock.Lock()
 
+	// Remove the transaction.
+	for i, t := range db.txs {
+		if t == tx {
+			last := len(db.txs) - 1
+			db.txs[i] = db.txs[last]
+			db.txs[last] = nil
+			db.txs = db.txs[:last]
+			break
+		}
+	}
+	n := len(db.txs)
 	if db.freelist != nil {
 		db.freelist.RemoveReadonlyTXID(tx.meta.Txid())
 	}
@@ -861,7 +876,7 @@ func (db *DB) removeTx(tx *Tx) {
 
 	// Merge statistics.
 	db.statlock.Lock()
-	db.stats.OpenTxN--
+	db.stats.OpenTxN = n
 	db.stats.TxStats.add(&tx.stats)
 	db.statlock.Unlock()
 }
