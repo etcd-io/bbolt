@@ -1019,7 +1019,10 @@ func (cmd *benchCommand) Run(args ...string) error {
 	}
 
 	// Create database.
-	db, err := bolt.Open(options.Path, 0600, nil)
+	dbOptions := *bolt.DefaultOptions
+	dbOptions.PageSize = options.PageSize
+	dbOptions.InitialMmapSize = options.InitialMmapSize
+	db, err := bolt.Open(options.Path, 0600, &dbOptions)
 	if err != nil {
 		return err
 	}
@@ -1095,6 +1098,8 @@ func (cmd *benchCommand) ParseFlags(args []string) (*BenchOptions, error) {
 	fs.BoolVar(&options.Work, "work", false, "")
 	fs.StringVar(&options.Path, "path", "", "")
 	fs.BoolVar(&options.GoBenchOutput, "gobench-output", false, "")
+	fs.IntVar(&options.PageSize, "page-size", common.DefaultPageSize, "Set page size in bytes.")
+	fs.IntVar(&options.InitialMmapSize, "initial-mmap-size", 0, "Set initial mmap size in bytes for database file.")
 	fs.SetOutput(cmd.Stderr)
 	if err := fs.Parse(args); err != nil {
 		return nil, err
@@ -1559,22 +1564,24 @@ func (cmd *benchCommand) stopProfiling() {
 
 // BenchOptions represents the set of options that can be passed to "bolt bench".
 type BenchOptions struct {
-	ProfileMode   string
-	WriteMode     string
-	ReadMode      string
-	Iterations    int64
-	BatchSize     int64
-	KeySize       int
-	ValueSize     int
-	CPUProfile    string
-	MemProfile    string
-	BlockProfile  string
-	StatsInterval time.Duration
-	FillPercent   float64
-	NoSync        bool
-	Work          bool
-	Path          string
-	GoBenchOutput bool
+	ProfileMode     string
+	WriteMode       string
+	ReadMode        string
+	Iterations      int64
+	BatchSize       int64
+	KeySize         int
+	ValueSize       int
+	CPUProfile      string
+	MemProfile      string
+	BlockProfile    string
+	StatsInterval   time.Duration
+	FillPercent     float64
+	NoSync          bool
+	Work            bool
+	Path            string
+	GoBenchOutput   bool
+	PageSize        int
+	InitialMmapSize int
 }
 
 // BenchResults represents the performance results of the benchmark and is thread-safe.
