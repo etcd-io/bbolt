@@ -241,12 +241,15 @@ func TestOpen_ReadPageSize_FromMeta1_OS(t *testing.T) {
 
 	// Reopen data file.
 	db = btesting.MustOpenDBWithOption(t, path, nil)
-	require.Equalf(t, os.Getpagesize(), db.Info().PageSize, "check page size failed")
+	require.Equalf(t, common.GetPagesize(), db.Info().PageSize, "check page size failed")
 }
 
 // Ensure that it can read the page size from the second meta page if the first one is invalid.
 // The page size is expected to be the given page size in this case.
 func TestOpen_ReadPageSize_FromMeta1_Given(t *testing.T) {
+	if runtime.GOOS == "js" || runtime.GOOS == "wasip1" {
+		t.Skip("skipping test on WASM due to memory constraints")
+	}
 	// test page size from 1KB (1024<<0) to 16MB(1024<<14)
 	for i := 0; i <= 14; i++ {
 		givenPageSize := 1024 << uint(i)
@@ -331,6 +334,9 @@ func TestOpen_Size(t *testing.T) {
 func TestOpen_Size_Large(t *testing.T) {
 	if testing.Short() {
 		t.Skip("short mode")
+	}
+	if runtime.GOOS == "js" || runtime.GOOS == "wasip1" {
+		t.Skip("skipping large file test in WASM")
 	}
 
 	// Open a data file.
@@ -456,6 +462,10 @@ func TestOpen_FileTooSmall(t *testing.T) {
 // read transaction blocks the write transaction and causes deadlock.
 // This is a very hacky test since the mmap size is not exposed.
 func TestDB_Open_InitialMmapSize(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "js" || runtime.GOOS == "wasip1" {
+		t.Skip("skipping test on WASM due to memory constraints")
+	}
 	path := tempfile()
 	defer os.Remove(path)
 

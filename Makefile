@@ -51,6 +51,32 @@ test:
 	BBOLT_VERIFY=all TEST_FREELIST_TYPE=array go test -v ${TESTFLAGS} ./internal/...
 	BBOLT_VERIFY=all TEST_FREELIST_TYPE=array go test -v ${TESTFLAGS} ./cmd/bbolt/...
 
+.PHONY: test-wasm
+test-wasm:
+	@echo "WASM js test"
+	export PATH="$$PATH:$$(go env GOROOT)/lib/wasm" && \
+	GOOS=js GOARCH=wasm go test -v ${TESTFLAGS} -timeout ${TESTFLAGS_TIMEOUT}
+
+.PHONY: test-wasip1
+test-wasip1:
+	@echo "WASM wasip1 test"
+	if command -v wazero >/dev/null 2>&1; then \
+		echo "Using wazero runtime"; \
+		GOOS=wasip1 GOARCH=wasm go test -v ${TESTFLAGS} -timeout ${TESTFLAGS_TIMEOUT} \
+			-exec="wazero run -mount=$(shell mktemp -d):/tmp -mount=.:/test"; \
+	elif command -v wasmtime >/dev/null 2>&1; then \
+		WASI_TEMP=$$(mktemp -d); \
+		echo "Using wasmtime runtime with temp dir: $$WASI_TEMP"; \
+		GOOS=wasip1 GOARCH=wasm go test -v ${TESTFLAGS} -timeout ${TESTFLAGS_TIMEOUT} \
+			-exec="wasmtime --dir=. --dir=$$WASI_TEMP --env=TMPDIR=$$WASI_TEMP"; \
+	else \
+		echo "No WASI runtime found - install wazero (recommended) or wasmtime"; \
+		echo "  go install github.com/tetratelabs/wazero/cmd/wazero@latest"; \
+		echo "  brew install wasmtime"; \
+		echo "Building wasip1 binary to verify compilation..."; \
+		GOOS=wasip1 GOARCH=wasm go build .; \
+	fi
+
 .PHONY: coverage
 coverage:
 	@echo "hashmap freelist test"

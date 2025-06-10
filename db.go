@@ -772,11 +772,25 @@ func (db *DB) Logger() Logger {
 	return db.logger
 }
 
+// txIniter is an interface that allows for platform-specific transaction
+// initialization.
+type txIniter interface {
+	txInit() error
+}
+
 func (db *DB) beginTx() (*Tx, error) {
 	// Lock the meta pages while we initialize the transaction. We obtain
 	// the meta lock before the mmap lock because that's the order that the
 	// write transaction will obtain them.
 	db.metalock.Lock()
+
+	// Allow platform-specific transaction initialization
+	if initer, ok := any(db).(txIniter); ok {
+		if err := initer.txInit(); err != nil {
+			db.metalock.Unlock()
+			return nil, err
+		}
+	}
 
 	// Obtain a read-only lock on the mmap. When the mmap is remapped it will
 	// obtain a write lock so all transactions must finish before it can be
@@ -833,6 +847,14 @@ func (db *DB) beginRWTx() (*Tx, error) {
 	// we can set up the transaction.
 	db.metalock.Lock()
 	defer db.metalock.Unlock()
+
+	// Allow platform-specific transaction initialization
+	if initer, ok := any(db).(txIniter); ok {
+		if err := initer.txInit(); err != nil {
+			db.rwlock.Unlock()
+			return nil, err
+		}
+	}
 
 	// Exit if the database is not open yet.
 	if !db.opened {
