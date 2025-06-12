@@ -784,11 +784,13 @@ func (db *DB) beginTx() (*Tx, error) {
 	// write transaction will obtain them.
 	db.metalock.Lock()
 
-	// Allow platform-specific transaction initialization
-	if initer, ok := any(db).(txIniter); ok {
-		if err := initer.txInit(); err != nil {
-			db.metalock.Unlock()
-			return nil, err
+	// Allow WASM-specific transaction initialization
+	if runtime.GOARCH == "wasm" {
+		if initer, ok := any(db).(txIniter); ok {
+			if err := initer.txInit(); err != nil {
+				db.metalock.Unlock()
+				return nil, err
+			}
 		}
 	}
 
@@ -848,11 +850,13 @@ func (db *DB) beginRWTx() (*Tx, error) {
 	db.metalock.Lock()
 	defer db.metalock.Unlock()
 
-	// Allow platform-specific transaction initialization
-	if initer, ok := any(db).(txIniter); ok {
-		if err := initer.txInit(); err != nil {
-			db.rwlock.Unlock()
-			return nil, err
+	// Allow WASM-specific transaction initialization
+	if runtime.GOARCH == "wasm" {
+		if initer, ok := any(db).(txIniter); ok {
+			if err := initer.txInit(); err != nil {
+				db.rwlock.Unlock()
+				return nil, err
+			}
 		}
 	}
 

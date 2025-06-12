@@ -24,7 +24,6 @@ import (
 	bolt "go.etcd.io/bbolt"
 	berrors "go.etcd.io/bbolt/errors"
 	"go.etcd.io/bbolt/internal/btesting"
-	"go.etcd.io/bbolt/internal/common"
 )
 
 // pageSize is the size of one page in the data file.
@@ -241,7 +240,7 @@ func TestOpen_ReadPageSize_FromMeta1_OS(t *testing.T) {
 
 	// Reopen data file.
 	db = btesting.MustOpenDBWithOption(t, path, nil)
-	require.Equalf(t, common.GetPagesize(), db.Info().PageSize, "check page size failed")
+	require.Equalf(t, os.Getpagesize(), db.Info().PageSize, "check page size failed")
 }
 
 // Ensure that it can read the page size from the second meta page if the first one is invalid.
