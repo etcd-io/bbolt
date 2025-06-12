@@ -2,7 +2,7 @@ module go.etcd.io/bbolt
 
 go 1.23
 
-toolchain go1.23.9
+toolchain go1.23.10
 
 require (
 	github.com/stretchr/testify v1.8.1
