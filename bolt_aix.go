@@ -8,6 +8,7 @@ import (
 	"time"
 	"unsafe"
 
+	"go.etcd.io/bbolt/internal/common"
 	"golang.org/x/sys/unix"
 )
 
@@ -69,7 +70,7 @@ func mmap(db *DB, sz int) error {
 
 	// Save the original byte slice and convert to a byte array pointer.
 	db.dataref = b
-	db.data = (*[maxMapSize]byte)(unsafe.Pointer(&b[0]))
+	db.data = (*[common.MaxMapSize]byte)(unsafe.Pointer(&b[0]))
 	db.datasz = sz
 	return nil
 }
