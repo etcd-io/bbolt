@@ -1,8 +1,14 @@
 formatters:
   enable:
+    - gci
     - gofmt
     - goimports
   settings: # please keep this alphabetized
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(go.etcd.io)
     goimports:
       local-prefixes:
         - go.etcd.io # Put imports beginning with prefix after 3rd-party packages.
