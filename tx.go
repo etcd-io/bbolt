@@ -357,13 +357,15 @@ func (tx *Tx) close() {
 		tx.db.rwlock.Unlock()
 
 		// Merge statistics.
-		tx.db.statlock.Lock()
-		tx.db.stats.FreePageN = freelistFreeN
-		tx.db.stats.PendingPageN = freelistPendingN
-		tx.db.stats.FreeAlloc = (freelistFreeN + freelistPendingN) * tx.db.pageSize
-		tx.db.stats.FreelistInuse = freelistAlloc
-		tx.db.stats.TxStats.add(&tx.stats)
-		tx.db.statlock.Unlock()
+		if tx.db.stats != nil {
+			tx.db.statlock.Lock()
+			tx.db.stats.FreePageN = freelistFreeN
+			tx.db.stats.PendingPageN = freelistPendingN
+			tx.db.stats.FreeAlloc = (freelistFreeN + freelistPendingN) * tx.db.pageSize
+			tx.db.stats.FreelistInuse = freelistAlloc
+			tx.db.stats.TxStats.add(&tx.stats)
+			tx.db.statlock.Unlock()
+		}
 	} else {
 		tx.db.removeTx(tx)
 	}
