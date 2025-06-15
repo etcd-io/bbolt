@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"go.etcd.io/bbolt"
 	"go.etcd.io/bbolt/errors"
 	"go.etcd.io/bbolt/internal/btesting"
-
-	"github.com/stretchr/testify/require"
 )
 
 func TestTx_MoveBucket(t *testing.T) {
