@@ -343,7 +343,7 @@ func (b *Bucket) Delete(key []byte) error {
 }
 
 // Sequence returns the current integer for the bucket without incrementing it.
-func (b *Bucket) Sequence() uint64 { return b.bucket.sequence }
+func (b *Bucket) Sequence() uint64 { return b.sequence }
 
 // SetSequence updates the sequence number for the bucket.
 func (b *Bucket) SetSequence(v uint64) error {
@@ -360,7 +360,7 @@ func (b *Bucket) SetSequence(v uint64) error {
 	}
 
 	// Set the sequence.
-	b.bucket.sequence = v
+	b.sequence = v
 	return nil
 }
 
@@ -379,8 +379,8 @@ func (b *Bucket) NextSequence() (uint64, error) {
 	}
 
 	// Increment and return the sequence.
-	b.bucket.sequence++
-	return b.bucket.sequence, nil
+	b.sequence++
+	return b.sequence, nil
 }
 
 // ForEach executes a function for each key/value pair in a bucket.
