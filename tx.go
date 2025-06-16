@@ -357,13 +357,15 @@ func (tx *Tx) close() {
 		tx.db.rwlock.Unlock()
 
 		// Merge statistics.
-		tx.db.statlock.Lock()
-		tx.db.stats.FreePageN = freelistFreeN
-		tx.db.stats.PendingPageN = freelistPendingN
-		tx.db.stats.FreeAlloc = (freelistFreeN + freelistPendingN) * tx.db.pageSize
-		tx.db.stats.FreelistInuse = freelistAlloc
-		tx.db.stats.TxStats.add(&tx.stats)
-		tx.db.statlock.Unlock()
+		if tx.db.stats != nil {
+			tx.db.statlock.Lock()
+			tx.db.stats.FreePageN = freelistFreeN
+			tx.db.stats.PendingPageN = freelistPendingN
+			tx.db.stats.FreeAlloc = (freelistFreeN + freelistPendingN) * tx.db.pageSize
+			tx.db.stats.FreelistInuse = freelistAlloc
+			tx.db.stats.TxStats.add(&tx.stats)
+			tx.db.statlock.Unlock()
+		}
 	} else {
 		tx.db.removeTx(tx)
 	}
@@ -558,7 +560,9 @@ func (tx *Tx) writeMeta() error {
 	lg := tx.db.Logger()
 	buf := make([]byte, tx.db.pageSize)
 	p := tx.db.pageInBuffer(buf, 0)
+	tx.db.metalock.Lock()
 	tx.meta.Write(p)
+	tx.db.metalock.Unlock()
 
 	// Write the meta page to file.
 	if _, err := tx.db.ops.writeAt(buf, int64(p.Id())*int64(tx.db.pageSize)); err != nil {

@@ -43,7 +43,7 @@ type Interface interface {
 	RemoveReadonlyTXID(txid common.Txid)
 
 	// ReleasePendingPages releases any pages associated with closed read-only transactions.
-	ReleasePendingPages()
+	ReleasePendingPages(txid common.Txid)
 
 	// Free releases a page and its overflow for a given transaction id.
 	// If the page is already free or is one of the meta pages, then a panic will occur.
