@@ -6,8 +6,9 @@ import (
 	"time"
 	"unsafe"
 
-	"go.etcd.io/bbolt/internal/common"
 	"golang.org/x/sys/unix"
+
+	"go.etcd.io/bbolt/internal/common"
 )
 
 // flock acquires an advisory lock on a file descriptor.
