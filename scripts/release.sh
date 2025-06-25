@@ -20,22 +20,25 @@ function get_gpg_key {
 
 # === Main Script Logic ===
 function main {
-  echo "enter release string according to semantic versioning (e.g. v1.2.3)."
-  read -r INPUT
-  if [[ ! "${INPUT}" =~ ^v[0-9]+.[0-9]+.[0-9]+ ]]; then
-    echo "Expected 'version' param of the form 'v<major-version>.<minor-version>.<patch-version>' but got '${INPUT}'"
-    exit 1
+  VERSION="$1"
+
+  if [ -z "${VERSION}" ]; then
+    read -p "Release version (e.g., v1.2.3) " -r VERSION
+    if [[ ! "${VERSION}" =~ ^v[0-9]+.[0-9]+.[0-9]+ ]]; then
+      echo "Expected 'version' param of the form 'v<major-version>.<minor-version>.<patch-version>' but got '${VERSION}'"
+      exit 1
+    fi
   fi
 
-  VERSION=${INPUT#v}
-  RELEASE_VERSION="${VERSION}"
-  MINOR_VERSION=$(echo "${VERSION}" | cut -d. -f 1-2)
+  VERSION=v${VERSION#v}
+  RELEASE_VERSION="${VERSION#v}"
+  MINOR_VERSION=$(echo "${RELEASE_VERSION}" | cut -d. -f 1-2)
   RELEASE_BRANCH="release-${MINOR_VERSION}"
 
   REPOSITORY=${REPOSITORY:-"git@github.com:etcd-io/bbolt.git"}
   REMOTE="${REMOTE:-"origin"}"
 
-  remote_tag_exists=$(git ls-remote --tags "${REPOSITORY}" | grep -c "${INPUT}" || true)
+  remote_tag_exists=$(git ls-remote --tags "${REPOSITORY}" | grep -c "${VERSION}" || true)
   if [ "${remote_tag_exists}" -gt 0 ]; then
     echo "Release version tag exists on remote."
     exit 1
@@ -76,12 +79,12 @@ function main {
   echo "'version.go' has been committed to remote repo."
 
   # create tag and push to remote.
-  echo "Creating new tag for '${INPUT}'"
+  echo "Creating new tag for '${VERSION}'"
   key_id=$(get_gpg_key) || return 2
-  git tag --local-user "${key_id}" --sign "${INPUT}" --message "${INPUT}"
-  git push origin "${INPUT}"
-  echo "Tag '${INPUT}' has been created and pushed to remote repo."
+  git tag --local-user "${key_id}" --sign "${VERSION}" --message "${VERSION}"
+  git push origin "${VERSION}"
+  echo "Tag '${VERSION}' has been created and pushed to remote repo."
   echo "SUCCESS"
 }
 
-main
+main "$1"
