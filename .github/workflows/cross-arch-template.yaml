@@ -1,0 +1,29 @@
+---
+name: Reusable Cross-Platform Build Workflow
+on:
+  workflow_call:
+    inputs:
+      archs:
+        required: true
+        type: string
+      os:
+        required: true
+        type: string
+permissions: read-all
+
+jobs:
+  cross-build:
+    strategy:
+      matrix:
+        arch: ${{ fromJSON(inputs.archs) }}
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+    - id: goversion
+      run: echo "goversion=$(cat .go-version)" >> "$GITHUB_OUTPUT"
+    - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      with:
+        go-version: ${{ steps.goversion.outputs.goversion }}
+    - name: Build for ${{ inputs.os }}/${{ matrix.arch }}
+      run: |
+        GOOS=${{ inputs.os }} GOARCH=${{ matrix.arch }} go build ./...
