@@ -36,9 +36,9 @@ function main {
   RELEASE_BRANCH="release-${MINOR_VERSION}"
 
   REPOSITORY=${REPOSITORY:-"git@github.com:etcd-io/bbolt.git"}
-  REMOTE="${REMOTE:-"origin"}"
 
-  remote_tag_exists=$(git ls-remote --tags "${REPOSITORY}" | grep -c "${VERSION}" || true)
+  local remote_tag_exists
+  remote_tag_exists=$(git ls-remote "${REPOSITORY}" "refs/tags/${VERSION}" | grep -c "${VERSION}" || true)
   if [ "${remote_tag_exists}" -gt 0 ]; then
     echo "Release version tag exists on remote."
     exit 1
