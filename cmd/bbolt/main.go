@@ -21,9 +21,8 @@ import (
 	"unicode/utf8"
 	"unsafe"
 
-	"go.etcd.io/bbolt/internal/guts_cli"
-
 	bolt "go.etcd.io/bbolt"
+	"go.etcd.io/bbolt/internal/guts_cli"
 )
 
 var (
@@ -934,7 +933,7 @@ func (cmd *keysCommand) Run(args ...string) error {
 	// Print keys.
 	return db.View(func(tx *bolt.Tx) error {
 		// Find bucket.
-		var lastbucket *bolt.Bucket = tx.Bucket([]byte(buckets[0]))
+		lastbucket := tx.Bucket([]byte(buckets[0]))
 		if lastbucket == nil {
 			return ErrBucketNotFound
 		}
@@ -1028,7 +1027,7 @@ func (cmd *getCommand) Run(args ...string) error {
 	// Print value.
 	return db.View(func(tx *bolt.Tx) error {
 		// Find bucket.
-		var lastbucket *bolt.Bucket = tx.Bucket([]byte(buckets[0]))
+		lastbucket := tx.Bucket([]byte(buckets[0]))
 		if lastbucket == nil {
 			return ErrBucketNotFound
 		}
@@ -1692,11 +1691,11 @@ Additional options include:
 
 type cmdKvStringer struct{}
 
-func (_ cmdKvStringer) KeyToString(key []byte) string {
+func (cmdKvStringer) KeyToString(key []byte) string {
 	return bytesToAsciiOrHex(key)
 }
 
-func (_ cmdKvStringer) ValueToString(value []byte) string {
+func (cmdKvStringer) ValueToString(value []byte) string {
 	return bytesToAsciiOrHex(value)
 }
 
