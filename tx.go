@@ -569,14 +569,15 @@ func (tx *Tx) writeMeta() error {
 		lg.Errorf("writeAt failed, pgid: %d, pageSize: %d, error: %v", p.Id(), tx.db.pageSize, err)
 		return err
 	}
-	tx.db.metalock.Unlock()
 	if !tx.db.NoSync || common.IgnoreNoSync {
 		// gofail: var beforeSyncMetaPage struct{}
 		if err := fdatasync(tx.db); err != nil {
+			tx.db.metalock.Unlock()
 			lg.Errorf("[GOOS: %s, GOARCH: %s] fdatasync failed: %w", runtime.GOOS, runtime.GOARCH, err)
 			return err
 		}
 	}
+	tx.db.metalock.Unlock()
 
 	// Update statistics.
 	tx.stats.IncWrite(1)
