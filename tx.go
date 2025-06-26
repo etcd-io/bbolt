@@ -509,9 +509,12 @@ func (tx *Tx) writeMeta() error {
 	tx.meta.write(p)
 
 	// Write the meta page to file.
+	tx.db.metalock.Lock()
 	if _, err := tx.db.ops.writeAt(buf, int64(p.id)*int64(tx.db.pageSize)); err != nil {
+		tx.db.metalock.Unlock()
 		return err
 	}
+	tx.db.metalock.Unlock()
 	if !tx.db.NoSync || IgnoreNoSync {
 		// gofail: var beforeSyncMetaPage struct{}
 		if err := fdatasync(tx.db); err != nil {
