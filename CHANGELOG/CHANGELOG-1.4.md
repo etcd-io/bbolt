@@ -5,6 +5,7 @@
 
 ### BoltDB
 - [Fix the compilation issue on aix, android and solaris due to wrong use of `maxMapSize`](https://github.com/etcd-io/bbolt/pull/990)
+- [Add protection on meta page when it's being written](https://github.com/etcd-io/bbolt/pull/1005)
 
 <hr>
 

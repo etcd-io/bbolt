@@ -2,6 +2,13 @@ Note that we start to track changes starting from v1.3.7.
 
 <hr>
 
+## v1.3.12(TBD)
+
+### BoltDB
+- [Add protection on meta page when it's being written](https://github.com/etcd-io/bbolt/pull/1006)
+
+<hr>
+
 ## v1.3.11(2024-08-21)
 
 ### BoltDB
