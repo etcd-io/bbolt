@@ -1,7 +1,7 @@
 
 <hr>
 
-## v1.4.2(TBD)
+## v1.4.2(2025-06-27)
 
 ### BoltDB
 - [Fix the compilation issue on aix, android and solaris due to wrong use of `maxMapSize`](https://github.com/etcd-io/bbolt/pull/990)
