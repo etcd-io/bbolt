@@ -69,7 +69,11 @@ function main {
 
   # bump 'version.go'.
   echo "Updating version from '${source_version}' to '${RELEASE_VERSION}' in 'version.go'"
-  sed -i "s/${source_version}/${RELEASE_VERSION}/g" ./version/version.go
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    sed -i '' "s/${source_version}/${RELEASE_VERSION}/g" ./version/version.go
+  else
+    sed -i "s/${source_version}/${RELEASE_VERSION}/g" ./version/version.go
+  fi
 
   # push 'version.go' to remote.
   echo "committing 'version.go'"
