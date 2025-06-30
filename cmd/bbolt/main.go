@@ -122,8 +122,6 @@ func (m *Main) Run(args ...string) error {
 		return ErrUsage
 	case "bench":
 		return newBenchCommand(m).Run(args[1:]...)
-	case "buckets":
-		return newBucketsCommand(m).Run(args[1:]...)
 	case "compact":
 		return newCompactCommand(m).Run(args[1:]...)
 	case "dump":
@@ -760,63 +758,6 @@ No errors should occur in your database. However, if for some reason you
 experience corruption, please submit a ticket to the etcd-io/bbolt project page:
 
   https://github.com/etcd-io/bbolt/issues
-`, "\n")
-}
-
-// bucketsCommand represents the "buckets" command execution.
-type bucketsCommand struct {
-	baseCommand
-}
-
-// newBucketsCommand returns a bucketsCommand.
-func newBucketsCommand(m *Main) *bucketsCommand {
-	c := &bucketsCommand{}
-	c.baseCommand = m.baseCommand
-	return c
-}
-
-// Run executes the command.
-func (cmd *bucketsCommand) Run(args ...string) error {
-	// Parse flags.
-	fs := flag.NewFlagSet("", flag.ContinueOnError)
-	help := fs.Bool("h", false, "")
-	if err := fs.Parse(args); err != nil {
-		return err
-	} else if *help {
-		fmt.Fprintln(cmd.Stderr, cmd.Usage())
-		return ErrUsage
-	}
-
-	// Require database path.
-	path := fs.Arg(0)
-	if path == "" {
-		return ErrPathRequired
-	} else if _, err := os.Stat(path); os.IsNotExist(err) {
-		return ErrFileNotFound
-	}
-
-	// Open database.
-	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true})
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
-	// Print buckets.
-	return db.View(func(tx *bolt.Tx) error {
-		return tx.ForEach(func(name []byte, _ *bolt.Bucket) error {
-			fmt.Fprintln(cmd.Stdout, string(name))
-			return nil
-		})
-	})
-}
-
-// Usage returns the help message.
-func (cmd *bucketsCommand) Usage() string {
-	return strings.TrimLeft(`
-usage: bolt buckets PATH
-
-Print a list of buckets.
 `, "\n")
 }
 
