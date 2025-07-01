@@ -22,6 +22,7 @@ func NewRootCommand() *cobra.Command {
 		newInspectCommand(),
 		newCheckCommand(),
 		newBucketsCommand(),
+		newKeysCommand(),
 	)
 
 	return rootCmd
