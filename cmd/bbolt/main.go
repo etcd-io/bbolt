@@ -122,8 +122,6 @@ func (m *Main) Run(args ...string) error {
 		return ErrUsage
 	case "bench":
 		return newBenchCommand(m).Run(args[1:]...)
-	case "compact":
-		return newCompactCommand(m).Run(args[1:]...)
 	case "dump":
 		return newDumpCommand(m).Run(args[1:]...)
 	case "page-item":
@@ -1553,108 +1551,6 @@ func stringToPages(strs []string) ([]uint64, error) {
 		a = append(a, i)
 	}
 	return a, nil
-}
-
-// compactCommand represents the "compact" command execution.
-type compactCommand struct {
-	baseCommand
-
-	SrcPath   string
-	DstPath   string
-	TxMaxSize int64
-	DstNoSync bool
-}
-
-// newCompactCommand returns a CompactCommand.
-func newCompactCommand(m *Main) *compactCommand {
-	c := &compactCommand{}
-	c.baseCommand = m.baseCommand
-	return c
-}
-
-// Run executes the command.
-func (cmd *compactCommand) Run(args ...string) (err error) {
-	// Parse flags.
-	fs := flag.NewFlagSet("", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	fs.StringVar(&cmd.DstPath, "o", "", "")
-	fs.Int64Var(&cmd.TxMaxSize, "tx-max-size", 65536, "")
-	fs.BoolVar(&cmd.DstNoSync, "no-sync", false, "")
-	if err := fs.Parse(args); err == flag.ErrHelp {
-		fmt.Fprintln(cmd.Stderr, cmd.Usage())
-		return ErrUsage
-	} else if err != nil {
-		return err
-	} else if cmd.DstPath == "" {
-		return errors.New("output file required")
-	}
-
-	// Require database paths.
-	cmd.SrcPath = fs.Arg(0)
-	if cmd.SrcPath == "" {
-		return ErrPathRequired
-	}
-
-	// Ensure source file exists.
-	fi, err := os.Stat(cmd.SrcPath)
-	if os.IsNotExist(err) {
-		return ErrFileNotFound
-	} else if err != nil {
-		return err
-	}
-	initialSize := fi.Size()
-
-	// Open source database.
-	src, err := bolt.Open(cmd.SrcPath, 0400, &bolt.Options{ReadOnly: true})
-	if err != nil {
-		return err
-	}
-	defer src.Close()
-
-	// Open destination database.
-	dst, err := bolt.Open(cmd.DstPath, fi.Mode(), &bolt.Options{NoSync: cmd.DstNoSync})
-	if err != nil {
-		return err
-	}
-	defer dst.Close()
-
-	// Run compaction.
-	if err := bolt.Compact(dst, src, cmd.TxMaxSize); err != nil {
-		return err
-	}
-
-	// Report stats on new size.
-	fi, err = os.Stat(cmd.DstPath)
-	if err != nil {
-		return err
-	} else if fi.Size() == 0 {
-		return fmt.Errorf("zero db size")
-	}
-	fmt.Fprintf(cmd.Stdout, "%d -> %d bytes (gain=%.2fx)\n", initialSize, fi.Size(), float64(initialSize)/float64(fi.Size()))
-
-	return nil
-}
-
-// Usage returns the help message.
-func (cmd *compactCommand) Usage() string {
-	return strings.TrimLeft(`
-usage: bolt compact [options] -o DST SRC
-
-Compact opens a database at SRC path and walks it recursively, copying keys
-as they are found from all buckets, to a newly created database at DST path.
-
-The original database is left untouched.
-
-Additional options include:
-
-	-tx-max-size NUM
-		Specifies the maximum size of individual transactions.
-		Defaults to 64KB.
-
-	-no-sync BOOL
-		Skip fsync() calls after each commit (fast but unsafe)
-		Defaults to false
-`, "\n")
 }
 
 type cmdKvStringer struct{}
