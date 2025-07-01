@@ -128,8 +128,6 @@ func (m *Main) Run(args ...string) error {
 		return newPageItemCommand(m).Run(args[1:]...)
 	case "get":
 		return newGetCommand(m).Run(args[1:]...)
-	case "keys":
-		return newKeysCommand(m).Run(args[1:]...)
 	case "page":
 		return newPageCommand(m).Run(args[1:]...)
 	default:
@@ -471,85 +469,6 @@ Additional options include:
 		Output format. One of: `+FORMAT_MODES+` (default=auto)
 
 page-item prints a page item key and value.
-`, "\n")
-}
-
-// keysCommand represents the "keys" command execution.
-type keysCommand struct {
-	baseCommand
-}
-
-// newKeysCommand returns a keysCommand.
-func newKeysCommand(m *Main) *keysCommand {
-	c := &keysCommand{}
-	c.baseCommand = m.baseCommand
-	return c
-}
-
-// Run executes the command.
-func (cmd *keysCommand) Run(args ...string) error {
-	// Parse flags.
-	fs := flag.NewFlagSet("", flag.ContinueOnError)
-	optionsFormat := fs.String("format", "auto", "Output format. One of: "+FORMAT_MODES+" (default: auto)")
-	help := fs.Bool("h", false, "")
-	if err := fs.Parse(args); err != nil {
-		return err
-	} else if *help {
-		fmt.Fprintln(cmd.Stderr, cmd.Usage())
-		return ErrUsage
-	}
-
-	// Require database path and bucket.
-	relevantArgs := fs.Args()
-	if len(relevantArgs) < 2 {
-		return ErrNotEnoughArgs
-	}
-	path, buckets := relevantArgs[0], relevantArgs[1:]
-	if path == "" {
-		return ErrPathRequired
-	} else if _, err := os.Stat(path); os.IsNotExist(err) {
-		return ErrFileNotFound
-	} else if len(buckets) == 0 {
-		return ErrBucketRequired
-	}
-
-	// Open database.
-	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true})
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
-	// Print keys.
-	return db.View(func(tx *bolt.Tx) error {
-		// Find bucket.
-		lastBucket, err := findLastBucket(tx, buckets)
-		if err != nil {
-			return err
-		}
-
-		// Iterate over each key.
-		return lastBucket.ForEach(func(key, _ []byte) error {
-			return writelnBytes(cmd.Stdout, key, *optionsFormat)
-		})
-	})
-}
-
-// Usage returns the help message.
-// TODO: Use https://pkg.go.dev/flag#FlagSet.PrintDefaults to print supported flags.
-func (cmd *keysCommand) Usage() string {
-	return strings.TrimLeft(`
-usage: bolt keys PATH [BUCKET...]
-
-Print a list of keys in the given (sub)bucket.
-=======
-
-Additional options include:
-
-	--format
-		Output format. One of: `+FORMAT_MODES+` (default=auto)
-
-Print a list of keys in the given bucket.
 `, "\n")
 }
 
