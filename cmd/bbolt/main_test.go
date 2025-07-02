@@ -339,71 +339,6 @@ func TestKeysCommand_Run(t *testing.T) {
 		})
 	}
 }
-
-// Ensure the "get" command can print the value of a key in a bucket.
-func TestGetCommand_Run(t *testing.T) {
-	testCases := []struct {
-		name          string
-		printable     bool
-		testBucket    string
-		testKey       string
-		expectedValue string
-	}{
-		{
-			name:          "printable data",
-			printable:     true,
-			testBucket:    "foo",
-			testKey:       "foo-1",
-			expectedValue: "val-foo-1\n",
-		},
-		{
-			name:          "non printable data",
-			printable:     false,
-			testBucket:    "bar",
-			testKey:       "100001",
-			expectedValue: hex.EncodeToString(convertInt64IntoBytes(100001)) + "\n",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			db := btesting.MustCreateDB(t)
-
-			if err := db.Update(func(tx *bolt.Tx) error {
-				b, err := tx.CreateBucket([]byte(tc.testBucket))
-				if err != nil {
-					return err
-				}
-				if tc.printable {
-					val := fmt.Sprintf("val-%s", tc.testKey)
-					if err := b.Put([]byte(tc.testKey), []byte(val)); err != nil {
-						return err
-					}
-				} else {
-					if err := b.Put([]byte(tc.testKey), convertInt64IntoBytes(100001)); err != nil {
-						return err
-					}
-				}
-				return nil
-			}); err != nil {
-				t.Fatal(err)
-			}
-			db.Close()
-
-			defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
-
-			// Run the command.
-			m := NewMain()
-			if err := m.Run("get", db.Path(), tc.testBucket, tc.testKey); err != nil {
-				t.Fatal(err)
-			}
-			actual := m.Stdout.String()
-			assert.Equal(t, tc.expectedValue, actual)
-		})
-	}
-}
-
-// Ensure the "pages" command neither panic, nor change the db file.
 func TestPagesCommand_Run(t *testing.T) {
 	db := btesting.MustCreateDB(t)
 
@@ -606,11 +541,6 @@ func TestCommands_Run_NoArgs(t *testing.T) {
 		cmd    string
 		expErr error
 	}{
-		{
-			name:   "get",
-			cmd:    "get",
-			expErr: main.ErrNotEnoughArgs,
-		},
 		{
 			name:   "keys",
 			cmd:    "keys",

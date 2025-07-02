@@ -128,8 +128,6 @@ func (m *Main) Run(args ...string) error {
 		return newDumpCommand(m).Run(args[1:]...)
 	case "page-item":
 		return newPageItemCommand(m).Run(args[1:]...)
-	case "get":
-		return newGetCommand(m).Run(args[1:]...)
 	case "info":
 		return newInfoCommand(m).Run(args[1:]...)
 	case "keys":
@@ -837,96 +835,6 @@ Additional options include:
 		Output format. One of: `+FORMAT_MODES+` (default=auto)
 
 Print a list of keys in the given bucket.
-`, "\n")
-}
-
-// getCommand represents the "get" command execution.
-type getCommand struct {
-	baseCommand
-}
-
-// newGetCommand returns a getCommand.
-func newGetCommand(m *Main) *getCommand {
-	c := &getCommand{}
-	c.baseCommand = m.baseCommand
-	return c
-}
-
-// Run executes the command.
-func (cmd *getCommand) Run(args ...string) error {
-	// Parse flags.
-	fs := flag.NewFlagSet("", flag.ContinueOnError)
-	var parseFormat string
-	var format string
-	fs.StringVar(&parseFormat, "parse-format", "ascii-encoded", "Input format. One of: ascii-encoded|hex (default: ascii-encoded)")
-	fs.StringVar(&format, "format", "auto", "Output format. One of: "+FORMAT_MODES+" (default: auto)")
-	help := fs.Bool("h", false, "")
-	if err := fs.Parse(args); err != nil {
-		return err
-	} else if *help {
-		fmt.Fprintln(cmd.Stderr, cmd.Usage())
-		return ErrUsage
-	}
-
-	// Require database path, bucket and key.
-	relevantArgs := fs.Args()
-	if len(relevantArgs) < 3 {
-		return ErrNotEnoughArgs
-	}
-	path, buckets := relevantArgs[0], relevantArgs[1:len(relevantArgs)-1]
-	key, err := parseBytes(relevantArgs[len(relevantArgs)-1], parseFormat)
-	if err != nil {
-		return err
-	}
-	if path == "" {
-		return ErrPathRequired
-	} else if _, err := os.Stat(path); os.IsNotExist(err) {
-		return ErrFileNotFound
-	} else if len(buckets) == 0 {
-		return ErrBucketRequired
-	} else if len(key) == 0 {
-		return berrors.ErrKeyRequired
-	}
-
-	// Open database.
-	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true})
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
-	// Print value.
-	return db.View(func(tx *bolt.Tx) error {
-		// Find bucket.
-		lastBucket, err := findLastBucket(tx, buckets)
-		if err != nil {
-			return err
-		}
-
-		// Find value for given key.
-		val := lastBucket.Get(key)
-		if val == nil {
-			return fmt.Errorf("Error %w for key: %q hex: \"%x\"", ErrKeyNotFound, key, string(key))
-		}
-
-		// TODO: In this particular case, it would be better to not terminate with '\n'
-		return writelnBytes(cmd.Stdout, val, format)
-	})
-}
-
-// Usage returns the help message.
-func (cmd *getCommand) Usage() string {
-	return strings.TrimLeft(`
-usage: bolt get PATH [BUCKET..] KEY
-
-Print the value of the given key in the given (sub)bucket.
-
-Additional options include:
-
-	--format
-		Output format. One of: `+FORMAT_MODES+` (default=auto)
-	--parse-format
-		Input format (of key). One of: ascii-encoded|hex (default=ascii-encoded)"
 `, "\n")
 }
 
