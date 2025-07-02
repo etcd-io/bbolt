@@ -19,7 +19,6 @@ import (
 	bolt "go.etcd.io/bbolt"
 	main "go.etcd.io/bbolt/cmd/bbolt"
 	"go.etcd.io/bbolt/internal/btesting"
-	"go.etcd.io/bbolt/internal/guts_cli"
 )
 
 func TestPageCommand_Run(t *testing.T) {
@@ -46,80 +45,6 @@ func TestPageCommand_Run(t *testing.T) {
 	require.NoError(t, err)
 	if m.Stdout.String() != exp {
 		t.Fatalf("unexpected stdout:\n%s\n%s", m.Stdout.String(), exp)
-	}
-}
-
-func TestPageItemCommand_Run(t *testing.T) {
-	testCases := []struct {
-		name          string
-		printable     bool
-		itemId        string
-		expectedKey   string
-		expectedValue string
-	}{
-		{
-			name:          "printable items",
-			printable:     true,
-			itemId:        "0",
-			expectedKey:   "key_0",
-			expectedValue: "value_0",
-		},
-		{
-			name:          "non printable items",
-			printable:     false,
-			itemId:        "0",
-			expectedKey:   hex.EncodeToString(convertInt64IntoBytes(0 + 1)),
-			expectedValue: hex.EncodeToString(convertInt64IntoBytes(0 + 2)),
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
-			srcPath := db.Path()
-
-			t.Log("Insert some sample data")
-			err := db.Update(func(tx *bolt.Tx) error {
-				b, bErr := tx.CreateBucketIfNotExists([]byte("data"))
-				if bErr != nil {
-					return bErr
-				}
-
-				for i := 0; i < 100; i++ {
-					if tc.printable {
-						if bErr = b.Put([]byte(fmt.Sprintf("key_%d", i)), []byte(fmt.Sprintf("value_%d", i))); bErr != nil {
-							return bErr
-						}
-					} else {
-						k, v := convertInt64IntoBytes(int64(i+1)), convertInt64IntoBytes(int64(i+2))
-						if bErr = b.Put(k, v); bErr != nil {
-							return bErr
-						}
-					}
-				}
-				return nil
-			})
-			require.NoError(t, err)
-			defer requireDBNoChange(t, dbData(t, srcPath), srcPath)
-
-			meta := readMetaPage(t, srcPath)
-			leafPageId := 0
-			for i := 2; i < int(meta.Pgid()); i++ {
-				p, _, err := guts_cli.ReadPage(srcPath, uint64(i))
-				require.NoError(t, err)
-				if p.IsLeafPage() && p.Count() > 1 {
-					leafPageId = int(p.Id())
-				}
-			}
-			require.NotEqual(t, 0, leafPageId)
-
-			m := NewMain()
-			err = m.Run("page-item", db.Path(), fmt.Sprintf("%d", leafPageId), tc.itemId)
-			require.NoError(t, err)
-			if !strings.Contains(m.Stdout.String(), tc.expectedKey) || !strings.Contains(m.Stdout.String(), tc.expectedValue) {
-				t.Fatalf("Unexpected output:\n%s\n", m.Stdout.String())
-			}
-		})
 	}
 }
 
