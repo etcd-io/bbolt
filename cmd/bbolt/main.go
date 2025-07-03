@@ -130,8 +130,6 @@ func (m *Main) Run(args ...string) error {
 		return newPageItemCommand(m).Run(args[1:]...)
 	case "get":
 		return newGetCommand(m).Run(args[1:]...)
-	case "info":
-		return newInfoCommand(m).Run(args[1:]...)
 	case "keys":
 		return newKeysCommand(m).Run(args[1:]...)
 	case "page":
@@ -174,61 +172,6 @@ The commands are:
     surgery     perform surgery on bbolt database
 
 Use "bbolt [command] -h" for more information about a command.
-`, "\n")
-}
-
-// infoCommand represents the "info" command execution.
-type infoCommand struct {
-	baseCommand
-}
-
-// newInfoCommand returns a infoCommand.
-func newInfoCommand(m *Main) *infoCommand {
-	c := &infoCommand{}
-	c.baseCommand = m.baseCommand
-	return c
-}
-
-// Run executes the command.
-func (cmd *infoCommand) Run(args ...string) error {
-	// Parse flags.
-	fs := flag.NewFlagSet("", flag.ContinueOnError)
-	help := fs.Bool("h", false, "")
-	if err := fs.Parse(args); err != nil {
-		return err
-	} else if *help {
-		fmt.Fprintln(cmd.Stderr, cmd.Usage())
-		return ErrUsage
-	}
-
-	// Require database path.
-	path := fs.Arg(0)
-	if path == "" {
-		return ErrPathRequired
-	} else if _, err := os.Stat(path); os.IsNotExist(err) {
-		return ErrFileNotFound
-	}
-
-	// Open the database.
-	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true})
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
-	// Print basic database info.
-	info := db.Info()
-	fmt.Fprintf(cmd.Stdout, "Page Size: %d\n", info.PageSize)
-
-	return nil
-}
-
-// Usage returns the help message.
-func (cmd *infoCommand) Usage() string {
-	return strings.TrimLeft(`
-usage: bolt info PATH
-
-Info prints basic information about the Bolt database at PATH.
 `, "\n")
 }
 
