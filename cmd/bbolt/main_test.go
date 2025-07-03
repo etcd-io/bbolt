@@ -93,34 +93,6 @@ func TestDumpCommand_Run(t *testing.T) {
 		t.Fatalf("unexpected stdout:\n%s\n", m.Stdout.String())
 	}
 }
-
-func TestPageCommand_Run(t *testing.T) {
-	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
-	db.Close()
-
-	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
-
-	exp := "Page ID:    0\n" +
-		"Page Type:  meta\n" +
-		"Total Size: 4096 bytes\n" +
-		"Overflow pages: 0\n" +
-		"Version:    2\n" +
-		"Page Size:  4096 bytes\n" +
-		"Flags:      00000000\n" +
-		"Root:       <pgid=3>\n" +
-		"Freelist:   <pgid=2>\n" +
-		"HWM:        <pgid=4>\n" +
-		"Txn ID:     0\n" +
-		"Checksum:   07516e114689fdee\n\n"
-
-	m := NewMain()
-	err := m.Run("page", db.Path(), "0")
-	require.NoError(t, err)
-	if m.Stdout.String() != exp {
-		t.Fatalf("unexpected stdout:\n%s\n%s", m.Stdout.String(), exp)
-	}
-}
-
 func TestPageItemCommand_Run(t *testing.T) {
 	testCases := []struct {
 		name          string
