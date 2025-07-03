@@ -23,20 +23,6 @@ import (
 	"go.etcd.io/bbolt/internal/guts_cli"
 )
 
-// Ensure the "info" command can print information about a database.
-func TestInfoCommand_Run(t *testing.T) {
-	db := btesting.MustCreateDB(t)
-	db.Close()
-
-	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
-
-	// Run the info command.
-	m := NewMain()
-	if err := m.Run("info", db.Path()); err != nil {
-		t.Fatal(err)
-	}
-}
-
 // Ensure the "stats" command executes correctly with an empty database.
 func TestStatsCommand_Run_EmptyDatabase(t *testing.T) {
 	// Ignore
