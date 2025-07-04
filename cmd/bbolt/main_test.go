@@ -9,7 +9,6 @@ import (
 	"io"
 	"math/rand"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -22,47 +21,6 @@ import (
 	"go.etcd.io/bbolt/internal/btesting"
 	"go.etcd.io/bbolt/internal/guts_cli"
 )
-
-// Ensure the "stats" command executes correctly with an empty database.
-func TestStatsCommand_Run_EmptyDatabase(t *testing.T) {
-	// Ignore
-	if os.Getpagesize() != 4096 {
-		t.Skip("system does not use 4KB page size")
-	}
-
-	db := btesting.MustCreateDB(t)
-	db.Close()
-
-	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
-
-	// Generate expected result.
-	exp := "Aggregate statistics for 0 buckets\n\n" +
-		"Page count statistics\n" +
-		"\tNumber of logical branch pages: 0\n" +
-		"\tNumber of physical branch overflow pages: 0\n" +
-		"\tNumber of logical leaf pages: 0\n" +
-		"\tNumber of physical leaf overflow pages: 0\n" +
-		"Tree statistics\n" +
-		"\tNumber of keys/value pairs: 0\n" +
-		"\tNumber of levels in B+tree: 0\n" +
-		"Page size utilization\n" +
-		"\tBytes allocated for physical branch pages: 0\n" +
-		"\tBytes actually used for branch data: 0 (0%)\n" +
-		"\tBytes allocated for physical leaf pages: 0\n" +
-		"\tBytes actually used for leaf data: 0 (0%)\n" +
-		"Bucket statistics\n" +
-		"\tTotal number of buckets: 0\n" +
-		"\tTotal number on inlined buckets: 0 (0%)\n" +
-		"\tBytes used for inlined buckets: 0 (0%)\n"
-
-	// Run the command.
-	m := NewMain()
-	if err := m.Run("stats", db.Path()); err != nil {
-		t.Fatal(err)
-	} else if m.Stdout.String() != exp {
-		t.Fatalf("unexpected stdout:\n\n%s", m.Stdout.String())
-	}
-}
 
 func TestDumpCommand_Run(t *testing.T) {
 	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
@@ -178,84 +136,6 @@ func TestPageItemCommand_Run(t *testing.T) {
 				t.Fatalf("Unexpected output:\n%s\n", m.Stdout.String())
 			}
 		})
-	}
-}
-
-// Ensure the "stats" command can execute correctly.
-func TestStatsCommand_Run(t *testing.T) {
-	// Ignore
-	if os.Getpagesize() != 4096 {
-		t.Skip("system does not use 4KB page size")
-	}
-
-	db := btesting.MustCreateDB(t)
-
-	if err := db.Update(func(tx *bolt.Tx) error {
-		// Create "foo" bucket.
-		b, err := tx.CreateBucket([]byte("foo"))
-		if err != nil {
-			return err
-		}
-		for i := 0; i < 10; i++ {
-			if err := b.Put([]byte(strconv.Itoa(i)), []byte(strconv.Itoa(i))); err != nil {
-				return err
-			}
-		}
-
-		// Create "bar" bucket.
-		b, err = tx.CreateBucket([]byte("bar"))
-		if err != nil {
-			return err
-		}
-		for i := 0; i < 100; i++ {
-			if err := b.Put([]byte(strconv.Itoa(i)), []byte(strconv.Itoa(i))); err != nil {
-				return err
-			}
-		}
-
-		// Create "baz" bucket.
-		b, err = tx.CreateBucket([]byte("baz"))
-		if err != nil {
-			return err
-		}
-		if err := b.Put([]byte("key"), []byte("value")); err != nil {
-			return err
-		}
-
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	db.Close()
-
-	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
-
-	// Generate expected result.
-	exp := "Aggregate statistics for 3 buckets\n\n" +
-		"Page count statistics\n" +
-		"\tNumber of logical branch pages: 0\n" +
-		"\tNumber of physical branch overflow pages: 0\n" +
-		"\tNumber of logical leaf pages: 1\n" +
-		"\tNumber of physical leaf overflow pages: 0\n" +
-		"Tree statistics\n" +
-		"\tNumber of keys/value pairs: 111\n" +
-		"\tNumber of levels in B+tree: 1\n" +
-		"Page size utilization\n" +
-		"\tBytes allocated for physical branch pages: 0\n" +
-		"\tBytes actually used for branch data: 0 (0%)\n" +
-		"\tBytes allocated for physical leaf pages: 4096\n" +
-		"\tBytes actually used for leaf data: 1996 (48%)\n" +
-		"Bucket statistics\n" +
-		"\tTotal number of buckets: 3\n" +
-		"\tTotal number on inlined buckets: 2 (66%)\n" +
-		"\tBytes used for inlined buckets: 236 (11%)\n"
-
-	// Run the command.
-	m := NewMain()
-	if err := m.Run("stats", db.Path()); err != nil {
-		t.Fatal(err)
-	} else if m.Stdout.String() != exp {
-		t.Fatalf("unexpected stdout:\n\n%s", m.Stdout.String())
 	}
 }
 
