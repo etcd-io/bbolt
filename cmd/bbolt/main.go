@@ -130,8 +130,6 @@ func (m *Main) Run(args ...string) error {
 		return newGetCommand(m).Run(args[1:]...)
 	case "keys":
 		return newKeysCommand(m).Run(args[1:]...)
-	case "page":
-		return newPageCommand(m).Run(args[1:]...)
 	case "pages":
 		return newPagesCommand(m).Run(args[1:]...)
 	default:
