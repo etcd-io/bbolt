@@ -23,7 +23,6 @@ import (
 	bolt "go.etcd.io/bbolt"
 	berrors "go.etcd.io/bbolt/errors"
 	"go.etcd.io/bbolt/internal/common"
-	"go.etcd.io/bbolt/internal/guts_cli"
 )
 
 var (
@@ -121,8 +120,6 @@ func (m *Main) Run(args ...string) error {
 		return ErrUsage
 	case "bench":
 		return newBenchCommand(m).Run(args[1:]...)
-	case "page-item":
-		return newPageItemCommand(m).Run(args[1:]...)
 	case "get":
 		return newGetCommand(m).Run(args[1:]...)
 	case "page":
@@ -162,106 +159,6 @@ The commands are:
 
 Use "bbolt [command] -h" for more information about a command.
 `, "\n")
-}
-
-// pageItemCommand represents the "page-item" command execution.
-type pageItemCommand struct {
-	baseCommand
-}
-
-// newPageItemCommand returns a pageItemCommand.
-func newPageItemCommand(m *Main) *pageItemCommand {
-	c := &pageItemCommand{}
-	c.baseCommand = m.baseCommand
-	return c
-}
-
-type pageItemOptions struct {
-	help      bool
-	keyOnly   bool
-	valueOnly bool
-	format    string
-}
-
-// Run executes the command.
-func (cmd *pageItemCommand) Run(args ...string) error {
-	// Parse flags.
-	options := &pageItemOptions{}
-	fs := flag.NewFlagSet("", flag.ContinueOnError)
-	fs.BoolVar(&options.keyOnly, "key-only", false, "Print only the key")
-	fs.BoolVar(&options.valueOnly, "value-only", false, "Print only the value")
-	fs.StringVar(&options.format, "format", "auto", "Output format. One of: "+FORMAT_MODES)
-	fs.BoolVar(&options.help, "h", false, "")
-	if err := fs.Parse(args); err != nil {
-		return err
-	} else if options.help {
-		fmt.Fprintln(cmd.Stderr, cmd.Usage())
-		return ErrUsage
-	}
-
-	if options.keyOnly && options.valueOnly {
-		return errors.New("The --key-only or --value-only flag may be set, but not both.")
-	}
-
-	// Require database path and page id.
-	path := fs.Arg(0)
-	if path == "" {
-		return ErrPathRequired
-	} else if _, err := os.Stat(path); os.IsNotExist(err) {
-		return ErrFileNotFound
-	}
-
-	// Read page id.
-	pageID, err := strconv.ParseUint(fs.Arg(1), 10, 64)
-	if err != nil {
-		return err
-	}
-
-	// Read item id.
-	itemID, err := strconv.ParseUint(fs.Arg(2), 10, 64)
-	if err != nil {
-		return err
-	}
-
-	// Open database file handler.
-	f, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = f.Close() }()
-
-	// Retrieve page info and page size.
-	_, buf, err := guts_cli.ReadPage(path, pageID)
-	if err != nil {
-		return err
-	}
-
-	if !options.valueOnly {
-		err := cmd.PrintLeafItemKey(cmd.Stdout, buf, uint16(itemID), options.format)
-		if err != nil {
-			return err
-		}
-	}
-	if !options.keyOnly {
-		err := cmd.PrintLeafItemValue(cmd.Stdout, buf, uint16(itemID), options.format)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (cmd *pageItemCommand) leafPageElement(pageBytes []byte, index uint16) ([]byte, []byte, error) {
-	p := common.LoadPage(pageBytes)
-	if index >= p.Count() {
-		return nil, nil, fmt.Errorf("leafPageElement: expected item index less than %d, but got %d", p.Count(), index)
-	}
-	if p.Typ() != "leaf" {
-		return nil, nil, fmt.Errorf("leafPageElement: expected page type of 'leaf', but got '%s'", p.Typ())
-	}
-
-	e := p.LeafPageElement(index)
-	return e.Key(), e.Value(), nil
 }
 
 const FORMAT_MODES = "auto|ascii-encoded|hex|bytes|redacted"
@@ -307,43 +204,6 @@ func writelnBytes(w io.Writer, b []byte, format string) error {
 	}
 	_, err = fmt.Fprintln(w, str)
 	return err
-}
-
-// PrintLeafItemKey writes the bytes of a leaf element's key.
-func (cmd *pageItemCommand) PrintLeafItemKey(w io.Writer, pageBytes []byte, index uint16, format string) error {
-	k, _, err := cmd.leafPageElement(pageBytes, index)
-	if err != nil {
-		return err
-	}
-
-	return writelnBytes(w, k, format)
-}
-
-// PrintLeafItemValue writes the bytes of a leaf element's value.
-func (cmd *pageItemCommand) PrintLeafItemValue(w io.Writer, pageBytes []byte, index uint16, format string) error {
-	_, v, err := cmd.leafPageElement(pageBytes, index)
-	if err != nil {
-		return err
-	}
-	return writelnBytes(w, v, format)
-}
-
-// Usage returns the help message.
-func (cmd *pageItemCommand) Usage() string {
-	return strings.TrimLeft(`
-usage: bolt page-item [options] PATH pageid itemid
-
-Additional options include:
-
-	--key-only
-		Print only the key
-	--value-only
-		Print only the value
-	--format
-		Output format. One of: `+FORMAT_MODES+` (default=auto)
-
-page-item prints a page item key and value.
-`, "\n")
 }
 
 // getCommand represents the "get" command execution.
