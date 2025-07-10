@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"math/rand"
 	"os"
 	"runtime"
@@ -458,6 +459,9 @@ func (cmd *benchCommand) runWrites(db *bolt.DB, options *BenchOptions, results *
 		keys, err = cmd.runWritesSequentialNested(db, options, results)
 	case "rnd-nest":
 		keys, err = cmd.runWritesRandomNested(db, options, results, r)
+	case "seq-del":
+		options.DeleteFraction = 0.1
+		keys, err = cmd.runWritesSequentialAndDelete(db, options, results)
 	default:
 		return nil, fmt.Errorf("invalid write mode: %s", options.WriteMode)
 	}
@@ -476,6 +480,11 @@ func (cmd *benchCommand) runWrites(db *bolt.DB, options *BenchOptions, results *
 func (cmd *benchCommand) runWritesSequential(db *bolt.DB, options *BenchOptions, results *BenchResults) ([]nestedKey, error) {
 	var i = uint32(0)
 	return cmd.runWritesWithSource(db, options, results, func() uint32 { i++; return i })
+}
+
+func (cmd *benchCommand) runWritesSequentialAndDelete(db *bolt.DB, options *BenchOptions, results *BenchResults) ([]nestedKey, error) {
+	var i = uint32(0)
+	return cmd.runWritesDeletesWithSource(db, options, results, func() uint32 { i++; return i })
 }
 
 func (cmd *benchCommand) runWritesRandom(db *bolt.DB, options *BenchOptions, results *BenchResults, r *rand.Rand) ([]nestedKey, error) {
@@ -521,6 +530,53 @@ func (cmd *benchCommand) runWritesWithSource(db *bolt.DB, options *BenchOptions,
 			}
 			fmt.Fprintf(cmd.Stderr, "Finished write iteration %d\n", i)
 
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+	}
+	return keys, nil
+}
+
+func (cmd *benchCommand) runWritesDeletesWithSource(db *bolt.DB, options *BenchOptions, results *BenchResults, keySource func() uint32) ([]nestedKey, error) {
+	var keys []nestedKey
+	deleteSize := int64(math.Ceil(float64(options.BatchSize) * options.DeleteFraction))
+	var InsertedKeys [][]byte
+
+	for i := int64(0); i < options.Iterations; i += options.BatchSize {
+		if err := db.Update(func(tx *bolt.Tx) error {
+			b, _ := tx.CreateBucketIfNotExists(benchBucketName)
+			b.FillPercent = options.FillPercent
+
+			fmt.Fprintf(cmd.Stderr, "Starting delete iteration %d, deleteSize: %d\n", i, deleteSize)
+			for i := int64(0); i < deleteSize && i < int64(len(InsertedKeys)); i++ {
+				if err := b.Delete(InsertedKeys[i]); err != nil {
+					return err
+				}
+			}
+			InsertedKeys = InsertedKeys[:0]
+			fmt.Fprintf(cmd.Stderr, "Finished delete iteration %d\n", i)
+
+			fmt.Fprintf(cmd.Stderr, "Starting write iteration %d\n", i)
+			for j := int64(0); j < options.BatchSize; j++ {
+
+				key := make([]byte, options.KeySize)
+				value := make([]byte, options.ValueSize)
+
+				// Write key as uint32.
+				binary.BigEndian.PutUint32(key, keySource())
+				InsertedKeys = append(InsertedKeys, key)
+
+				// Insert key/value.
+				if err := b.Put(key, value); err != nil {
+					return err
+				}
+				if keys != nil {
+					keys = append(keys, nestedKey{nil, key})
+				}
+				results.AddCompletedOps(1)
+			}
+			fmt.Fprintf(cmd.Stderr, "Finished write iteration %d\n", i)
 			return nil
 		}); err != nil {
 			return nil, err
@@ -889,6 +945,7 @@ type BenchOptions struct {
 	GoBenchOutput   bool
 	PageSize        int
 	InitialMmapSize int
+	DeleteFraction  float64 // Fraction of keys of last tx to delete during writes. works only with "seq-del" write mode.
 }
 
 // BenchResults represents the performance results of the benchmark and is thread-safe.
