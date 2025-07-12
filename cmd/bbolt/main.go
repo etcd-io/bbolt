@@ -204,11 +204,6 @@ func writelnBytes(w io.Writer, b []byte, format string) error {
 	return err
 }
 
-// getCommand represents the "get" command execution.
-type getCommand struct {
-	baseCommand
-}
-
 var benchBucketName = []byte("bench")
 
 // benchCommand represents the "bench" command execution.

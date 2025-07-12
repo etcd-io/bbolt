@@ -8,7 +8,28 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-// Refactor the main logic into a separate function (getFunc).
+func newGetCommand() *cobra.Command {
+	var parseFormat, format string
+
+	cmd := &cobra.Command{
+		Use:   "get PATH [BUCKET..] KEY",
+		Short: "get the value of a key from a (sub)bucket in a bbolt database",
+		Args:  cobra.MinimumNArgs(3),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path := args[0]
+			buckets := args[1 : len(args)-1]
+			keyStr := args[len(args)-1]
+
+			return getFunc(cmd, path, buckets, keyStr, parseFormat, format)
+		},
+	}
+
+	cmd.Flags().StringVar(&parseFormat, "parse-format", "ascii-encoded", "Input format. One of: ascii-encoded|hex")
+	cmd.Flags().StringVar(&format, "format", "auto", "Output format. One of: ascii|hex|auto")
+
+	return cmd
+}
+
 func getFunc(cmd *cobra.Command, path string, buckets []string, keyStr string, parseFormat string, format string) error {
 	// validate the input parameters
 	if len(buckets) == 0 {
@@ -46,28 +67,4 @@ func getFunc(cmd *cobra.Command, path string, buckets []string, keyStr string, p
 		}
 		return writelnBytes(cmd.OutOrStdout(), val, format)
 	})
-}
-
-func newGetCommand() *cobra.Command {
-	var parseFormat, format string
-
-	cmd := &cobra.Command{
-		Use:   "get PATH [BUCKET..] KEY",
-		Short: "get the value of a key from a (sub)bucket in a bbolt database",
-		Args:  cobra.MinimumNArgs(3),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			// argument parsing
-			path := args[0]
-			buckets := args[1 : len(args)-1]
-			keyStr := args[len(args)-1]
-
-			// call the refactored getFunc
-			return getFunc(cmd, path, buckets, keyStr, parseFormat, format)
-		},
-	}
-
-	cmd.Flags().StringVar(&parseFormat, "parse-format", "ascii-encoded", "Input format. One of: ascii-encoded|hex")
-	cmd.Flags().StringVar(&format, "format", "auto", "Output format. One of: ascii|hex|auto")
-
-	return cmd
 }
