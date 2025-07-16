@@ -123,8 +123,6 @@ func (m *Main) Run(args ...string) error {
 		return newBenchCommand(m).Run(args[1:]...)
 	case "get":
 		return newGetCommand(m).Run(args[1:]...)
-	case "page":
-		return newPageCommand(m).Run(args[1:]...)
 	default:
 		return ErrUnknownCommand
 	}
