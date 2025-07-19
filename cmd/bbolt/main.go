@@ -50,6 +50,9 @@ var (
 	// ErrPageIDRequired is returned when a required page id is not specified.
 	ErrPageIDRequired = errors.New("page id required")
 
+	// ErrInvalidPageArgs is returned when Page cmd receives pageIds and all option is true.
+	ErrInvalidPageArgs = errors.New("invalid args: either use '--all' or 'pageid...'")
+
 	// ErrBucketRequired is returned when a bucket is not specified.
 	ErrBucketRequired = errors.New("bucket required")
 
@@ -1024,6 +1027,9 @@ func stringToPage(str string) (uint64, error) {
 func stringToPages(strs []string) ([]uint64, error) {
 	var a []uint64
 	for _, str := range strs {
+		if len(str) == 0 {
+			continue
+		}
 		i, err := stringToPage(str)
 		if err != nil {
 			return nil, err

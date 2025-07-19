@@ -43,8 +43,55 @@ func TestPageCommand_Run(t *testing.T) {
 	require.Equal(t, exp, outBuf.String(), "unexpected stdout")
 }
 
+func TestPageCommand_ExclusiveArgs(t *testing.T) {
+	testCases := []struct {
+		name    string
+		pageIds string
+		allFlag string
+		expErr  error
+	}{
+		{
+			name:    "flag only",
+			pageIds: "",
+			allFlag: "--all",
+			expErr:  nil,
+		},
+		{
+			name:    "pageIds only",
+			pageIds: "0",
+			allFlag: "",
+			expErr:  nil,
+		},
+		{
+			name:    "pageIds and flag",
+			pageIds: "0",
+			allFlag: "--all",
+			expErr:  main.ErrInvalidPageArgs,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Log("Creating a new database")
+			db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
+			db.Close()
+
+			defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
+
+			t.Log("Running page command")
+			rootCmd := main.NewRootCommand()
+			outBuf := &bytes.Buffer{}
+			rootCmd.SetOut(outBuf)
+			rootCmd.SetArgs([]string{"page", db.Path(), tc.pageIds, tc.allFlag})
+
+			err := rootCmd.Execute()
+			require.Equal(t, tc.expErr, err)
+		})
+	}
+}
+
 func TestPageCommand_NoArgs(t *testing.T) {
-	expErr := errors.New("requires at least 2 arg(s), only received 0")
+	expErr := errors.New("requires at least 1 arg(s), only received 0")
 	rootCmd := main.NewRootCommand()
 	rootCmd.SetArgs([]string{"page"})
 	err := rootCmd.Execute()

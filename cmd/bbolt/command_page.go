@@ -19,16 +19,16 @@ type getPageOptions struct {
 func newPageCommand() *cobra.Command {
 	var opt getPageOptions
 	pageCmd := &cobra.Command{
-		Use:   "page <bbolt-file> <pageid> [pageid...]",
+		Use:   "page <bbolt-file> [pageid...]",
 		Short: "page prints one or more pages in human readable format.",
-		Args:  cobra.MinimumNArgs(2),
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dbPath := args[0]
 			pageIDs, err := stringToPages(args[1:])
 			if err != nil {
 				return err
 			}
-			if len(pageIDs) == 0 {
+			if len(pageIDs) == 0 && !opt.all {
 				return ErrPageIDRequired
 			}
 			return pageFunc(cmd, opt, dbPath, pageIDs)
@@ -45,6 +45,10 @@ func (o *getPageOptions) AddFlags(fs *pflag.FlagSet) {
 }
 
 func pageFunc(cmd *cobra.Command, cfg getPageOptions, dbPath string, pageIDs []uint64) (err error) {
+	if cfg.all && len(pageIDs) != 0 {
+		return ErrInvalidPageArgs
+	}
+
 	if _, err := checkSourceDBPath(dbPath); err != nil {
 		return err
 	}
