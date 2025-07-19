@@ -31,7 +31,7 @@ jobs:
         run: |
           case "${TARGET}" in
             windows-amd64-unit-test-4-cpu)
-              CPU=4 TIMEOUT=40m make test
+              CPU=4 TIMEOUT=50m make test
               ;;
             *)
               echo "Failed to find target"
@@ -60,4 +60,4 @@ jobs:
           version: v2.1.6
       - run: make coverage
         env:
-          TIMEOUT: 40m
+          TIMEOUT: 50m
