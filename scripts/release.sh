@@ -36,9 +36,9 @@ function main {
   RELEASE_BRANCH="release-${MINOR_VERSION}"
 
   REPOSITORY=${REPOSITORY:-"git@github.com:etcd-io/bbolt.git"}
+  REMOTE="${REMOTE:-"origin"}"
 
-  local remote_tag_exists
-  remote_tag_exists=$(git ls-remote "${REPOSITORY}" "refs/tags/${VERSION}" | grep -c "${VERSION}" || true)
+  remote_tag_exists=$(git ls-remote --tags "${REPOSITORY}" | grep -c "${VERSION}" || true)
   if [ "${remote_tag_exists}" -gt 0 ]; then
     echo "Release version tag exists on remote."
     exit 1
@@ -69,11 +69,7 @@ function main {
 
   # bump 'version.go'.
   echo "Updating version from '${source_version}' to '${RELEASE_VERSION}' in 'version.go'"
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    sed -i '' "s/${source_version}/${RELEASE_VERSION}/g" ./version/version.go
-  else
-    sed -i "s/${source_version}/${RELEASE_VERSION}/g" ./version/version.go
-  fi
+  sed -i "s/${source_version}/${RELEASE_VERSION}/g" ./version/version.go
 
   # push 'version.go' to remote.
   echo "committing 'version.go'"

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
@@ -8,7 +9,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"math"
 	"math/rand"
 	"os"
 	"runtime"
@@ -24,6 +24,7 @@ import (
 	bolt "go.etcd.io/bbolt"
 	berrors "go.etcd.io/bbolt/errors"
 	"go.etcd.io/bbolt/internal/common"
+	"go.etcd.io/bbolt/internal/guts_cli"
 )
 
 var (
@@ -49,9 +50,6 @@ var (
 
 	// ErrPageIDRequired is returned when a required page id is not specified.
 	ErrPageIDRequired = errors.New("page id required")
-
-	// ErrInvalidPageArgs is returned when Page cmd receives pageIds and all option is true.
-	ErrInvalidPageArgs = errors.New("invalid args: either use '--all' or 'pageid...'")
 
 	// ErrBucketRequired is returned when a bucket is not specified.
 	ErrBucketRequired = errors.New("bucket required")
@@ -124,8 +122,26 @@ func (m *Main) Run(args ...string) error {
 		return ErrUsage
 	case "bench":
 		return newBenchCommand(m).Run(args[1:]...)
+	case "buckets":
+		return newBucketsCommand(m).Run(args[1:]...)
+	case "compact":
+		return newCompactCommand(m).Run(args[1:]...)
+	case "dump":
+		return newDumpCommand(m).Run(args[1:]...)
+	case "page-item":
+		return newPageItemCommand(m).Run(args[1:]...)
 	case "get":
 		return newGetCommand(m).Run(args[1:]...)
+	case "info":
+		return newInfoCommand(m).Run(args[1:]...)
+	case "keys":
+		return newKeysCommand(m).Run(args[1:]...)
+	case "page":
+		return newPageCommand(m).Run(args[1:]...)
+	case "pages":
+		return newPagesCommand(m).Run(args[1:]...)
+	case "stats":
+		return newStatsCommand(m).Run(args[1:]...)
 	default:
 		return ErrUnknownCommand
 	}
@@ -161,6 +177,284 @@ The commands are:
 
 Use "bbolt [command] -h" for more information about a command.
 `, "\n")
+}
+
+// infoCommand represents the "info" command execution.
+type infoCommand struct {
+	baseCommand
+}
+
+// newInfoCommand returns a infoCommand.
+func newInfoCommand(m *Main) *infoCommand {
+	c := &infoCommand{}
+	c.baseCommand = m.baseCommand
+	return c
+}
+
+// Run executes the command.
+func (cmd *infoCommand) Run(args ...string) error {
+	// Parse flags.
+	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	help := fs.Bool("h", false, "")
+	if err := fs.Parse(args); err != nil {
+		return err
+	} else if *help {
+		fmt.Fprintln(cmd.Stderr, cmd.Usage())
+		return ErrUsage
+	}
+
+	// Require database path.
+	path := fs.Arg(0)
+	if path == "" {
+		return ErrPathRequired
+	} else if _, err := os.Stat(path); os.IsNotExist(err) {
+		return ErrFileNotFound
+	}
+
+	// Open the database.
+	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true})
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	// Print basic database info.
+	info := db.Info()
+	fmt.Fprintf(cmd.Stdout, "Page Size: %d\n", info.PageSize)
+
+	return nil
+}
+
+// Usage returns the help message.
+func (cmd *infoCommand) Usage() string {
+	return strings.TrimLeft(`
+usage: bolt info PATH
+
+Info prints basic information about the Bolt database at PATH.
+`, "\n")
+}
+
+// dumpCommand represents the "dump" command execution.
+type dumpCommand struct {
+	baseCommand
+}
+
+// newDumpCommand returns a dumpCommand.
+func newDumpCommand(m *Main) *dumpCommand {
+	c := &dumpCommand{}
+	c.baseCommand = m.baseCommand
+	return c
+}
+
+// Run executes the command.
+func (cmd *dumpCommand) Run(args ...string) error {
+	// Parse flags.
+	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	help := fs.Bool("h", false, "")
+	if err := fs.Parse(args); err != nil {
+		return err
+	} else if *help {
+		fmt.Fprintln(cmd.Stderr, cmd.Usage())
+		return ErrUsage
+	}
+
+	// Require database path and page id.
+	path := fs.Arg(0)
+	if path == "" {
+		return ErrPathRequired
+	} else if _, err := os.Stat(path); os.IsNotExist(err) {
+		return ErrFileNotFound
+	}
+
+	// Read page ids.
+	pageIDs, err := stringToPages(fs.Args()[1:])
+	if err != nil {
+		return err
+	} else if len(pageIDs) == 0 {
+		return ErrPageIDRequired
+	}
+
+	// Open database to retrieve page size.
+	pageSize, _, err := guts_cli.ReadPageAndHWMSize(path)
+	if err != nil {
+		return err
+	}
+
+	// Open database file handler.
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+
+	// Print each page listed.
+	for i, pageID := range pageIDs {
+		// Print a separator.
+		if i > 0 {
+			fmt.Fprintln(cmd.Stdout, "===============================================")
+		}
+
+		// Print page to stdout.
+		if err := cmd.PrintPage(cmd.Stdout, f, pageID, uint64(pageSize)); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// PrintPage prints a given page as hexadecimal.
+func (cmd *dumpCommand) PrintPage(w io.Writer, r io.ReaderAt, pageID uint64, pageSize uint64) error {
+	const bytesPerLineN = 16
+
+	// Read page into buffer.
+	buf := make([]byte, pageSize)
+	addr := pageID * uint64(pageSize)
+	if n, err := r.ReadAt(buf, int64(addr)); err != nil {
+		return err
+	} else if uint64(n) != pageSize {
+		return io.ErrUnexpectedEOF
+	}
+
+	// Write out to writer in 16-byte lines.
+	var prev []byte
+	var skipped bool
+	for offset := uint64(0); offset < pageSize; offset += bytesPerLineN {
+		// Retrieve current 16-byte line.
+		line := buf[offset : offset+bytesPerLineN]
+		isLastLine := (offset == (pageSize - bytesPerLineN))
+
+		// If it's the same as the previous line then print a skip.
+		if bytes.Equal(line, prev) && !isLastLine {
+			if !skipped {
+				fmt.Fprintf(w, "%07x *\n", addr+offset)
+				skipped = true
+			}
+		} else {
+			// Print line as hexadecimal in 2-byte groups.
+			fmt.Fprintf(w, "%07x %04x %04x %04x %04x %04x %04x %04x %04x\n", addr+offset,
+				line[0:2], line[2:4], line[4:6], line[6:8],
+				line[8:10], line[10:12], line[12:14], line[14:16],
+			)
+
+			skipped = false
+		}
+
+		// Save the previous line.
+		prev = line
+	}
+	fmt.Fprint(w, "\n")
+
+	return nil
+}
+
+// Usage returns the help message.
+func (cmd *dumpCommand) Usage() string {
+	return strings.TrimLeft(`
+usage: bolt dump PATH pageid [pageid...]
+
+Dump prints a hexadecimal dump of one or more pages.
+`, "\n")
+}
+
+// pageItemCommand represents the "page-item" command execution.
+type pageItemCommand struct {
+	baseCommand
+}
+
+// newPageItemCommand returns a pageItemCommand.
+func newPageItemCommand(m *Main) *pageItemCommand {
+	c := &pageItemCommand{}
+	c.baseCommand = m.baseCommand
+	return c
+}
+
+type pageItemOptions struct {
+	help      bool
+	keyOnly   bool
+	valueOnly bool
+	format    string
+}
+
+// Run executes the command.
+func (cmd *pageItemCommand) Run(args ...string) error {
+	// Parse flags.
+	options := &pageItemOptions{}
+	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	fs.BoolVar(&options.keyOnly, "key-only", false, "Print only the key")
+	fs.BoolVar(&options.valueOnly, "value-only", false, "Print only the value")
+	fs.StringVar(&options.format, "format", "auto", "Output format. One of: "+FORMAT_MODES)
+	fs.BoolVar(&options.help, "h", false, "")
+	if err := fs.Parse(args); err != nil {
+		return err
+	} else if options.help {
+		fmt.Fprintln(cmd.Stderr, cmd.Usage())
+		return ErrUsage
+	}
+
+	if options.keyOnly && options.valueOnly {
+		return errors.New("The --key-only or --value-only flag may be set, but not both.")
+	}
+
+	// Require database path and page id.
+	path := fs.Arg(0)
+	if path == "" {
+		return ErrPathRequired
+	} else if _, err := os.Stat(path); os.IsNotExist(err) {
+		return ErrFileNotFound
+	}
+
+	// Read page id.
+	pageID, err := strconv.ParseUint(fs.Arg(1), 10, 64)
+	if err != nil {
+		return err
+	}
+
+	// Read item id.
+	itemID, err := strconv.ParseUint(fs.Arg(2), 10, 64)
+	if err != nil {
+		return err
+	}
+
+	// Open database file handler.
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+
+	// Retrieve page info and page size.
+	_, buf, err := guts_cli.ReadPage(path, pageID)
+	if err != nil {
+		return err
+	}
+
+	if !options.valueOnly {
+		err := cmd.PrintLeafItemKey(cmd.Stdout, buf, uint16(itemID), options.format)
+		if err != nil {
+			return err
+		}
+	}
+	if !options.keyOnly {
+		err := cmd.PrintLeafItemValue(cmd.Stdout, buf, uint16(itemID), options.format)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (cmd *pageItemCommand) leafPageElement(pageBytes []byte, index uint16) ([]byte, []byte, error) {
+	p := common.LoadPage(pageBytes)
+	if index >= p.Count() {
+		return nil, nil, fmt.Errorf("leafPageElement: expected item index less than %d, but got %d", p.Count(), index)
+	}
+	if p.Typ() != "leaf" {
+		return nil, nil, fmt.Errorf("leafPageElement: expected page type of 'leaf', but got '%s'", p.Typ())
+	}
+
+	e := p.LeafPageElement(index)
+	return e.Key(), e.Value(), nil
 }
 
 const FORMAT_MODES = "auto|ascii-encoded|hex|bytes|redacted"
@@ -206,6 +500,403 @@ func writelnBytes(w io.Writer, b []byte, format string) error {
 	}
 	_, err = fmt.Fprintln(w, str)
 	return err
+}
+
+// PrintLeafItemKey writes the bytes of a leaf element's key.
+func (cmd *pageItemCommand) PrintLeafItemKey(w io.Writer, pageBytes []byte, index uint16, format string) error {
+	k, _, err := cmd.leafPageElement(pageBytes, index)
+	if err != nil {
+		return err
+	}
+
+	return writelnBytes(w, k, format)
+}
+
+// PrintLeafItemValue writes the bytes of a leaf element's value.
+func (cmd *pageItemCommand) PrintLeafItemValue(w io.Writer, pageBytes []byte, index uint16, format string) error {
+	_, v, err := cmd.leafPageElement(pageBytes, index)
+	if err != nil {
+		return err
+	}
+	return writelnBytes(w, v, format)
+}
+
+// Usage returns the help message.
+func (cmd *pageItemCommand) Usage() string {
+	return strings.TrimLeft(`
+usage: bolt page-item [options] PATH pageid itemid
+
+Additional options include:
+
+	--key-only
+		Print only the key
+	--value-only
+		Print only the value
+	--format
+		Output format. One of: `+FORMAT_MODES+` (default=auto)
+
+page-item prints a page item key and value.
+`, "\n")
+}
+
+// pagesCommand represents the "pages" command execution.
+type pagesCommand struct {
+	baseCommand
+}
+
+// newPagesCommand returns a pagesCommand.
+func newPagesCommand(m *Main) *pagesCommand {
+	c := &pagesCommand{}
+	c.baseCommand = m.baseCommand
+	return c
+}
+
+// Run executes the command.
+func (cmd *pagesCommand) Run(args ...string) error {
+	// Parse flags.
+	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	help := fs.Bool("h", false, "")
+	if err := fs.Parse(args); err != nil {
+		return err
+	} else if *help {
+		fmt.Fprintln(cmd.Stderr, cmd.Usage())
+		return ErrUsage
+	}
+
+	// Require database path.
+	path := fs.Arg(0)
+	if path == "" {
+		return ErrPathRequired
+	} else if _, err := os.Stat(path); os.IsNotExist(err) {
+		return ErrFileNotFound
+	}
+
+	// Open database.
+	db, err := bolt.Open(path, 0600, &bolt.Options{
+		ReadOnly:        true,
+		PreLoadFreelist: true,
+	})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = db.Close() }()
+
+	// Write header.
+	fmt.Fprintln(cmd.Stdout, "ID       TYPE       ITEMS  OVRFLW")
+	fmt.Fprintln(cmd.Stdout, "======== ========== ====== ======")
+
+	return db.View(func(tx *bolt.Tx) error {
+		var id int
+		for {
+			p, err := tx.Page(id)
+			if err != nil {
+				return &PageError{ID: id, Err: err}
+			} else if p == nil {
+				break
+			}
+
+			// Only display count and overflow if this is a non-free page.
+			var count, overflow string
+			if p.Type != "free" {
+				count = strconv.Itoa(p.Count)
+				if p.OverflowCount > 0 {
+					overflow = strconv.Itoa(p.OverflowCount)
+				}
+			}
+
+			// Print table row.
+			fmt.Fprintf(cmd.Stdout, "%-8d %-10s %-6s %-6s\n", p.ID, p.Type, count, overflow)
+
+			// Move to the next non-overflow page.
+			id += 1
+			if p.Type != "free" {
+				id += p.OverflowCount
+			}
+		}
+		return nil
+	})
+}
+
+// Usage returns the help message.
+func (cmd *pagesCommand) Usage() string {
+	return strings.TrimLeft(`
+usage: bolt pages PATH
+
+Pages prints a table of pages with their type (meta, leaf, branch, freelist).
+Leaf and branch pages will show a key count in the "items" column while the
+freelist will show the number of free pages in the "items" column.
+
+The "overflow" column shows the number of blocks that the page spills over
+into. Normally there is no overflow but large keys and values can cause
+a single page to take up multiple blocks.
+`, "\n")
+}
+
+// statsCommand represents the "stats" command execution.
+type statsCommand struct {
+	baseCommand
+}
+
+// newStatsCommand returns a statsCommand.
+func newStatsCommand(m *Main) *statsCommand {
+	c := &statsCommand{}
+	c.baseCommand = m.baseCommand
+	return c
+}
+
+// Run executes the command.
+func (cmd *statsCommand) Run(args ...string) error {
+	// Parse flags.
+	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	help := fs.Bool("h", false, "")
+	if err := fs.Parse(args); err != nil {
+		return err
+	} else if *help {
+		fmt.Fprintln(cmd.Stderr, cmd.Usage())
+		return ErrUsage
+	}
+
+	// Require database path.
+	path, prefix := fs.Arg(0), fs.Arg(1)
+	if path == "" {
+		return ErrPathRequired
+	} else if _, err := os.Stat(path); os.IsNotExist(err) {
+		return ErrFileNotFound
+	}
+
+	// Open database.
+	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true})
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	return db.View(func(tx *bolt.Tx) error {
+		var s bolt.BucketStats
+		var count int
+		if err := tx.ForEach(func(name []byte, b *bolt.Bucket) error {
+			if bytes.HasPrefix(name, []byte(prefix)) {
+				s.Add(b.Stats())
+				count += 1
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+
+		fmt.Fprintf(cmd.Stdout, "Aggregate statistics for %d buckets\n\n", count)
+
+		fmt.Fprintln(cmd.Stdout, "Page count statistics")
+		fmt.Fprintf(cmd.Stdout, "\tNumber of logical branch pages: %d\n", s.BranchPageN)
+		fmt.Fprintf(cmd.Stdout, "\tNumber of physical branch overflow pages: %d\n", s.BranchOverflowN)
+		fmt.Fprintf(cmd.Stdout, "\tNumber of logical leaf pages: %d\n", s.LeafPageN)
+		fmt.Fprintf(cmd.Stdout, "\tNumber of physical leaf overflow pages: %d\n", s.LeafOverflowN)
+
+		fmt.Fprintln(cmd.Stdout, "Tree statistics")
+		fmt.Fprintf(cmd.Stdout, "\tNumber of keys/value pairs: %d\n", s.KeyN)
+		fmt.Fprintf(cmd.Stdout, "\tNumber of levels in B+tree: %d\n", s.Depth)
+
+		fmt.Fprintln(cmd.Stdout, "Page size utilization")
+		fmt.Fprintf(cmd.Stdout, "\tBytes allocated for physical branch pages: %d\n", s.BranchAlloc)
+		var percentage int
+		if s.BranchAlloc != 0 {
+			percentage = int(float32(s.BranchInuse) * 100.0 / float32(s.BranchAlloc))
+		}
+		fmt.Fprintf(cmd.Stdout, "\tBytes actually used for branch data: %d (%d%%)\n", s.BranchInuse, percentage)
+		fmt.Fprintf(cmd.Stdout, "\tBytes allocated for physical leaf pages: %d\n", s.LeafAlloc)
+		percentage = 0
+		if s.LeafAlloc != 0 {
+			percentage = int(float32(s.LeafInuse) * 100.0 / float32(s.LeafAlloc))
+		}
+		fmt.Fprintf(cmd.Stdout, "\tBytes actually used for leaf data: %d (%d%%)\n", s.LeafInuse, percentage)
+
+		fmt.Fprintln(cmd.Stdout, "Bucket statistics")
+		fmt.Fprintf(cmd.Stdout, "\tTotal number of buckets: %d\n", s.BucketN)
+		percentage = 0
+		if s.BucketN != 0 {
+			percentage = int(float32(s.InlineBucketN) * 100.0 / float32(s.BucketN))
+		}
+		fmt.Fprintf(cmd.Stdout, "\tTotal number on inlined buckets: %d (%d%%)\n", s.InlineBucketN, percentage)
+		percentage = 0
+		if s.LeafInuse != 0 {
+			percentage = int(float32(s.InlineBucketInuse) * 100.0 / float32(s.LeafInuse))
+		}
+		fmt.Fprintf(cmd.Stdout, "\tBytes used for inlined buckets: %d (%d%%)\n", s.InlineBucketInuse, percentage)
+
+		return nil
+	})
+}
+
+// Usage returns the help message.
+func (cmd *statsCommand) Usage() string {
+	return strings.TrimLeft(`
+usage: bolt stats PATH
+
+Stats performs an extensive search of the database to track every page
+reference. It starts at the current meta page and recursively iterates
+through every accessible bucket.
+
+The following errors can be reported:
+
+    already freed
+        The page is referenced more than once in the freelist.
+
+    unreachable unfreed
+        The page is not referenced by a bucket or in the freelist.
+
+    reachable freed
+        The page is referenced by a bucket but is also in the freelist.
+
+    out of bounds
+        A page is referenced that is above the high water mark.
+
+    multiple references
+        A page is referenced by more than one other page.
+
+    invalid type
+        The page type is not "meta", "leaf", "branch", or "freelist".
+
+No errors should occur in your database. However, if for some reason you
+experience corruption, please submit a ticket to the etcd-io/bbolt project page:
+
+  https://github.com/etcd-io/bbolt/issues
+`, "\n")
+}
+
+// bucketsCommand represents the "buckets" command execution.
+type bucketsCommand struct {
+	baseCommand
+}
+
+// newBucketsCommand returns a bucketsCommand.
+func newBucketsCommand(m *Main) *bucketsCommand {
+	c := &bucketsCommand{}
+	c.baseCommand = m.baseCommand
+	return c
+}
+
+// Run executes the command.
+func (cmd *bucketsCommand) Run(args ...string) error {
+	// Parse flags.
+	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	help := fs.Bool("h", false, "")
+	if err := fs.Parse(args); err != nil {
+		return err
+	} else if *help {
+		fmt.Fprintln(cmd.Stderr, cmd.Usage())
+		return ErrUsage
+	}
+
+	// Require database path.
+	path := fs.Arg(0)
+	if path == "" {
+		return ErrPathRequired
+	} else if _, err := os.Stat(path); os.IsNotExist(err) {
+		return ErrFileNotFound
+	}
+
+	// Open database.
+	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true})
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	// Print buckets.
+	return db.View(func(tx *bolt.Tx) error {
+		return tx.ForEach(func(name []byte, _ *bolt.Bucket) error {
+			fmt.Fprintln(cmd.Stdout, string(name))
+			return nil
+		})
+	})
+}
+
+// Usage returns the help message.
+func (cmd *bucketsCommand) Usage() string {
+	return strings.TrimLeft(`
+usage: bolt buckets PATH
+
+Print a list of buckets.
+`, "\n")
+}
+
+// keysCommand represents the "keys" command execution.
+type keysCommand struct {
+	baseCommand
+}
+
+// newKeysCommand returns a keysCommand.
+func newKeysCommand(m *Main) *keysCommand {
+	c := &keysCommand{}
+	c.baseCommand = m.baseCommand
+	return c
+}
+
+// Run executes the command.
+func (cmd *keysCommand) Run(args ...string) error {
+	// Parse flags.
+	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	optionsFormat := fs.String("format", "auto", "Output format. One of: "+FORMAT_MODES+" (default: auto)")
+	help := fs.Bool("h", false, "")
+	if err := fs.Parse(args); err != nil {
+		return err
+	} else if *help {
+		fmt.Fprintln(cmd.Stderr, cmd.Usage())
+		return ErrUsage
+	}
+
+	// Require database path and bucket.
+	relevantArgs := fs.Args()
+	if len(relevantArgs) < 2 {
+		return ErrNotEnoughArgs
+	}
+	path, buckets := relevantArgs[0], relevantArgs[1:]
+	if path == "" {
+		return ErrPathRequired
+	} else if _, err := os.Stat(path); os.IsNotExist(err) {
+		return ErrFileNotFound
+	} else if len(buckets) == 0 {
+		return ErrBucketRequired
+	}
+
+	// Open database.
+	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true})
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	// Print keys.
+	return db.View(func(tx *bolt.Tx) error {
+		// Find bucket.
+		lastBucket, err := findLastBucket(tx, buckets)
+		if err != nil {
+			return err
+		}
+
+		// Iterate over each key.
+		return lastBucket.ForEach(func(key, _ []byte) error {
+			return writelnBytes(cmd.Stdout, key, *optionsFormat)
+		})
+	})
+}
+
+// Usage returns the help message.
+// TODO: Use https://pkg.go.dev/flag#FlagSet.PrintDefaults to print supported flags.
+func (cmd *keysCommand) Usage() string {
+	return strings.TrimLeft(`
+usage: bolt keys PATH [BUCKET...]
+
+Print a list of keys in the given (sub)bucket.
+=======
+
+Additional options include:
+
+	--format
+		Output format. One of: `+FORMAT_MODES+` (default=auto)
+
+Print a list of keys in the given bucket.
+`, "\n")
 }
 
 // getCommand represents the "get" command execution.
@@ -460,9 +1151,6 @@ func (cmd *benchCommand) runWrites(db *bolt.DB, options *BenchOptions, results *
 		keys, err = cmd.runWritesSequentialNested(db, options, results)
 	case "rnd-nest":
 		keys, err = cmd.runWritesRandomNested(db, options, results, r)
-	case "seq-del":
-		options.DeleteFraction = 0.1
-		keys, err = cmd.runWritesSequentialAndDelete(db, options, results)
 	default:
 		return nil, fmt.Errorf("invalid write mode: %s", options.WriteMode)
 	}
@@ -481,11 +1169,6 @@ func (cmd *benchCommand) runWrites(db *bolt.DB, options *BenchOptions, results *
 func (cmd *benchCommand) runWritesSequential(db *bolt.DB, options *BenchOptions, results *BenchResults) ([]nestedKey, error) {
 	var i = uint32(0)
 	return cmd.runWritesWithSource(db, options, results, func() uint32 { i++; return i })
-}
-
-func (cmd *benchCommand) runWritesSequentialAndDelete(db *bolt.DB, options *BenchOptions, results *BenchResults) ([]nestedKey, error) {
-	var i = uint32(0)
-	return cmd.runWritesDeletesWithSource(db, options, results, func() uint32 { i++; return i })
 }
 
 func (cmd *benchCommand) runWritesRandom(db *bolt.DB, options *BenchOptions, results *BenchResults, r *rand.Rand) ([]nestedKey, error) {
@@ -531,53 +1214,6 @@ func (cmd *benchCommand) runWritesWithSource(db *bolt.DB, options *BenchOptions,
 			}
 			fmt.Fprintf(cmd.Stderr, "Finished write iteration %d\n", i)
 
-			return nil
-		}); err != nil {
-			return nil, err
-		}
-	}
-	return keys, nil
-}
-
-func (cmd *benchCommand) runWritesDeletesWithSource(db *bolt.DB, options *BenchOptions, results *BenchResults, keySource func() uint32) ([]nestedKey, error) {
-	var keys []nestedKey
-	deleteSize := int64(math.Ceil(float64(options.BatchSize) * options.DeleteFraction))
-	var InsertedKeys [][]byte
-
-	for i := int64(0); i < options.Iterations; i += options.BatchSize {
-		if err := db.Update(func(tx *bolt.Tx) error {
-			b, _ := tx.CreateBucketIfNotExists(benchBucketName)
-			b.FillPercent = options.FillPercent
-
-			fmt.Fprintf(cmd.Stderr, "Starting delete iteration %d, deleteSize: %d\n", i, deleteSize)
-			for i := int64(0); i < deleteSize && i < int64(len(InsertedKeys)); i++ {
-				if err := b.Delete(InsertedKeys[i]); err != nil {
-					return err
-				}
-			}
-			InsertedKeys = InsertedKeys[:0]
-			fmt.Fprintf(cmd.Stderr, "Finished delete iteration %d\n", i)
-
-			fmt.Fprintf(cmd.Stderr, "Starting write iteration %d\n", i)
-			for j := int64(0); j < options.BatchSize; j++ {
-
-				key := make([]byte, options.KeySize)
-				value := make([]byte, options.ValueSize)
-
-				// Write key as uint32.
-				binary.BigEndian.PutUint32(key, keySource())
-				InsertedKeys = append(InsertedKeys, key)
-
-				// Insert key/value.
-				if err := b.Put(key, value); err != nil {
-					return err
-				}
-				if keys != nil {
-					keys = append(keys, nestedKey{nil, key})
-				}
-				results.AddCompletedOps(1)
-			}
-			fmt.Fprintf(cmd.Stderr, "Finished write iteration %d\n", i)
 			return nil
 		}); err != nil {
 			return nil, err
@@ -946,7 +1582,6 @@ type BenchOptions struct {
 	GoBenchOutput   bool
 	PageSize        int
 	InitialMmapSize int
-	DeleteFraction  float64 // Fraction of keys of last tx to delete during writes. works only with "seq-del" write mode.
 }
 
 // BenchResults represents the performance results of the benchmark and is thread-safe.
@@ -1027,9 +1662,6 @@ func stringToPage(str string) (uint64, error) {
 func stringToPages(strs []string) ([]uint64, error) {
 	var a []uint64
 	for _, str := range strs {
-		if len(str) == 0 {
-			continue
-		}
 		i, err := stringToPage(str)
 		if err != nil {
 			return nil, err
@@ -1037,6 +1669,108 @@ func stringToPages(strs []string) ([]uint64, error) {
 		a = append(a, i)
 	}
 	return a, nil
+}
+
+// compactCommand represents the "compact" command execution.
+type compactCommand struct {
+	baseCommand
+
+	SrcPath   string
+	DstPath   string
+	TxMaxSize int64
+	DstNoSync bool
+}
+
+// newCompactCommand returns a CompactCommand.
+func newCompactCommand(m *Main) *compactCommand {
+	c := &compactCommand{}
+	c.baseCommand = m.baseCommand
+	return c
+}
+
+// Run executes the command.
+func (cmd *compactCommand) Run(args ...string) (err error) {
+	// Parse flags.
+	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	fs.StringVar(&cmd.DstPath, "o", "", "")
+	fs.Int64Var(&cmd.TxMaxSize, "tx-max-size", 65536, "")
+	fs.BoolVar(&cmd.DstNoSync, "no-sync", false, "")
+	if err := fs.Parse(args); err == flag.ErrHelp {
+		fmt.Fprintln(cmd.Stderr, cmd.Usage())
+		return ErrUsage
+	} else if err != nil {
+		return err
+	} else if cmd.DstPath == "" {
+		return errors.New("output file required")
+	}
+
+	// Require database paths.
+	cmd.SrcPath = fs.Arg(0)
+	if cmd.SrcPath == "" {
+		return ErrPathRequired
+	}
+
+	// Ensure source file exists.
+	fi, err := os.Stat(cmd.SrcPath)
+	if os.IsNotExist(err) {
+		return ErrFileNotFound
+	} else if err != nil {
+		return err
+	}
+	initialSize := fi.Size()
+
+	// Open source database.
+	src, err := bolt.Open(cmd.SrcPath, 0400, &bolt.Options{ReadOnly: true})
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	// Open destination database.
+	dst, err := bolt.Open(cmd.DstPath, fi.Mode(), &bolt.Options{NoSync: cmd.DstNoSync})
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+
+	// Run compaction.
+	if err := bolt.Compact(dst, src, cmd.TxMaxSize); err != nil {
+		return err
+	}
+
+	// Report stats on new size.
+	fi, err = os.Stat(cmd.DstPath)
+	if err != nil {
+		return err
+	} else if fi.Size() == 0 {
+		return fmt.Errorf("zero db size")
+	}
+	fmt.Fprintf(cmd.Stdout, "%d -> %d bytes (gain=%.2fx)\n", initialSize, fi.Size(), float64(initialSize)/float64(fi.Size()))
+
+	return nil
+}
+
+// Usage returns the help message.
+func (cmd *compactCommand) Usage() string {
+	return strings.TrimLeft(`
+usage: bolt compact [options] -o DST SRC
+
+Compact opens a database at SRC path and walks it recursively, copying keys
+as they are found from all buckets, to a newly created database at DST path.
+
+The original database is left untouched.
+
+Additional options include:
+
+	-tx-max-size NUM
+		Specifies the maximum size of individual transactions.
+		Defaults to 64KB.
+
+	-no-sync BOOL
+		Skip fsync() calls after each commit (fast but unsafe)
+		Defaults to false
+`, "\n")
 }
 
 type cmdKvStringer struct{}
