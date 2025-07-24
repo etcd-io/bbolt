@@ -19,7 +19,7 @@ RESULT_TO_COMPARE="$(mktemp)-${BASE_TO_COMPARE}"
 BENCH_COUNT=${BENCH_COUNT:-10}
 BENCHSTAT_CONFIDENCE_LEVEL=${BENCHSTAT_CONFIDENCE_LEVEL:-0.9}
 BENCHSTAT_FORMAT=${BENCHSTAT_FORMAT:-"text"}
-BENCH_PARAMETERS=${BENCH_PARAMETERS:-"-count 2000000 -batch-size 10000"}
+BENCH_PARAMETERS=${BENCH_PARAMETERS:-"--count 2000000 --batch-size 10000"}
 
 if [[ "${BENCHSTAT_FORMAT}" == "csv" ]] && [[ -z "${BENCHSTAT_OUTPUT_FILE}" ]]; then
   echo "BENCHSTAT_FORMAT is set to csv, but BENCHSTAT_OUTPUT_FILE is not set."
@@ -32,9 +32,9 @@ function bench() {
   make build
 
   for _ in $(seq "$BENCH_COUNT"); do
-    echo ./bin/bbolt bench -gobench-output -profile-mode n ${BENCH_PARAMETERS}
+    echo ./bin/bbolt bench --gobench-output --profile-mode n ${BENCH_PARAMETERS}
     # shellcheck disable=SC2086
-    ./bin/bbolt bench -gobench-output -profile-mode n ${BENCH_PARAMETERS} >> "${output_file}"
+    ./bin/bbolt bench --gobench-output --profile-mode n ${BENCH_PARAMETERS} >> "${output_file}"
   done
 }
 
