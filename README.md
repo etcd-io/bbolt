@@ -1030,3 +1030,4 @@ Below is a list of public, open source projects that use Bolt:
 * [Wiki](https://github.com/peterhellberg/wiki) - A tiny wiki using Goji, BoltDB and Blackfriday.
 
 If you are using Bolt in a project please send a pull request to add it to the list.
+
