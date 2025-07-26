@@ -37,4 +37,7 @@ linters:
         - -ST1003 # Poorly chosen identifier
         - -ST1005 # Incorrectly formatted error string
         - -ST1012 # Poorly chosen name for error variable
+        - ST1020 # The documentation of an exported function should start with the function's name
+        - ST1021 # The documentation of an exported type should start with type's name
+        - ST1022 # The documentation of an exported variable or constant should start with variable's name
 version: "2"
