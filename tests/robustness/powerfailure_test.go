@@ -146,11 +146,11 @@ func doPowerFailure(t *testing.T, du time.Duration, fsType dmflakey.FSType, mkfs
 	dbPath := filepath.Join(root, "boltdb")
 
 	args := []string{"bbolt", "bench",
-		"-work", // keep the database
-		"-path", dbPath,
-		"-count=1000000000",
-		"-batch-size=5", // separate total count into multiple truncation
-		"-value-size=512",
+		"--work", // keep the database
+		"--path", dbPath,
+		"--count=1000000000",
+		"--batch-size=5", // separate total count into multiple truncation
+		"--value-size=512",
 	}
 
 	logPath := filepath.Join(t.TempDir(), fmt.Sprintf("%s.log", t.Name()))
