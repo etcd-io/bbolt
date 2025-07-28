@@ -27,7 +27,6 @@ func NewRootCommand() *cobra.Command {
 		newStatsCommand(),
 		newPagesCommand(),
 		newKeysCommand(),
-		newDumpCommand(),
 	)
 
 	return rootCmd

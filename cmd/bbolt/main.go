@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
@@ -121,6 +122,8 @@ func (m *Main) Run(args ...string) error {
 		return ErrUsage
 	case "bench":
 		return newBenchCommand(m).Run(args[1:]...)
+	case "dump":
+		return newDumpCommand(m).Run(args[1:]...)
 	case "page-item":
 		return newPageItemCommand(m).Run(args[1:]...)
 	case "get":
@@ -161,6 +164,129 @@ The commands are:
     surgery     perform surgery on bbolt database
 
 Use "bbolt [command] -h" for more information about a command.
+`, "\n")
+}
+
+// dumpCommand represents the "dump" command execution.
+type dumpCommand struct {
+	baseCommand
+}
+
+// newDumpCommand returns a dumpCommand.
+func newDumpCommand(m *Main) *dumpCommand {
+	c := &dumpCommand{}
+	c.baseCommand = m.baseCommand
+	return c
+}
+
+// Run executes the command.
+func (cmd *dumpCommand) Run(args ...string) error {
+	// Parse flags.
+	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	help := fs.Bool("h", false, "")
+	if err := fs.Parse(args); err != nil {
+		return err
+	} else if *help {
+		fmt.Fprintln(cmd.Stderr, cmd.Usage())
+		return ErrUsage
+	}
+
+	// Require database path and page id.
+	path := fs.Arg(0)
+	if path == "" {
+		return ErrPathRequired
+	} else if _, err := os.Stat(path); os.IsNotExist(err) {
+		return ErrFileNotFound
+	}
+
+	// Read page ids.
+	pageIDs, err := stringToPages(fs.Args()[1:])
+	if err != nil {
+		return err
+	} else if len(pageIDs) == 0 {
+		return ErrPageIDRequired
+	}
+
+	// Open database to retrieve page size.
+	pageSize, _, err := guts_cli.ReadPageAndHWMSize(path)
+	if err != nil {
+		return err
+	}
+
+	// Open database file handler.
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+
+	// Print each page listed.
+	for i, pageID := range pageIDs {
+		// Print a separator.
+		if i > 0 {
+			fmt.Fprintln(cmd.Stdout, "===============================================")
+		}
+
+		// Print page to stdout.
+		if err := cmd.PrintPage(cmd.Stdout, f, pageID, uint64(pageSize)); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// PrintPage prints a given page as hexadecimal.
+func (cmd *dumpCommand) PrintPage(w io.Writer, r io.ReaderAt, pageID uint64, pageSize uint64) error {
+	const bytesPerLineN = 16
+
+	// Read page into buffer.
+	buf := make([]byte, pageSize)
+	addr := pageID * uint64(pageSize)
+	if n, err := r.ReadAt(buf, int64(addr)); err != nil {
+		return err
+	} else if uint64(n) != pageSize {
+		return io.ErrUnexpectedEOF
+	}
+
+	// Write out to writer in 16-byte lines.
+	var prev []byte
+	var skipped bool
+	for offset := uint64(0); offset < pageSize; offset += bytesPerLineN {
+		// Retrieve current 16-byte line.
+		line := buf[offset : offset+bytesPerLineN]
+		isLastLine := (offset == (pageSize - bytesPerLineN))
+
+		// If it's the same as the previous line then print a skip.
+		if bytes.Equal(line, prev) && !isLastLine {
+			if !skipped {
+				fmt.Fprintf(w, "%07x *\n", addr+offset)
+				skipped = true
+			}
+		} else {
+			// Print line as hexadecimal in 2-byte groups.
+			fmt.Fprintf(w, "%07x %04x %04x %04x %04x %04x %04x %04x %04x\n", addr+offset,
+				line[0:2], line[2:4], line[4:6], line[6:8],
+				line[8:10], line[10:12], line[12:14], line[14:16],
+			)
+
+			skipped = false
+		}
+
+		// Save the previous line.
+		prev = line
+	}
+	fmt.Fprint(w, "\n")
+
+	return nil
+}
+
+// Usage returns the help message.
+func (cmd *dumpCommand) Usage() string {
+	return strings.TrimLeft(`
+usage: bolt dump PATH pageid [pageid...]
+
+Dump prints a hexadecimal dump of one or more pages.
 `, "\n")
 }
 

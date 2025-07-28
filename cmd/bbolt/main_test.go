@@ -22,6 +22,22 @@ import (
 	"go.etcd.io/bbolt/internal/guts_cli"
 )
 
+func TestDumpCommand_Run(t *testing.T) {
+	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
+	db.Close()
+
+	defer requireDBNoChange(t, dbData(t, db.Path()), db.Path())
+
+	exp := `0000010 edda 0ced 0200 0000 0010 0000 0000 0000`
+
+	m := NewMain()
+	err := m.Run("dump", db.Path(), "0")
+	require.NoError(t, err)
+	if !strings.Contains(m.Stdout.String(), exp) {
+		t.Fatalf("unexpected stdout:\n%s\n", m.Stdout.String())
+	}
+}
+
 func TestPageCommand_Run(t *testing.T) {
 	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
 	db.Close()
