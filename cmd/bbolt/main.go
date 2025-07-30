@@ -132,6 +132,8 @@ func (m *Main) Run(args ...string) error {
 		return newKeysCommand(m).Run(args[1:]...)
 	case "page":
 		return newPageCommand(m).Run(args[1:]...)
+	case "pages":
+		return newPagesCommand(m).Run(args[1:]...)
 	default:
 		return ErrUnknownCommand
 	}
@@ -471,6 +473,99 @@ Additional options include:
 		Output format. One of: `+FORMAT_MODES+` (default=auto)
 
 page-item prints a page item key and value.
+`, "\n")
+}
+
+// pagesCommand represents the "pages" command execution.
+type pagesCommand struct {
+	baseCommand
+}
+
+// newPagesCommand returns a pagesCommand.
+func newPagesCommand(m *Main) *pagesCommand {
+	c := &pagesCommand{}
+	c.baseCommand = m.baseCommand
+	return c
+}
+
+// Run executes the command.
+func (cmd *pagesCommand) Run(args ...string) error {
+	// Parse flags.
+	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	help := fs.Bool("h", false, "")
+	if err := fs.Parse(args); err != nil {
+		return err
+	} else if *help {
+		fmt.Fprintln(cmd.Stderr, cmd.Usage())
+		return ErrUsage
+	}
+
+	// Require database path.
+	path := fs.Arg(0)
+	if path == "" {
+		return ErrPathRequired
+	} else if _, err := os.Stat(path); os.IsNotExist(err) {
+		return ErrFileNotFound
+	}
+
+	// Open database.
+	db, err := bolt.Open(path, 0600, &bolt.Options{
+		ReadOnly:        true,
+		PreLoadFreelist: true,
+	})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = db.Close() }()
+
+	// Write header.
+	fmt.Fprintln(cmd.Stdout, "ID       TYPE       ITEMS  OVRFLW")
+	fmt.Fprintln(cmd.Stdout, "======== ========== ====== ======")
+
+	return db.View(func(tx *bolt.Tx) error {
+		var id int
+		for {
+			p, err := tx.Page(id)
+			if err != nil {
+				return &PageError{ID: id, Err: err}
+			} else if p == nil {
+				break
+			}
+
+			// Only display count and overflow if this is a non-free page.
+			var count, overflow string
+			if p.Type != "free" {
+				count = strconv.Itoa(p.Count)
+				if p.OverflowCount > 0 {
+					overflow = strconv.Itoa(p.OverflowCount)
+				}
+			}
+
+			// Print table row.
+			fmt.Fprintf(cmd.Stdout, "%-8d %-10s %-6s %-6s\n", p.ID, p.Type, count, overflow)
+
+			// Move to the next non-overflow page.
+			id += 1
+			if p.Type != "free" {
+				id += p.OverflowCount
+			}
+		}
+		return nil
+	})
+}
+
+// Usage returns the help message.
+func (cmd *pagesCommand) Usage() string {
+	return strings.TrimLeft(`
+usage: bolt pages PATH
+
+Pages prints a table of pages with their type (meta, leaf, branch, freelist).
+Leaf and branch pages will show a key count in the "items" column while the
+freelist will show the number of free pages in the "items" column.
+
+The "overflow" column shows the number of blocks that the page spills over
+into. Normally there is no overflow but large keys and values can cause
+a single page to take up multiple blocks.
 `, "\n")
 }
 
