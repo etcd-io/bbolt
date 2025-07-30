@@ -134,6 +134,8 @@ func (m *Main) Run(args ...string) error {
 		return newPageCommand(m).Run(args[1:]...)
 	case "pages":
 		return newPagesCommand(m).Run(args[1:]...)
+	case "stats":
+		return newStatsCommand(m).Run(args[1:]...)
 	default:
 		return ErrUnknownCommand
 	}
@@ -566,6 +568,137 @@ freelist will show the number of free pages in the "items" column.
 The "overflow" column shows the number of blocks that the page spills over
 into. Normally there is no overflow but large keys and values can cause
 a single page to take up multiple blocks.
+`, "\n")
+}
+
+// statsCommand represents the "stats" command execution.
+type statsCommand struct {
+	baseCommand
+}
+
+// newStatsCommand returns a statsCommand.
+func newStatsCommand(m *Main) *statsCommand {
+	c := &statsCommand{}
+	c.baseCommand = m.baseCommand
+	return c
+}
+
+// Run executes the command.
+func (cmd *statsCommand) Run(args ...string) error {
+	// Parse flags.
+	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	help := fs.Bool("h", false, "")
+	if err := fs.Parse(args); err != nil {
+		return err
+	} else if *help {
+		fmt.Fprintln(cmd.Stderr, cmd.Usage())
+		return ErrUsage
+	}
+
+	// Require database path.
+	path, prefix := fs.Arg(0), fs.Arg(1)
+	if path == "" {
+		return ErrPathRequired
+	} else if _, err := os.Stat(path); os.IsNotExist(err) {
+		return ErrFileNotFound
+	}
+
+	// Open database.
+	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true})
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	return db.View(func(tx *bolt.Tx) error {
+		var s bolt.BucketStats
+		var count int
+		if err := tx.ForEach(func(name []byte, b *bolt.Bucket) error {
+			if bytes.HasPrefix(name, []byte(prefix)) {
+				s.Add(b.Stats())
+				count += 1
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+
+		fmt.Fprintf(cmd.Stdout, "Aggregate statistics for %d buckets\n\n", count)
+
+		fmt.Fprintln(cmd.Stdout, "Page count statistics")
+		fmt.Fprintf(cmd.Stdout, "\tNumber of logical branch pages: %d\n", s.BranchPageN)
+		fmt.Fprintf(cmd.Stdout, "\tNumber of physical branch overflow pages: %d\n", s.BranchOverflowN)
+		fmt.Fprintf(cmd.Stdout, "\tNumber of logical leaf pages: %d\n", s.LeafPageN)
+		fmt.Fprintf(cmd.Stdout, "\tNumber of physical leaf overflow pages: %d\n", s.LeafOverflowN)
+
+		fmt.Fprintln(cmd.Stdout, "Tree statistics")
+		fmt.Fprintf(cmd.Stdout, "\tNumber of keys/value pairs: %d\n", s.KeyN)
+		fmt.Fprintf(cmd.Stdout, "\tNumber of levels in B+tree: %d\n", s.Depth)
+
+		fmt.Fprintln(cmd.Stdout, "Page size utilization")
+		fmt.Fprintf(cmd.Stdout, "\tBytes allocated for physical branch pages: %d\n", s.BranchAlloc)
+		var percentage int
+		if s.BranchAlloc != 0 {
+			percentage = int(float32(s.BranchInuse) * 100.0 / float32(s.BranchAlloc))
+		}
+		fmt.Fprintf(cmd.Stdout, "\tBytes actually used for branch data: %d (%d%%)\n", s.BranchInuse, percentage)
+		fmt.Fprintf(cmd.Stdout, "\tBytes allocated for physical leaf pages: %d\n", s.LeafAlloc)
+		percentage = 0
+		if s.LeafAlloc != 0 {
+			percentage = int(float32(s.LeafInuse) * 100.0 / float32(s.LeafAlloc))
+		}
+		fmt.Fprintf(cmd.Stdout, "\tBytes actually used for leaf data: %d (%d%%)\n", s.LeafInuse, percentage)
+
+		fmt.Fprintln(cmd.Stdout, "Bucket statistics")
+		fmt.Fprintf(cmd.Stdout, "\tTotal number of buckets: %d\n", s.BucketN)
+		percentage = 0
+		if s.BucketN != 0 {
+			percentage = int(float32(s.InlineBucketN) * 100.0 / float32(s.BucketN))
+		}
+		fmt.Fprintf(cmd.Stdout, "\tTotal number on inlined buckets: %d (%d%%)\n", s.InlineBucketN, percentage)
+		percentage = 0
+		if s.LeafInuse != 0 {
+			percentage = int(float32(s.InlineBucketInuse) * 100.0 / float32(s.LeafInuse))
+		}
+		fmt.Fprintf(cmd.Stdout, "\tBytes used for inlined buckets: %d (%d%%)\n", s.InlineBucketInuse, percentage)
+
+		return nil
+	})
+}
+
+// Usage returns the help message.
+func (cmd *statsCommand) Usage() string {
+	return strings.TrimLeft(`
+usage: bolt stats PATH
+
+Stats performs an extensive search of the database to track every page
+reference. It starts at the current meta page and recursively iterates
+through every accessible bucket.
+
+The following errors can be reported:
+
+    already freed
+        The page is referenced more than once in the freelist.
+
+    unreachable unfreed
+        The page is not referenced by a bucket or in the freelist.
+
+    reachable freed
+        The page is referenced by a bucket but is also in the freelist.
+
+    out of bounds
+        A page is referenced that is above the high water mark.
+
+    multiple references
+        A page is referenced by more than one other page.
+
+    invalid type
+        The page type is not "meta", "leaf", "branch", or "freelist".
+
+No errors should occur in your database. However, if for some reason you
+experience corruption, please submit a ticket to the etcd-io/bbolt project page:
+
+  https://github.com/etcd-io/bbolt/issues
 `, "\n")
 }
 
