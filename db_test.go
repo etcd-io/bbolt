@@ -23,6 +23,7 @@ import (
 	bolt "go.etcd.io/bbolt"
 	berrors "go.etcd.io/bbolt/errors"
 	"go.etcd.io/bbolt/internal/btesting"
+	"go.etcd.io/bbolt/internal/common"
 )
 
 // pageSize is the size of one page in the data file.
@@ -1381,7 +1382,14 @@ func TestDB_HugeValue(t *testing.T) {
 		require.NoError(t, db.Close())
 	}()
 
-	data := make([]byte, 0xFFFFFFF+1)
+	maxSize := 0xFFFFFFF + 1
+	// On 32 bit systems, the MaxAllocSize is 0xFFFFFFF (268435455,
+	// roughly 256MB), and the test will fail for sure, so we reduce
+	// the maxSize by half in such case.
+	if maxSize > common.MaxAllocSize {
+		maxSize = maxSize / 2
+	}
+	data := make([]byte, maxSize)
 
 	_ = db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte("data"))
