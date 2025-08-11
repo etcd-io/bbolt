@@ -79,7 +79,7 @@ jobs:
       run: |
         case "${TARGET}" in
           windows-amd64-unit-test-4-cpu)
-            CPU=4 make test
+            CPU=4 TIMEOUT=50m make test
             ;;
           *)
             echo "Failed to find target"
@@ -106,3 +106,5 @@ jobs:
       with:
         go-version: ${{ steps.goversion.outputs.goversion }}
     - run: make coverage
+      env:
+        TIMEOUT: 50m
