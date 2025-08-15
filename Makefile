@@ -33,7 +33,7 @@ fmt:
 	@!(gofmt -l -s -d ${GOFILES} | grep '[a-z]')
 
 	@echo "Verifying goimports, failures can be fixed with ./scripts/fix.sh"
-	@!(go run golang.org/x/tools/cmd/goimports@latest -l -d ${GOFILES} | grep '[a-z]')
+	@!(go tool golang.org/x/tools/cmd/goimports -l -d ${GOFILES} | grep '[a-z]')
 
 .PHONY: lint
 lint:
@@ -71,16 +71,12 @@ clean: # Clean binaries
 	rm -f ./bin/${BOLT_CMD}
 
 .PHONY: gofail-enable
-gofail-enable: install-gofail
-	gofail enable .
+gofail-enable:
+	go tool go.etcd.io/gofail enable .
 
 .PHONY: gofail-disable
-gofail-disable: install-gofail
-	gofail disable .
-
-.PHONY: install-gofail
-install-gofail:
-	go install go.etcd.io/gofail
+gofail-disable:
+	go tool go.etcd.io/gofail disable .
 
 .PHONY: test-failpoint
 test-failpoint:
@@ -99,10 +95,6 @@ test-robustness: gofail-enable build
 .PHONY: test-benchmark-compare
 # Runs benchmark tests on the current git ref and the given REF, and compares
 # the two.
-test-benchmark-compare: install-benchstat
+test-benchmark-compare:
 	@git fetch
 	./scripts/compare_benchmarks.sh $(REF)
-
-.PHONY: install-benchstat
-install-benchstat:
-	go install golang.org/x/perf/cmd/benchstat@latest

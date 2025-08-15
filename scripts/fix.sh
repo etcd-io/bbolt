@@ -7,7 +7,7 @@ TESTGOFILES=$(${GO_CMD} list  --f "{{with \$d:=.}}{{range .TestGoFiles}}{{\$d.Di
 XTESTGOFILES=$(${GO_CMD} list  --f "{{with \$d:=.}}{{range .XTestGoFiles}}{{\$d.Dir}}/{{.}}{{\"\n\"}}{{end}}{{end}}" ./...)
 
 
-echo "${GOFILES}" "${TESTGOFILES}" "${XTESTGOFILES}"| xargs -n 100 go run golang.org/x/tools/cmd/goimports@latest -w -local go.etcd.io
+echo "${GOFILES}" "${TESTGOFILES}" "${XTESTGOFILES}"| xargs -n 100 go tool golang.org/x/tools/cmd/goimports -w -local go.etcd.io
 
 go fmt ./...
 go mod tidy
