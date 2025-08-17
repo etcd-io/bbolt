@@ -761,6 +761,114 @@ func TestDB_Concurrent_WriteTo_and_ConsistentRead(t *testing.T) {
 	}
 }
 
+// TestDB_WriteTo_and_Overwrite verifies that `(tx *Tx) WriteTo` can still
+// work even the underlying file is overwritten between the time a read-only
+// transaction is created and the time the file is actually opened
+func TestDB_WriteTo_and_Overwrite(t *testing.T) {
+	testCases := []struct {
+		name      string
+		writeFlag int
+	}{
+		{
+			name:      "writeFlag not set",
+			writeFlag: 0,
+		},
+		/* syscall.O_DIRECT not supported on some platforms, i.e. Windows and MacOS
+		{
+			name:      "writeFlag set",
+			writeFlag: syscall.O_DIRECT,
+		},*/
+	}
+
+	fRead := func(db *bolt.DB, bucketName []byte) map[string]string {
+		data := make(map[string]string)
+		_ = db.View(func(tx *bolt.Tx) error {
+			b := tx.Bucket(bucketName)
+			berr := b.ForEach(func(k, v []byte) error {
+				data[string(k)] = string(v)
+				return nil
+			})
+			require.NoError(t, berr)
+			return nil
+		})
+		return data
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := btesting.MustCreateDBWithOption(t, &bolt.Options{
+				PageSize: 4096,
+			})
+			filePathOfDb := db.Path()
+
+			var (
+				bucketName   = []byte("data")
+				dataExpected map[string]string
+				dataActual   map[string]string
+			)
+
+			t.Log("Populate some data")
+			err := db.Update(func(tx *bolt.Tx) error {
+				b, berr := tx.CreateBucket(bucketName)
+				if berr != nil {
+					return berr
+				}
+				for k := 0; k < 10; k++ {
+					key, value := fmt.Sprintf("key_%d", rand.Intn(10)), fmt.Sprintf("value_%d", rand.Intn(100))
+					if perr := b.Put([]byte(key), []byte(value)); perr != nil {
+						return perr
+					}
+				}
+				return nil
+			})
+			require.NoError(t, err)
+
+			t.Log("Read all the data before calling WriteTo")
+			dataExpected = fRead(db.DB, bucketName)
+
+			t.Log("Create a readonly transaction for WriteTo")
+			rtx, rerr := db.Begin(false)
+			require.NoError(t, rerr)
+
+			// Some platforms (i.e. Windows) don't support renaming a file
+			// when the target file already exist and is opened.
+			if runtime.GOOS == "linux" {
+				t.Log("Create another empty db file")
+				db2 := btesting.MustCreateDBWithOption(t, &bolt.Options{
+					PageSize: 4096,
+				})
+				db2.MustClose()
+				filePathOfDb2 := db2.Path()
+
+				t.Logf("Renaming the new empty db file (%s) to the original db path (%s)", filePathOfDb2, filePathOfDb)
+				err = os.Rename(filePathOfDb2, filePathOfDb)
+				require.NoError(t, err)
+			} else {
+				t.Log("Ignore renaming step on non-Linux platform")
+			}
+
+			t.Logf("Call WriteTo to copy the data of the original db file")
+			f := filepath.Join(t.TempDir(), "-backup-db")
+			err = rtx.CopyFile(f, 0600)
+			require.NoError(t, err)
+			require.NoError(t, rtx.Rollback())
+
+			t.Logf("Read all the data from the backup db after calling WriteTo")
+			newDB, err := bolt.Open(f, 0600, &bolt.Options{
+				ReadOnly: true,
+			})
+			require.NoError(t, err)
+			dataActual = fRead(newDB, bucketName)
+			err = newDB.Close()
+			require.NoError(t, err)
+
+			t.Log("Compare the dataExpected and dataActual")
+			same := reflect.DeepEqual(dataExpected, dataActual)
+			require.True(t, same, fmt.Sprintf("found inconsistent data, dataExpected: %v, ddataActual : %v", dataExpected, dataActual))
+		})
+	}
+}
+
 // Ensure that opening a transaction while the DB is closed returns an error.
 func TestDB_BeginRW_Closed(t *testing.T) {
 	var db bolt.DB
