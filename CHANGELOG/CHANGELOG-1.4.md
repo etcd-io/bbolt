@@ -1,6 +1,13 @@
 
 <hr>
 
+## v1.4.3(TBD)
+
+### BoltDB
+- Fix [potential data corruption in `(*Tx)WriteTo` if underlying db file is overwritten](https://github.com/etcd-io/bbolt/pull/1058)
+
+<hr>
+
 ## v1.4.2(2025-06-27)
 
 ### BoltDB
