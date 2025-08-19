@@ -525,7 +525,7 @@ func TestFreelist_E2E_SerDe_AcrossImplementations(t *testing.T) {
 			p := common.LoadPage(buf)
 			freelist.Write(p)
 
-			for n, loadFreeList := range map[string]Interface{
+			for n, loadFreeList := range map[string]Freelist{
 				"hashmap": NewHashMapFreelist(),
 				"array":   NewArrayFreelist(),
 			} {
@@ -538,7 +538,7 @@ func TestFreelist_E2E_SerDe_AcrossImplementations(t *testing.T) {
 	}
 }
 
-func requirePages(t *testing.T, f Interface, freePageIds common.Pgids, pendingPageIds common.Pgids) {
+func requirePages(t *testing.T, f Freelist, freePageIds common.Pgids, pendingPageIds common.Pgids) {
 	require.Equal(t, f.FreeCount()+f.PendingCount(), f.Count())
 	require.Equalf(t, freePageIds, f.freePageIds(), "unexpected free pages")
 	require.Equal(t, len(freePageIds), f.FreeCount())
@@ -613,7 +613,7 @@ func Test_freelist_ReadIDs_and_getFreePageIDs(t *testing.T) {
 }
 
 // newTestFreelist get the freelist type from env and initial the freelist
-func newTestFreelist() Interface {
+func newTestFreelist() Freelist {
 	if env := os.Getenv(TestFreelistType); env == "hashmap" {
 		return NewHashMapFreelist()
 	}

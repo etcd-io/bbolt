@@ -280,13 +280,13 @@ func (f *hashMap) idsFromBackwardMap() map[common.Pgid]struct{} {
 	return ids
 }
 
-func NewHashMapFreelist() Interface {
+func NewHashMapFreelist() Freelist {
 	hm := &hashMap{
 		shared:      newShared(),
 		freemaps:    make(map[uint64]pidSet),
 		forwardMap:  make(map[common.Pgid]uint64),
 		backwardMap: make(map[common.Pgid]uint64),
 	}
-	hm.Interface = hm
+	hm.Freelist = hm
 	return hm
 }

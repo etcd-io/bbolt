@@ -16,7 +16,7 @@ type ReadWriter interface {
 	EstimatedWritePageSize() int
 }
 
-type Interface interface {
+type Freelist interface {
 	ReadWriter
 
 	// Init initializes this freelist with the given list of pages.

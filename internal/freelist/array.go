@@ -98,11 +98,11 @@ func (f *array) mergeSpans(ids common.Pgids) {
 	f.ids = common.Pgids(f.ids).Merge(ids)
 }
 
-func NewArrayFreelist() Interface {
+func NewArrayFreelist() Freelist {
 	a := &array{
 		shared: newShared(),
 		ids:    []common.Pgid{},
 	}
-	a.Interface = a
+	a.Freelist = a
 	return a
 }

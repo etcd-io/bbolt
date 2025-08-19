@@ -134,7 +134,7 @@ type DB struct {
 	rwtx     *Tx
 	stats    *Stats
 
-	freelist     fl.Interface
+	freelist     fl.Freelist
 	freelistLoad sync.Once
 
 	pagePool sync.Pool
@@ -1272,11 +1272,15 @@ func (db *DB) freepages() []common.Pgid {
 	return fids
 }
 
-func newFreelist(freelistType FreelistType) fl.Interface {
-	if freelistType == FreelistMapType {
-		return fl.NewHashMapFreelist()
-	}
-	return fl.NewArrayFreelist()
+func newFreelist(freelistType FreelistType) fl.Freelist {
+    switch freelistType {
+    case FreelistMapType:
+        return fl.NewHashMapFreelist()
+    case FreelistArrayType:
+        return fl.NewArrayFreelist()
+    default:
+        panic(fmt.Sprintf("Unknown freelist type: %v", freelistType))
+    }
 }
 
 // Options represents the options that can be set when opening a database.

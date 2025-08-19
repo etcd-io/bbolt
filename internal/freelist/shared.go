@@ -16,7 +16,7 @@ type txPending struct {
 }
 
 type shared struct {
-	Interface
+	Freelist
 
 	readonlyTXIDs []common.Txid               // all readonly transaction IDs.
 	allocs        map[common.Pgid]common.Txid // mapping of Txid that allocated a pgid.
