@@ -398,7 +398,7 @@ func (tx *Tx) WriteTo(w io.Writer) (n int64, err error) {
 	// the transaction was based on.
 	//
 	// To overcome this, we reuse the already opened file handle when
-	// WritFlag not set. When the WriteFlag is set, we reopen the file
+	// WriteFlag not set. When the WriteFlag is set, we reopen the file
 	// but verify that it still refers to the same underlying file
 	// (by device and inode). If it does not, we fall back to
 	// reusing the existing already opened file handle.
