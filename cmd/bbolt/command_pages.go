@@ -10,6 +10,15 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
+type PageError struct {
+	ID  int
+	Err error
+}
+
+func (e *PageError) Error() string {
+	return fmt.Sprintf("page error: id=%d, err=%s", e.ID, e.Err)
+}
+
 func newPagesCommand() *cobra.Command {
 	pagesCmd := &cobra.Command{
 		Use:   "pages <bbolt-file>",

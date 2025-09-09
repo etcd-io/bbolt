@@ -16,7 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	bolt "go.etcd.io/bbolt"
-	main "go.etcd.io/bbolt/cmd/bbolt"
 )
 
 type ConcurrentBuffer struct {
@@ -43,23 +42,6 @@ func (b *ConcurrentBuffer) String() string {
 	defer b.m.Unlock()
 
 	return b.buf.String()
-}
-
-// Main represents a test wrapper for main.Main that records output.
-type Main struct {
-	*main.Main
-	Stdin  ConcurrentBuffer
-	Stdout ConcurrentBuffer
-	Stderr ConcurrentBuffer
-}
-
-// NewMain returns a new instance of Main.
-func NewMain() *Main {
-	m := &Main{Main: main.NewMain()}
-	m.Main.Stdin = &m.Stdin
-	m.Main.Stdout = &m.Stdout
-	m.Main.Stderr = &m.Stderr
-	return m
 }
 
 func fillBucket(b *bolt.Bucket, prefix []byte) error {
