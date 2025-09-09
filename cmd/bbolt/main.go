@@ -140,12 +140,3 @@ The commands are:
 Use "bbolt [command] -h" for more information about a command.
 `, "\n")
 }
-
-type PageError struct {
-	ID  int
-	Err error
-}
-
-func (e *PageError) Error() string {
-	return fmt.Sprintf("page error: id=%d, err=%s", e.ID, e.Err)
-}
