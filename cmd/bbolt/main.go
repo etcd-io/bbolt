@@ -3,9 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
-	"strings"
 )
 
 var (
@@ -46,18 +44,6 @@ var (
 )
 
 func main() {
-	m := NewMain()
-	if err := m.Run(os.Args[1:]...); err == ErrUsage {
-		os.Exit(2)
-	} else if err == ErrUnknownCommand {
-		cobraExecute()
-	} else if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
-	}
-}
-
-func cobraExecute() {
 	rootCmd := NewRootCommand()
 	if err := rootCmd.Execute(); err != nil {
 		if rootCmd.SilenceErrors {
@@ -67,76 +53,4 @@ func cobraExecute() {
 			os.Exit(1)
 		}
 	}
-}
-
-type baseCommand struct {
-	Stdin  io.Reader
-	Stdout io.Writer
-	Stderr io.Writer
-}
-
-// Main represents the main program execution.
-type Main struct {
-	baseCommand
-}
-
-// NewMain returns a new instance of Main connect to the standard input/output.
-func NewMain() *Main {
-	return &Main{
-		baseCommand: baseCommand{
-			Stdin:  os.Stdin,
-			Stdout: os.Stdout,
-			Stderr: os.Stderr,
-		},
-	}
-}
-
-// Run executes the program.
-func (m *Main) Run(args ...string) error {
-	// Require a command at the beginning.
-	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
-		fmt.Fprintln(m.Stderr, m.Usage())
-		return ErrUsage
-	}
-
-	// Execute command.
-	switch args[0] {
-	case "help":
-		fmt.Fprintln(m.Stderr, m.Usage())
-		return ErrUsage
-	default:
-		return ErrUnknownCommand
-	}
-}
-
-// Usage returns the help message.
-func (m *Main) Usage() string {
-	return strings.TrimLeft(`
-Bbolt is a tool for inspecting bbolt databases.
-
-Usage:
-
-	bbolt command [arguments]
-
-The commands are:
-
-    version     print the current version of bbolt
-    bench       run synthetic benchmark against bbolt
-    buckets     print a list of buckets
-    check       verifies integrity of bbolt database
-    compact     copies a bbolt database, compacting it in the process
-    dump        print a hexadecimal dump of a single page
-    get         print the value of a key in a bucket
-    info        print basic info
-    keys        print a list of keys in a bucket
-    help        print this screen
-    page        print one or more pages in human readable format
-    pages       print list of pages with their types
-    page-item   print the key and value of a page item.
-    stats       iterate over all pages and generate usage stats
-    inspect     inspect the structure of the database
-    surgery     perform surgery on bbolt database
-
-Use "bbolt [command] -h" for more information about a command.
-`, "\n")
 }
