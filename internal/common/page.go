@@ -389,3 +389,23 @@ func Mergepgids(dst, a, b Pgids) {
 	// Append what's left in follow.
 	_ = append(merged, follow...)
 }
+
+type PgidSet map[Pgid]struct{}
+
+func (s *PgidSet) Add(key Pgid) {
+	if *s == nil {
+		*s = make(map[Pgid]struct{})
+	}
+
+	(*s)[key] = struct{}{}
+}
+
+func (s *PgidSet) Has(key Pgid) bool {
+	if *s == nil {
+		return false
+	}
+
+	_, ok := (*s)[key]
+
+	return ok
+}

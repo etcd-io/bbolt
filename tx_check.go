@@ -40,14 +40,14 @@ func (tx *Tx) check(cfg checkConfig, ch chan error) {
 	tx.db.loadFreelist()
 
 	// Check if any pages are double freed.
-	freed := make(map[common.Pgid]bool)
+	freed := make(common.PgidSet)
 	all := make([]common.Pgid, tx.db.freelist.Count())
 	tx.db.freelist.Copyall(all)
 	for _, id := range all {
-		if freed[id] {
+		if freed.Has(id) {
 			ch <- fmt.Errorf("page %d: already freed", id)
 		}
-		freed[id] = true
+		freed.Add(id)
 	}
 
 	// Track every reachable page.
@@ -68,7 +68,7 @@ func (tx *Tx) check(cfg checkConfig, ch chan error) {
 		// Ensure all pages below high water mark are either reachable or freed.
 		for i := common.Pgid(0); i < tx.meta.Pgid(); i++ {
 			_, isReachable := reachable[i]
-			if !isReachable && !freed[i] {
+			if !isReachable && !freed.Has(i) {
 				ch <- fmt.Errorf("page %d: unreachable unfreed", int(i))
 			}
 		}
@@ -83,13 +83,13 @@ func (tx *Tx) check(cfg checkConfig, ch chan error) {
 	}
 }
 
-func (tx *Tx) recursivelyCheckPage(pageId common.Pgid, reachable map[common.Pgid]*common.Page, freed map[common.Pgid]bool,
+func (tx *Tx) recursivelyCheckPage(pageId common.Pgid, reachable map[common.Pgid]*common.Page, freed common.PgidSet,
 	kvStringer KVStringer, ch chan error) {
 	tx.checkInvariantProperties(pageId, reachable, freed, kvStringer, ch)
 	tx.recursivelyCheckBucketInPage(pageId, reachable, freed, kvStringer, ch)
 }
 
-func (tx *Tx) recursivelyCheckBucketInPage(pageId common.Pgid, reachable map[common.Pgid]*common.Page, freed map[common.Pgid]bool,
+func (tx *Tx) recursivelyCheckBucketInPage(pageId common.Pgid, reachable map[common.Pgid]*common.Page, freed common.PgidSet,
 	kvStringer KVStringer, ch chan error) {
 	p := tx.page(pageId)
 
@@ -120,7 +120,7 @@ func (tx *Tx) recursivelyCheckBucketInPage(pageId common.Pgid, reachable map[com
 	}
 }
 
-func (tx *Tx) recursivelyCheckBucket(b *Bucket, reachable map[common.Pgid]*common.Page, freed map[common.Pgid]bool,
+func (tx *Tx) recursivelyCheckBucket(b *Bucket, reachable map[common.Pgid]*common.Page, freed common.PgidSet,
 	kvStringer KVStringer, ch chan error) {
 	// Ignore inline buckets.
 	if b.RootPage() == 0 {
@@ -138,7 +138,7 @@ func (tx *Tx) recursivelyCheckBucket(b *Bucket, reachable map[common.Pgid]*commo
 	})
 }
 
-func (tx *Tx) checkInvariantProperties(pageId common.Pgid, reachable map[common.Pgid]*common.Page, freed map[common.Pgid]bool,
+func (tx *Tx) checkInvariantProperties(pageId common.Pgid, reachable map[common.Pgid]*common.Page, freed common.PgidSet,
 	kvStringer KVStringer, ch chan error) {
 	tx.forEachPage(pageId, func(p *common.Page, _ int, stack []common.Pgid) {
 		verifyPageReachable(p, tx.meta.Pgid(), stack, reachable, freed, ch)
@@ -147,7 +147,7 @@ func (tx *Tx) checkInvariantProperties(pageId common.Pgid, reachable map[common.
 	tx.recursivelyCheckPageKeyOrder(pageId, kvStringer.KeyToString, ch)
 }
 
-func verifyPageReachable(p *common.Page, hwm common.Pgid, stack []common.Pgid, reachable map[common.Pgid]*common.Page, freed map[common.Pgid]bool, ch chan error) {
+func verifyPageReachable(p *common.Page, hwm common.Pgid, stack []common.Pgid, reachable map[common.Pgid]*common.Page, freed common.PgidSet, ch chan error) {
 	if p.Id() > hwm {
 		ch <- fmt.Errorf("page %d: out of bounds: %d (stack: %v)", int(p.Id()), int(hwm), stack)
 	}
@@ -162,7 +162,7 @@ func verifyPageReachable(p *common.Page, hwm common.Pgid, stack []common.Pgid, r
 	}
 
 	// We should only encounter un-freed leaf and branch pages.
-	if freed[p.Id()] {
+	if freed.Has(p.Id()) {
 		ch <- fmt.Errorf("page %d: reachable freed", int(p.Id()))
 	} else if !p.IsBranchPage() && !p.IsLeafPage() {
 		ch <- fmt.Errorf("page %d: invalid type: %s (stack: %v)", int(p.Id()), p.Typ(), stack)

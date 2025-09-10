@@ -70,3 +70,43 @@ func TestPgids_merge_quick(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestPgidSet_initialization(t *testing.T) {
+	var s PgidSet
+	if s != nil {
+		t.Fatal("Set must be nil")
+	}
+
+	s.Add(0)
+	if s == nil {
+		t.Fatal("Set must be initialized")
+	}
+}
+
+func TestPgidSet_set_has_added_values(t *testing.T) {
+	var s PgidSet
+	s.Add(100)
+	if len(s) != 1 || !s.Has(100) {
+		t.Fatal("Set must contain exactly one element")
+	}
+
+	s.Add(200)
+	if len(s) != 2 || !s.Has(200) {
+		t.Fatal("Set must contain exactly two elements")
+	}
+}
+
+func TestPgidSet_duplicates(t *testing.T) {
+	var s PgidSet
+	s.Add(5)
+	s.Add(5)
+	if len(s) != 1 {
+		t.Fatal("Set must still contain exactly one element after adding duplicate")
+	}
+
+	s.Add(15)
+	s.Add(15)
+	if len(s) != 2 {
+		t.Fatal("Set must still contain exactly two elements after adding duplicate")
+	}
+}

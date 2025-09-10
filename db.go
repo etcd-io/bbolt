@@ -1251,7 +1251,7 @@ func (db *DB) freepages() []common.Pgid {
 	}
 
 	reachable := make(map[common.Pgid]*common.Page)
-	nofreed := make(map[common.Pgid]bool)
+	nofreed := make(common.PgidSet)
 	ech := make(chan error)
 	go func() {
 		for e := range ech {
