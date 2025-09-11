@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -19,15 +18,6 @@ import (
 
 	bolt "go.etcd.io/bbolt"
 	"go.etcd.io/bbolt/internal/common"
-)
-
-var (
-	// ErrBatchNonDivisibleBatchSize is returned when the batch size can't be evenly
-	// divided by the iteration count.
-	ErrBatchNonDivisibleBatchSize = errors.New("the number of iterations must be divisible by the batch size")
-
-	// ErrBatchInvalidWriteMode is returned when the write mode is other than seq, rnd, seq-nest, or rnd-nest.
-	ErrBatchInvalidWriteMode = errors.New("the write mode should be one of seq, rnd, seq-nest, or rnd-nest")
 )
 
 var benchBucketName = []byte("bench")

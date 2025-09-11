@@ -13,10 +13,6 @@ import (
 	"go.etcd.io/bbolt/internal/surgeon"
 )
 
-var (
-	ErrSurgeryFreelistAlreadyExist = errors.New("the file already has freelist, please consider to abandon the freelist to forcibly rebuild it")
-)
-
 func newSurgeryCommand() *cobra.Command {
 	surgeryCmd := &cobra.Command{
 		Use:   "surgery <subcommand>",
