@@ -25,9 +25,9 @@ var (
 	// ErrPageIDRequired is returned when a required page id is not specified.
 	ErrPageIDRequired = errors.New("page id required")
 
-	// ErrPathRequired is returned when the path to a Bolt database is not specified.
+	// ErrPathRequired is returned when the path to a bbolt database is not specified.
 	ErrPathRequired = errors.New("path required")
 
-	// ErrSurgeryFreelistAlreadyExist is returned when boltdb database file already has a freelist.
+	// ErrSurgeryFreelistAlreadyExist is returned when a bbolt database file already has a freelist.
 	ErrSurgeryFreelistAlreadyExist = errors.New("the file already has freelist, please consider to abandon the freelist to forcibly rebuild it")
 )
