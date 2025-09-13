@@ -53,7 +53,7 @@ func newGetCommand() *cobra.Command {
 	return cmd
 }
 
-// getFunc opens the BoltDB and retrieves the key value from the bucket path.
+// getFunc opens the given bbolt db file and retrieves the key value from the bucket path.
 func getFunc(cmd *cobra.Command, path string, buckets []string, key []byte, opts getOptions) error {
 	// check if the source DB path is valid
 	if _, err := checkSourceDBPath(path); err != nil {
