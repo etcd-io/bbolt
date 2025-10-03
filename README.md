@@ -971,6 +971,7 @@ them via pull request.
 Below is a list of public, open source projects that use Bolt:
 
 * [Algernon](https://github.com/xyproto/algernon) - A HTTP/2 web server with built-in support for Lua. Uses BoltDB as the default database backend.
+* [ApitoBolt](https://github.com/apito-io/apitoBolt) - ApitoBolt is a lightweight Storm-style wrapper around bbolt that provides Mongo-like collections, JSON documents, secondary indexes, ACID CRUD, and simple queries with a tiny footprint.
 * [Bazil](https://bazil.org/) - A file system that lets your data reside where it is most convenient for it to reside.
 * [bolter](https://github.com/hasit/bolter) - Command-line app for viewing BoltDB file in your terminal.
 * [boltcli](https://github.com/spacewander/boltcli) - the redis-cli for boltdb with Lua script support.
