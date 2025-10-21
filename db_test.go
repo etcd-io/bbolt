@@ -24,6 +24,7 @@ import (
 	bolt "go.etcd.io/bbolt"
 	berrors "go.etcd.io/bbolt/errors"
 	"go.etcd.io/bbolt/internal/btesting"
+	"go.etcd.io/bbolt/internal/common"
 )
 
 // pageSize is the size of one page in the data file.
