@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	testutils "go.etcd.io/bbolt/tests/utils"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sys/unix"
+
+	testutils "go.etcd.io/bbolt/tests/utils"
 )
 
 func TestMain(m *testing.M) {
