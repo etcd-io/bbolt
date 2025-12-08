@@ -1491,6 +1491,14 @@ func fillDBWithKeys(db *btesting.DB, numKeys int) error {
 	)
 }
 
+// Convenience function for inserting a bunch of keys with values of a specific size (in bytes)
+func fillDBWithEntries(db *btesting.DB, numKeys int, valueSize int) error {
+	return db.Fill([]byte("data"), 1, numKeys,
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
+		func(tx int, k int) []byte { return make([]byte, valueSize) },
+	)
+}
+
 // Creates a new database size, forces a specific allocation size jump, and fills it with the number of keys specified
 func createFilledDB(t testing.TB, o *bolt.Options, allocSize int, numKeys int) *btesting.DB {
 	// Open a data file.
@@ -1543,14 +1551,18 @@ func TestDB_MaxSizeNotExceeded(t *testing.T) {
 			path := db.Path()
 
 			// The data file should be 4 MiB now (expanded once from zero).
-			// It should have space for roughly 16 more entries before trying to grow
-			// Keep inserting until grow is required
-			err := fillDBWithKeys(db, 100)
+			// It should have space for roughly one more entry with value size 100kB before trying to grow
+			// This next insert should be too big
+			err := fillDBWithEntries(db, 2, 100000)
 			assert.ErrorIs(t, err, berrors.ErrMaxSizeReached)
 
 			newSz := fileSize(path)
 			require.Greater(t, newSz, int64(0), "unexpected new file size: %d", newSz)
 			assert.LessOrEqual(t, newSz, int64(db.MaxSize), "The size of the data file should not exceed db.MaxSize")
+
+			// Now try another write that shouldn't increase the max size
+			err = fillDBWithEntries(db, 1, 1)
+			assert.NoError(t, err, "Adding an entry after a failed, oversized write should not error")
 
 			err = db.Close()
 			require.NoError(t, err, "Closing the re-opened database should succeed")
