@@ -1483,16 +1483,8 @@ func TestDBUnmap(t *testing.T) {
 	db.DB = nil
 }
 
-// Convenience function for inserting a bunch of keys with 1000 byte values
-func fillDBWithKeys(db *btesting.DB, numKeys int) error {
-	return db.Fill([]byte("data"), 1, numKeys,
-		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
-		func(tx int, k int) []byte { return make([]byte, 1000) },
-	)
-}
-
 // Convenience function for inserting a bunch of keys with values of a specific size (in bytes)
-func fillDBWithEntries(db *btesting.DB, numKeys int, valueSize int) error {
+func fillDBWithKeys(db *btesting.DB, numKeys, valueSize int) error {
 	return db.Fill([]byte("data"), 1, numKeys,
 		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
 		func(tx int, k int) []byte { return make([]byte, valueSize) },
@@ -1553,7 +1545,7 @@ func TestDB_MaxSizeNotExceeded(t *testing.T) {
 			// The data file should be 4 MiB now (expanded once from zero).
 			// It should have space for roughly one more entry with value size 100kB before trying to grow
 			// This next insert should be too big
-			err := fillDBWithEntries(db, 2, 100000)
+			err := fillDBWithKeys(db, 2, 100000)
 			assert.ErrorIs(t, err, berrors.ErrMaxSizeReached)
 
 			newSz := fileSize(path)
@@ -1561,7 +1553,7 @@ func TestDB_MaxSizeNotExceeded(t *testing.T) {
 			assert.LessOrEqual(t, newSz, int64(db.MaxSize), "The size of the data file should not exceed db.MaxSize")
 
 			// Now try another write that shouldn't increase the max size
-			err = fillDBWithEntries(db, 1, 1)
+			err = fillDBWithKeys(db, 1, 1)
 			assert.NoError(t, err, "Adding an entry after a failed, oversized write should not error")
 
 			err = db.Close()
@@ -1579,7 +1571,7 @@ func TestDB_MaxSizeExceededCanOpen(t *testing.T) {
 	path := db.Path()
 
 	// Insert a reasonable amount of data below the max size.
-	err := fillDBWithKeys(db, 2000)
+	err := fillDBWithKeys(db, 2000, 1000)
 	require.NoError(t, err, "fillDbWithKeys should succeed")
 
 	err = db.Close()
