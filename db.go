@@ -1166,7 +1166,7 @@ func (db *DB) allocate(txid common.Txid, count int) (*common.Page, error) {
 	p.SetId(db.rwtx.meta.Pgid())
 	var minsz = int((p.Id()+common.Pgid(count))+1) * db.pageSize
 	if minsz >= db.datasz {
-		if !db.readOnly && db.MaxSize > 0 {
+		if db.MaxSize > 0 {
 			// this calculation matches the calculation in grow
 			// however, I don't quite understand it. Why is the allocation increment added to the size required,
 			// rather than the size required rounded up to the next multiple of the allocation increment?
