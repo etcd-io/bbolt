@@ -451,3 +451,202 @@ $ ./bbolt inspect ~/default.etcd/member/snap/db
     ```
 
   - It runs a benchmark with batch size of `400` and with key size of `16` while for others parameters default value is taken.
+
+### surgery
+
+- `surgery` perform surgery on bbolt database for repair and recovery operations.
+- usage:
+  `bbolt surgery <subcommand> [arguments]`
+
+  The surgery subcommands are:
+  - `revert-meta-page` - revert to previous transaction state
+  - `copy-page` - copy page from source to destination
+  - `clear-page` - clear all elements from a page
+  - `clear-page-elements` - clear specific elements from a page
+  - `freelist` - freelist related surgery commands
+  - `meta` - meta page related surgery commands
+
+#### surgery revert-meta-page
+
+- `surgery revert-meta-page` reverts to the previous transaction state by replacing the active meta page with the inactive one.
+- usage:
+
+  ```bash
+  bbolt surgery revert-meta-page [path to the bbolt database] --output [output-file]
+  ```
+
+  Example:
+
+  ```bash
+  $bbolt surgery revert-meta-page ~/default.etcd/member/snap/db --output reverted.db
+  The meta page is reverted.
+  ```
+
+  - This is particularly useful when the most recent transaction has corrupted the database and you need to roll back to the previous consistent state.
+
+#### surgery copy-page
+
+- `surgery copy-page` copies content from one page to another.
+- usage:
+
+  ```bash
+  bbolt surgery copy-page [path to the bbolt database] --output [output-file] --from-page [source-id] --to-page [destination-id]
+  ```
+
+  Example:
+
+  ```bash
+  $bbolt surgery copy-page ~/default.etcd/member/snap/db --output copied.db --from-page 3 --to-page 2
+  The page 3 was successfully copied to page 2
+  WARNING: the free list might have changed.
+  Please consider executing `./bbolt surgery freelist abandon ...`
+  ```
+
+  - This command is useful for recovering data from damaged pages or creating page backups.
+
+#### surgery clear-page
+
+- `surgery clear-page` removes all elements from a branch or leaf page.
+- usage:
+
+  ```bash
+  bbolt surgery clear-page [path to the bbolt database] --output [output-file] --pageId [page-id]
+  ```
+
+  Example:
+
+  ```bash
+  $bbolt surgery clear-page ~/default.etcd/member/snap/db --output cleared.db --pageId 3
+  The page (3) was cleared
+  WARNING: The clearing has abandoned some pages that are not yet referenced from free list.
+  Please consider executing `./bbolt surgery freelist abandon ...`
+  ```
+
+  - The pageId must be at least 2 (meta pages 0 and 1 cannot be cleared).
+
+#### surgery clear-page-elements
+
+- `surgery clear-page-elements` removes specific elements from a branch or leaf page by index range.
+- usage:
+
+  ```bash
+  bbolt surgery clear-page-elements [path to the bbolt database] --output [output-file] --pageId [page-id] --from-index [start] --to-index [end]
+  ```
+
+  Example:
+
+  ```bash
+  $bbolt surgery clear-page-elements ~/default.etcd/member/snap/db --output partial.db --pageId 3 --from-index 1 --to-index 4
+  All elements in [1, 4) in page 3 were cleared
+  WARNING: The clearing has abandoned some pages that are not yet referenced from free list.
+  Please consider executing `./bbolt surgery freelist abandon ...`
+  ```
+
+  - Use `--to-index -1` to clear elements to the end of the page.
+
+#### surgery freelist
+
+- `surgery freelist` provides commands for managing the database's free page list.
+- usage:
+
+  ```bash
+  bbolt surgery freelist <subcommand> [arguments]
+  ```
+
+  The freelist subcommands are:
+
+  - `abandon` - remove freelist references from meta pages
+  - `rebuild` - rebuild the freelist by scanning the database
+
+##### surgery freelist abandon
+
+- `surgery freelist abandon` removes freelist references from both meta pages, forcing Bbolt to reconstruct the freelist when the database is next opened.
+- usage:
+
+  ```bash
+  bbolt surgery freelist abandon [path to the bbolt database] --output [output-file]
+  ```
+
+  Example:
+
+  ```bash
+  $bbolt surgery freelist abandon ~/default.etcd/member/snap/db --output abandoned.db
+  The freelist was abandoned in both meta pages.
+  It may cause some delay on next startup because bbolt needs to scan the whole db to reconstruct the free list.
+  ```
+
+  - This sets the freelist page ID to a special value indicating the freelist is not present.
+
+##### surgery freelist rebuild
+
+- `surgery freelist rebuild` rebuilds the freelist in a database where the freelist has been abandoned.
+- usage:
+
+  ```bash
+  bbolt surgery freelist rebuild [path to the bbolt database] --output [output-file]
+  ```
+
+  Example:
+
+  ```bash
+  $bbolt surgery freelist rebuild ~/default.etcd/member/snap/db --output rebuilt.db
+  The freelist was successfully rebuilt.
+  ```
+
+  - This command opens the database and lets Bbolt automatically reconstruct and sync the freelist.
+
+#### surgery meta
+
+- `surgery meta` provides commands for working with database metadata pages.
+- usage:
+
+  ```bash
+  bbolt surgery meta <subcommand> [arguments]
+  ```
+  
+  The meta subcommands are:
+  - `validate` - validate integrity of meta pages
+  - `update` - update specific fields in meta pages
+
+##### surgery meta validate
+
+- `surgery meta validate` validates the integrity of both meta pages in the database.
+- usage:
+
+  ```bash
+  bbolt surgery meta validate [path to the bbolt database]
+  ```
+
+  Example:
+
+  ```bash
+  $bbolt surgery meta validate ~/default.etcd/member/snap/db
+  The meta page 0 is valid!
+  The meta page 1 is valid!
+  ```
+
+  - It checks magic number values, version compatibility, checksum integrity, and general metadata validity for both meta pages (0 and 1).
+
+##### surgery meta update
+
+- `surgery meta update` updates specific fields in a meta page for manual repair of corrupted metadata.
+- usage:
+
+  ```bash
+  bbolt surgery meta update [path to the bbolt database] --output [output-file] --meta-page [0|1] --fields [field:value,...]
+  ```
+
+  Supported fields:
+  - `pageSize` - Size of database pages
+  - `root` - Root bucket page ID
+  - `freelist` - Freelist page ID
+  - `pgid` - Next page ID to allocate
+
+  Example:
+
+  ```bash
+  $bbolt surgery meta update ~/default.etcd/member/snap/db --output fixed.db --meta-page 0 --fields root:16,freelist:8
+  The meta page 0 has been updated!
+  ```
+
+  - It updates the specified meta page and automatically updates magic number, version, flags, and checksum to ensure consistency.
