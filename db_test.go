@@ -1629,7 +1629,7 @@ func TestDB_MaxSizeExceededCanOpenWithHighMmap(t *testing.T) {
 }
 
 // Ensure that when InitialMmapSize is above the limit, opening a database
-// that is beyond the maximum size fails in Windows.
+// that is beyond the maximum size does not grow the db on Windows.
 // In Windows, the file must be expanded to the mmap initial size.
 // https://github.com/etcd-io/bbolt/issues/928
 func TestDB_MaxSizeExceededDoesNotGrow(t *testing.T) {
