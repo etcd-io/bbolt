@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	bolt "go.etcd.io/bbolt"
 	"go.etcd.io/bbolt/errors"
@@ -22,35 +23,61 @@ func newGetCommand() *cobra.Command {
 		Short: "get the value of a key from a (sub)bucket in a bbolt database",
 		Args:  cobra.MinimumNArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			path := args[0]
-			if path == "" {
-				return ErrPathRequired
-			}
-			buckets := args[1 : len(args)-1]
-			keyStr := args[len(args)-1]
-
-			// validate input parameters
-			if len(buckets) == 0 {
-				return fmt.Errorf("bucket is required: %w", ErrBucketRequired)
-			}
-
-			key, err := parseBytes(keyStr, opts.parseFormat)
-			if err != nil {
+			if err := opts.Validate(args); err != nil {
 				return err
 			}
-
-			if len(key) == 0 {
-				return fmt.Errorf("key is required: %w", errors.ErrKeyRequired)
-			}
-
-			return getFunc(cmd, path, buckets, key, opts)
+			return opts.Run(cmd, args)
 		},
 	}
-
-	cmd.Flags().StringVar(&opts.parseFormat, "parse-format", "ascii-encoded", "Input format one of: ascii-encoded|hex")
-	cmd.Flags().StringVar(&opts.format, "format", "auto", "Output format one of: "+FORMAT_MODES+" (default: auto)")
+	opts.AddFlags(cmd.Flags())
 
 	return cmd
+}
+
+func (o *getOptions) AddFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&o.parseFormat, "parse-format", "ascii-encoded", "Input format one of: ascii-encoded|hex")
+	fs.StringVar(&o.format, "format", "auto", "Output format one of: "+FORMAT_MODES+" (default: auto)")
+}
+
+func (o *getOptions) Validate(args []string) error {
+	if len(args) < 3 {
+		return fmt.Errorf("requires at least 3 arguments")
+	}
+
+	path := args[0]
+	if path == "" {
+		return ErrPathRequired
+	}
+
+	buckets := args[1 : len(args)-1]
+	if len(buckets) == 0 {
+		return fmt.Errorf("bucket is required: %w", ErrBucketRequired)
+	}
+
+	keyStr := args[len(args)-1]
+	key, err := parseBytes(keyStr, o.parseFormat)
+	if err != nil {
+		return err
+	}
+
+	if len(key) == 0 {
+		return fmt.Errorf("key is required: %w", errors.ErrKeyRequired)
+	}
+
+	return nil
+}
+
+func (o *getOptions) Run(cmd *cobra.Command, args []string) error {
+	path := args[0]
+	buckets := args[1 : len(args)-1]
+	keyStr := args[len(args)-1]
+
+	key, err := parseBytes(keyStr, o.parseFormat)
+	if err != nil {
+		return err
+	}
+
+	return getFunc(cmd, path, buckets, key, *o)
 }
 
 // getFunc opens the given bbolt db file and retrieves the key value from the bucket path.
