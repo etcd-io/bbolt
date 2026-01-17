@@ -512,6 +512,60 @@ func TestDB_Open_InitialMmapSize(t *testing.T) {
 	}
 }
 
+// TestDB_Open_InitialMmapSize_Windows_NoReader verifies the behavior of large
+// InitialMmapSize values when there is NO concurrent read transaction.
+// This test helps isolate whether delays in TestDB_Open_InitialMmapSize are caused
+// by the large InitialMmapSize itself or by reader-writer interaction.
+func TestDB_Open_InitialMmapSize_Windows_NoReader(t *testing.T) {
+	path := tempfile()
+	defer os.Remove(path)
+
+	initMmapSize := 1 << 30  // 1GB
+	testWriteSize := 1 << 27 // 134MB
+
+	db, err := bolt.Open(path, 0600, &bolt.Options{InitialMmapSize: initMmapSize})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	// create a write transaction
+	wtx, err := db.Begin(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	b, err := wtx.CreateBucket([]byte("test"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// commit a large write
+	err = b.Put([]byte("foo"), make([]byte, testWriteSize))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	done := make(chan error, 1)
+	start := time.Now()
+
+	go func() {
+		err := wtx.Commit()
+		done <- err
+	}()
+
+	select {
+	case <-time.After(5 * time.Second):
+		t.Errorf("write commit did not complete within 5s")
+	case err := <-done:
+		elapsed := time.Since(start)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("Write commit completed in %v", elapsed)
+	}
+}
+
 // TestDB_Open_ReadOnly checks a database in read only mode can read but not write.
 func TestDB_Open_ReadOnly(t *testing.T) {
 	// Create a writable db, write k-v and close it.
