@@ -1,4 +1,4 @@
-//go:build !windows && !plan9 && !linux && !openbsd
+//go:build !windows && !plan9 && !linux && !openbsd && !js && !wasip1
 
 package bbolt
 

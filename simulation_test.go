@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/rand"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -33,6 +34,9 @@ func TestSimulate_10000op_1000p(t *testing.T) { testSimulate(t, nil, 1, 10000, 1
 func testSimulate(t *testing.T, openOption *bolt.Options, round, threadCount, parallelism int) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
+	}
+	if runtime.GOARCH == "wasm" && threadCount >= 1000 {
+		t.Skip("skipping test on wasm with 1000+ concurrency")
 	}
 
 	// A list of operations that readers and writers can perform.

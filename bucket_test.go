@@ -8,6 +8,7 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -208,6 +209,9 @@ func TestDB_Put_VeryLarge(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
+	if runtime.GOOS == "js" || runtime.GOOS == "wasip1" {
+		t.Skip("skipping test on WASM due to memory constraints")
+	}
 
 	n, batchN := 400000, 200000
 	ksize, vsize := 8, 500
@@ -376,6 +380,9 @@ func TestBucket_Delete_Large(t *testing.T) {
 func TestBucket_Delete_FreelistOverflow(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
+	}
+	if runtime.GOOS == "js" || runtime.GOOS == "wasip1" {
+		t.Skip("skipping test on WASM due to memory constraints")
 	}
 
 	db := btesting.MustCreateDB(t)
@@ -1207,6 +1214,9 @@ func TestBucket_Put_KeyTooLarge(t *testing.T) {
 
 // Ensure that an error is returned when inserting a value that's too large.
 func TestBucket_Put_ValueTooLarge(t *testing.T) {
+	if runtime.GOARCH == "wasm" {
+		t.Skip("skipping test on wasm")
+	}
 	// Skip this test on DroneCI because the machine is resource constrained.
 	if os.Getenv("DRONE") == "true" {
 		t.Skip("not enough RAM for test")
