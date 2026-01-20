@@ -954,11 +954,16 @@ them via pull request.
 
 - bbolt might run into data corruption issue on Linux when the feature
   [ext4: fast commit](https://lwn.net/Articles/842385/), which was introduced in
-  linux kernel version v5.10, is enabled. The fixes to the issue were included in
-  linux kernel version v5.17, please refer to links below,
+  linux kernel version v5.10, is enabled. The fixes to the issue are included in
+  stable LTS patchlevels 5.10.94+ and 5.15.17+ (ftruncate tracking), plus
+  5.15.27+ (ineligible-commit fallback). Linux 5.17 includes these fixes as
+  well, but 5.17 is not an LTS release. Please refer to links below,
 
   * [ext4: fast commit may miss tracking unwritten range during ftruncate](https://lore.kernel.org/linux-ext4/20211223032337.5198-3-yinxin.x@bytedance.com/)
+    * [5.10.94 stable backport](https://lore.kernel.org/stable/20220124184041.063143682@linuxfoundation.org/)
+    * [5.15.17 stable backport](https://lore.kernel.org/stable/20220124184125.887304707@linuxfoundation.org/)
   * [ext4: fast commit may not fallback for ineligible commit](https://lore.kernel.org/lkml/202201091544.W5HHEXAp-lkp@intel.com/T/#ma0768815e4b5f671e9e451d578256ef9a76fe30e)
+    * [5.15.27 stable backport](https://lore.kernel.org/stable/20220307091703.544901888@linuxfoundation.org/)
   * [ext4 updates for 5.17](https://lore.kernel.org/lkml/YdyxjTFaLWif6BCM@mit.edu/)
 
   Please also refer to the discussion in https://github.com/etcd-io/bbolt/issues/562.
