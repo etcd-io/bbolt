@@ -456,59 +456,86 @@ func TestOpen_FileTooSmall(t *testing.T) {
 // read transaction blocks the write transaction and causes deadlock.
 // This is a very hacky test since the mmap size is not exposed.
 func TestDB_Open_InitialMmapSize(t *testing.T) {
-	path := tempfile()
-	defer os.Remove(path)
-
-	initMmapSize := 1 << 30  // 1GB
-	testWriteSize := 1 << 27 // 134MB
-
-	db, err := bolt.Open(path, 0600, &bolt.Options{InitialMmapSize: initMmapSize})
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		name       string
+		withReadTx bool
+	}{
+		{
+			name:       "with concurrent read transaction",
+			withReadTx: true,
+		},
+		{
+			name:       "without concurrent read transaction",
+			withReadTx: false,
+		},
 	}
 
-	// create a long-running read transaction
-	// that never gets closed while writing
-	rtx, err := db.Begin(false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := tempfile()
+			defer os.Remove(path)
 
-	// create a write transaction
-	wtx, err := db.Begin(true)
-	if err != nil {
-		t.Fatal(err)
-	}
+			initMmapSize := 1 << 30  // 1GB
+			testWriteSize := 1 << 27 // 134MB
 
-	b, err := wtx.CreateBucket([]byte("test"))
-	if err != nil {
-		t.Fatal(err)
-	}
+			db, err := bolt.Open(path, 0600, &bolt.Options{InitialMmapSize: initMmapSize})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
 
-	// and commit a large write
-	err = b.Put([]byte("foo"), make([]byte, testWriteSize))
-	if err != nil {
-		t.Fatal(err)
-	}
+			var rtx *bolt.Tx
+			if tt.withReadTx {
+				// create a long-running read transaction
+				// that never gets closed while writing
+				rtx, err = db.Begin(false)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
 
-	done := make(chan error, 1)
+			// create a write transaction
+			wtx, err := db.Begin(true)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	go func() {
-		err := wtx.Commit()
-		done <- err
-	}()
+			b, err := wtx.CreateBucket([]byte("test"))
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	select {
-	case <-time.After(5 * time.Second):
-		t.Errorf("unexpected that the reader blocks writer")
-	case err := <-done:
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
+			// commit a large write
+			err = b.Put([]byte("foo"), make([]byte, testWriteSize))
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	if err := rtx.Rollback(); err != nil {
-		t.Fatal(err)
+			done := make(chan error, 1)
+			start := time.Now()
+
+			go func() {
+				err := wtx.Commit()
+				done <- err
+			}()
+
+			select {
+			case <-time.After(5 * time.Second):
+				t.Error("unexpected that the writer is blocked for a long time")
+			case err := <-done:
+				elapsed := time.Since(start)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Logf("Write commit completed in %v", elapsed)
+			}
+
+			if rtx != nil {
+				if err := rtx.Rollback(); err != nil {
+					t.Fatal(err)
+				}
+			}
+		})
 	}
 }
 
