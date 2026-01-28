@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	bolt "go.etcd.io/bbolt"
 	"go.etcd.io/bbolt/errors"
@@ -26,6 +27,7 @@ func newGetCommand() *cobra.Command {
 			if path == "" {
 				return ErrPathRequired
 			}
+
 			buckets := args[1 : len(args)-1]
 			keyStr := args[len(args)-1]
 
@@ -46,11 +48,14 @@ func newGetCommand() *cobra.Command {
 			return getFunc(cmd, path, buckets, key, opts)
 		},
 	}
-
-	cmd.Flags().StringVar(&opts.parseFormat, "parse-format", "ascii-encoded", "Input format one of: ascii-encoded|hex")
-	cmd.Flags().StringVar(&opts.format, "format", "auto", "Output format one of: "+FORMAT_MODES+" (default: auto)")
+	opts.AddFlags(cmd.Flags())
 
 	return cmd
+}
+
+func (o *getOptions) AddFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&o.parseFormat, "parse-format", "ascii-encoded", "Input format one of: ascii-encoded|hex")
+	fs.StringVar(&o.format, "format", "auto", "Output format one of: "+FORMAT_MODES+" (default: auto)")
 }
 
 // getFunc opens the given bbolt db file and retrieves the key value from the bucket path.
