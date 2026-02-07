@@ -143,7 +143,7 @@ type DB struct {
 	batch   *batch
 
 	rwlock   sync.Mutex   // Allows only one writer at a time.
-	metalock sync.Mutex   // Protects meta page access.
+	metalock sync.RWMutex // Protects meta page access.
 	mmaplock sync.RWMutex // Protects mmap access during remapping.
 	statlock sync.RWMutex // Protects stats access.
 
@@ -422,6 +422,7 @@ func (db *DB) getPageSizeFromSecondMeta() (int, bool, error) {
 func (db *DB) loadFreelist() {
 	db.freelistLoad.Do(func() {
 		db.freelist = newFreelist(db.FreelistType)
+		db.freelist.AddCurrentTXID(db.meta().Txid())
 		if !db.hasSyncedFreelist() {
 			// Reconstruct free list by scanning the DB.
 			db.freelist.Init(db.freepages())
@@ -776,7 +777,7 @@ func (db *DB) beginTx() (*Tx, error) {
 	// Lock the meta pages while we initialize the transaction. We obtain
 	// the meta lock before the mmap lock because that's the order that the
 	// write transaction will obtain them.
-	db.metalock.Lock()
+	db.metalock.RLock()
 
 	// Obtain a read-only lock on the mmap. When the mmap is remapped it will
 	// obtain a write lock so all transactions must finish before it can be
@@ -786,14 +787,14 @@ func (db *DB) beginTx() (*Tx, error) {
 	// Exit if the database is not open yet.
 	if !db.opened {
 		db.mmaplock.RUnlock()
-		db.metalock.Unlock()
+		db.metalock.RUnlock()
 		return nil, berrors.ErrDatabaseNotOpen
 	}
 
 	// Exit if the database is not correctly mapped.
 	if db.data == nil {
 		db.mmaplock.RUnlock()
-		db.metalock.Unlock()
+		db.metalock.RUnlock()
 		return nil, berrors.ErrInvalidMapping
 	}
 
@@ -806,7 +807,7 @@ func (db *DB) beginTx() (*Tx, error) {
 	}
 
 	// Unlock the meta pages.
-	db.metalock.Unlock()
+	db.metalock.RUnlock()
 
 	// Update the transaction stats.
 	if db.stats != nil {
@@ -831,8 +832,8 @@ func (db *DB) beginRWTx() (*Tx, error) {
 
 	// Once we have the writer lock then we can lock the meta pages so that
 	// we can set up the transaction.
-	db.metalock.Lock()
-	defer db.metalock.Unlock()
+	db.metalock.RLock()
+	defer db.metalock.RUnlock()
 
 	// Exit if the database is not open yet.
 	if !db.opened {
@@ -860,14 +861,14 @@ func (db *DB) removeTx(tx *Tx) {
 	db.mmaplock.RUnlock()
 
 	// Use the meta lock to restrict access to the DB object.
-	db.metalock.Lock()
+	db.metalock.RLock()
 
 	if db.freelist != nil {
 		db.freelist.RemoveReadonlyTXID(tx.meta.Txid())
 	}
 
 	// Unlock the meta pages.
-	db.metalock.Unlock()
+	db.metalock.RUnlock()
 
 	// Merge statistics.
 	if db.stats != nil {
