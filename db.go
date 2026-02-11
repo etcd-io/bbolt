@@ -116,6 +116,13 @@ type DB struct {
 	// Supported only on Unix via mlock/munlock syscalls.
 	Mlock bool
 
+	// Compression enables snappy compression of leaf and branch page data.
+	// When enabled, page data is compressed before writing to disk and
+	// transparently decompressed when reading. This can significantly
+	// reduce database file size for compressible data at the cost of
+	// some CPU overhead.
+	Compression bool
+
 	logger Logger
 
 	path     string
@@ -192,6 +199,7 @@ func Open(path string, mode os.FileMode, options *Options) (db *DB, err error) {
 	db.FreelistType = options.FreelistType
 	db.Mlock = options.Mlock
 	db.MaxSize = options.MaxSize
+	db.Compression = options.Compression
 
 	// Set default values for later DB operations.
 	db.MaxBatchSize = common.DefaultMaxBatchSize
@@ -1347,6 +1355,11 @@ type Options struct {
 	// used memory can't be reclaimed. (UNIX only)
 	Mlock bool
 
+	// Compression enables snappy compression of leaf and branch page data.
+	// When enabled, page data is compressed before writing to disk and
+	// transparently decompressed when reading.
+	Compression bool
+
 	// Logger is the logger used for bbolt.
 	Logger Logger
 
@@ -1361,8 +1374,8 @@ func (o *Options) String() string {
 		return "{}"
 	}
 
-	return fmt.Sprintf("{Timeout: %s, NoGrowSync: %t, NoFreelistSync: %t, PreLoadFreelist: %t, FreelistType: %s, ReadOnly: %t, MmapFlags: %x, InitialMmapSize: %d, PageSize: %d, MaxSize: %d, NoSync: %t, OpenFile: %p, Mlock: %t, Logger: %p, NoStatistics: %t}",
-		o.Timeout, o.NoGrowSync, o.NoFreelistSync, o.PreLoadFreelist, o.FreelistType, o.ReadOnly, o.MmapFlags, o.InitialMmapSize, o.PageSize, o.MaxSize, o.NoSync, o.OpenFile, o.Mlock, o.Logger, o.NoStatistics)
+	return fmt.Sprintf("{Timeout: %s, NoGrowSync: %t, NoFreelistSync: %t, PreLoadFreelist: %t, FreelistType: %s, ReadOnly: %t, MmapFlags: %x, InitialMmapSize: %d, PageSize: %d, MaxSize: %d, NoSync: %t, OpenFile: %p, Mlock: %t, Compression: %t, Logger: %p, NoStatistics: %t}",
+		o.Timeout, o.NoGrowSync, o.NoFreelistSync, o.PreLoadFreelist, o.FreelistType, o.ReadOnly, o.MmapFlags, o.InitialMmapSize, o.PageSize, o.MaxSize, o.NoSync, o.OpenFile, o.Mlock, o.Compression, o.Logger, o.NoStatistics)
 
 }
 

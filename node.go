@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
+	"unsafe"
 
 	"go.etcd.io/bbolt/internal/common"
 )
@@ -312,7 +313,18 @@ func (n *node) spill() error {
 	n.children = nil
 
 	// Split nodes into appropriate sizes. The first node will always be n.
-	var nodes = n.split(uintptr(tx.db.pageSize))
+	// When compression is enabled, use a larger effective page size for
+	// splitting so that nodes accumulate more data before being split.
+	// Compression can then pack the larger node into fewer actual pages.
+	splitPageSize := uintptr(tx.db.pageSize)
+	if tx.db.Compression {
+		// Allow nodes to grow up to 4x the page size before splitting.
+		// Snappy typically achieves 2-4x compression on structured data,
+		// so this gives the compressor enough data to work with while
+		// keeping individual nodes at a reasonable size.
+		splitPageSize *= 4
+	}
+	var nodes = n.split(splitPageSize)
 	for _, node := range nodes {
 		// Add node's page to the freelist if it's not new.
 		if node.pgid > 0 {
@@ -320,8 +332,19 @@ func (n *node) spill() error {
 			node.pgid = 0
 		}
 
-		// Allocate contiguous space for the node.
-		p, err := tx.allocate((node.size() + tx.db.pageSize - 1) / tx.db.pageSize)
+		// Try to compress the node data to reduce page allocation.
+		var compressedBuf []byte
+		uncompressedPages := (node.size() + tx.db.pageSize - 1) / tx.db.pageSize
+		if tx.db.Compression {
+			compressedBuf = common.CompressInodes(node.inodes, node.isLeaf, tx.db.pageSize)
+		}
+
+		// Allocate pages: use compressed page count if compression succeeded.
+		allocPages := uncompressedPages
+		if compressedBuf != nil {
+			allocPages = len(compressedBuf) / tx.db.pageSize
+		}
+		p, err := tx.allocate(allocPages)
 		if err != nil {
 			return err
 		}
@@ -331,7 +354,17 @@ func (n *node) spill() error {
 			panic(fmt.Sprintf("pgid (%d) above high water mark (%d)", p.Id(), tx.meta.Pgid()))
 		}
 		node.pgid = p.Id()
-		node.write(p)
+		if compressedBuf != nil {
+			// Copy the compressed buffer into the allocated page.
+			// The page header's id is already correct from allocate(),
+			// so we preserve it and copy the rest from the compressed buffer.
+			pgid := p.Id()
+			buf := common.UnsafeByteSlice(unsafe.Pointer(p), 0, 0, len(compressedBuf))
+			copy(buf, compressedBuf)
+			p.SetId(pgid)
+		} else {
+			node.write(p)
+		}
 		node.spilled = true
 
 		// Insert into parent inodes.
