@@ -41,6 +41,7 @@ type benchOptions struct {
 	pageSize        int
 	initialMmapSize int
 	deleteFraction  float64 // Fraction of keys of last tx to delete during writes. works only with "seq-del" write mode.
+	compression     bool
 }
 
 func (o *benchOptions) AddFlags(fs *pflag.FlagSet) {
@@ -61,6 +62,7 @@ func (o *benchOptions) AddFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&o.goBenchOutput, "gobench-output", false, "")
 	fs.IntVar(&o.pageSize, "page-size", common.DefaultPageSize, "Set page size in bytes.")
 	fs.IntVar(&o.initialMmapSize, "initial-mmap-size", 0, "Set initial mmap size in bytes for database file.")
+	fs.BoolVar(&o.compression, "compression", false, "Enables compression.")
 }
 
 // Returns an error if `bench` options are not valid.
@@ -145,6 +147,7 @@ func benchFunc(cmd *cobra.Command, options *benchOptions) error {
 	dbOptions := *bolt.DefaultOptions
 	dbOptions.PageSize = options.pageSize
 	dbOptions.InitialMmapSize = options.initialMmapSize
+	dbOptions.Compression = options.compression
 	db, err := bolt.Open(options.path, 0600, &dbOptions)
 	if err != nil {
 		return err
