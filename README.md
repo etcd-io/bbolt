@@ -890,13 +890,19 @@ Here are a few things to note when evaluating and using Bolt:
   to grow. However, it's important to note that deleting large chunks of data
   will not allow you to reclaim that space on disk.
 
+  For more information on page allocation, [see this comment][page-allocation].
+
 * Removing key/values pairs in a bucket during iteration on the bucket using
   cursor may not work properly. Each time when removing a key/value pair, the
   cursor may automatically move to the next position if present. When users
   call `c.Next()` after removing a key, it may skip one key/value pair.
   Refer to https://github.com/etcd-io/bbolt/pull/611 for more detailed info.
 
-  For more information on page allocation, [see this comment][page-allocation].
+* Bolt db can be corrupted during the initialization phase due to abrupt power failure.
+  - Please note: This issue can only be reproduced during the very first initialization phase, when there is
+  no existing data in bolt database.
+  - In normal production environment, it is difficult to reproduce this. Once the database file has been initialized, it can no longer occur.
+  - Please refer to this issue for more details: https://github.com/etcd-io/etcd/issues/16596.
 
 [page-allocation]: https://github.com/boltdb/bolt/issues/308#issuecomment-74811638
 
