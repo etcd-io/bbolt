@@ -1253,13 +1253,16 @@ func (db *DB) freepages() []common.Pgid {
 	reachable := make(map[common.Pgid]*common.Page)
 	nofreed := make(map[common.Pgid]bool)
 	ech := make(chan error)
+
 	go func() {
-		for e := range ech {
-			panic(fmt.Sprintf("freepages: failed to get all reachable pages (%v)", e))
-		}
+		defer close(ech)
+		tx.recursivelyCheckBucket(&tx.root, reachable, nofreed, HexKVStringer(), ech)
 	}()
-	tx.recursivelyCheckBucket(&tx.root, reachable, nofreed, HexKVStringer(), ech)
-	close(ech)
+	// following for loop will exit once channel is closed in the above goroutine.
+	// we don't need to wait explictly with a waitgroup
+	for e := range ech {
+		panic(fmt.Sprintf("freepages: failed to get all reachable pages (%v)", e))
+	}
 
 	// TODO: If check bucket reported any corruptions (ech) we shouldn't proceed to freeing the pages.
 
