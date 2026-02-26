@@ -38,8 +38,9 @@ func TestBenchCommand_Run(t *testing.T) {
 	tests := map[string]struct {
 		args []string
 	}{
-		"no-args":    {},
-		"100k count": {[]string{"--count", "100000"}},
+		"no-args":     {},
+		"100k count":  {[]string{"--count", "100000"}},
+		"compression": {[]string{"--compression"}},
 	}
 
 	for name, test := range tests {

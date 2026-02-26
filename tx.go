@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -33,6 +34,12 @@ type Tx struct {
 	pages          map[common.Pgid]*common.Page
 	stats          TxStats
 	commitHandlers []func()
+
+	// decompressedPages caches pages that have been decompressed from
+	// compressed on-disk format. The buffers keep the decompressed data
+	// alive for the lifetime of the transaction. A sync.Map is used
+	// because read-only transactions may be accessed concurrently.
+	decompressedPages sync.Map // Pgid -> *common.Page
 
 	// WriteFlag specifies the flag for write-related methods like WriteTo().
 	// Tx opens the database file with the specified flag to copy the data.
@@ -530,8 +537,8 @@ func (tx *Tx) write() error {
 
 	// Write pages to disk in order.
 	for _, p := range pages {
-		rem := (uint64(p.Overflow()) + 1) * uint64(tx.db.pageSize)
 		offset := int64(p.Id()) * int64(tx.db.pageSize)
+		rem := (uint64(p.Overflow()) + 1) * uint64(tx.db.pageSize)
 		var written uintptr
 
 		// Write out page in "max allocation" sized chunks.
@@ -641,6 +648,26 @@ func (tx *Tx) page(id common.Pgid) *common.Page {
 	return p
 }
 
+// decompressedPage returns the decompressed version of a compressed page.
+// Results are cached for the lifetime of the transaction. This method is
+// safe for concurrent use by multiple goroutines, which is required because
+// read-only transactions may be shared across goroutines.
+func (tx *Tx) decompressedPage(p *common.Page) *common.Page {
+	if dp, ok := tx.decompressedPages.Load(p.Id()); ok {
+		return dp.(*common.Page)
+	}
+
+	dp, _, err := common.DecompressPage(p, tx.db.pageSize)
+	if err != nil {
+		panic(fmt.Sprintf("decompress page %d: %v", p.Id(), err))
+	}
+
+	// LoadOrStore ensures that if two goroutines race to decompress the same
+	// page, only one result is kept and both get the same pointer.
+	actual, _ := tx.decompressedPages.LoadOrStore(p.Id(), dp)
+	return actual.(*common.Page)
+}
+
 // forEachPage iterates over every page within a given page and executes a function.
 func (tx *Tx) forEachPage(pgidnum common.Pgid, fn func(*common.Page, int, []common.Pgid)) {
 	stack := make([]common.Pgid, 10)
@@ -650,6 +677,11 @@ func (tx *Tx) forEachPage(pgidnum common.Pgid, fn func(*common.Page, int, []comm
 
 func (tx *Tx) forEachPageInternal(pgidstack []common.Pgid, fn func(*common.Page, int, []common.Pgid)) {
 	p := tx.page(pgidstack[len(pgidstack)-1])
+
+	// Decompress if needed so we can read page elements.
+	if p.IsCompressed() {
+		p = tx.decompressedPage(p)
+	}
 
 	// Execute function.
 	fn(p, len(pgidstack)-1, pgidstack)

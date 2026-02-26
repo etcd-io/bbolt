@@ -884,6 +884,11 @@ func (b *Bucket) node(pgId common.Pgid, parent *node) *node {
 		})
 	}
 
+	// If the page is compressed, decompress it before reading.
+	if p.IsCompressed() {
+		p = b.tx.decompressedPage(p)
+	}
+
 	// Read the page into the node and cache it.
 	n.read(p)
 	b.nodes[pgId] = n
@@ -945,7 +950,14 @@ func (b *Bucket) pageNode(id common.Pgid) (*common.Page, *node) {
 	}
 
 	// Finally lookup the page from the transaction if no node is materialized.
-	return b.tx.page(id), nil
+	p := b.tx.page(id)
+
+	// If the page is compressed, decompress it transparently.
+	if p.IsCompressed() {
+		p = b.tx.decompressedPage(p)
+	}
+
+	return p, nil
 }
 
 // BucketStats records statistics about resources used by a bucket.
