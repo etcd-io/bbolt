@@ -6,5 +6,6 @@
 - [Add support for data file size limit](https://github.com/etcd-io/bbolt/pull/929)
 - [Remove the unused txs list](https://github.com/etcd-io/bbolt/pull/973)
 - [Add option `NoStatistics` to make the statistics optional](https://github.com/etcd-io/bbolt/pull/977)
+- [Move panic handling from goroutine to the parent function](https://github.com/etcd-io/bbolt/pull/1153)
 
 <hr>
