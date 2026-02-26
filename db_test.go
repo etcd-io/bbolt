@@ -1510,11 +1510,11 @@ func TestDBUnmap(t *testing.T) {
 	db.DB = nil
 }
 
-// Convenience function for inserting a bunch of keys with 1000 byte values
-func fillDBWithKeys(db *btesting.DB, numKeys int) error {
+// Convenience function for inserting a bunch of keys with values of a specific size (in bytes)
+func fillDBWithKeys(db *btesting.DB, numKeys, valueSize int) error {
 	return db.Fill([]byte("data"), 1, numKeys,
 		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
-		func(tx int, k int) []byte { return make([]byte, 1000) },
+		func(tx int, k int) []byte { return make([]byte, valueSize) },
 	)
 }
 
@@ -1570,14 +1570,18 @@ func TestDB_MaxSizeNotExceeded(t *testing.T) {
 			path := db.Path()
 
 			// The data file should be 4 MiB now (expanded once from zero).
-			// It should have space for roughly 16 more entries before trying to grow
-			// Keep inserting until grow is required
-			err := fillDBWithKeys(db, 100)
+			// It should have space for roughly one more entry with value size 100kB before trying to grow
+			// This next insert should be too big
+			err := fillDBWithKeys(db, 2, 100000)
 			assert.ErrorIs(t, err, berrors.ErrMaxSizeReached)
 
 			newSz := fileSize(path)
 			require.Greater(t, newSz, int64(0), "unexpected new file size: %d", newSz)
 			assert.LessOrEqual(t, newSz, int64(db.MaxSize), "The size of the data file should not exceed db.MaxSize")
+
+			// Now try another write that shouldn't increase the max size
+			err = fillDBWithKeys(db, 1, 1)
+			assert.NoError(t, err, "Adding an entry after a failed, oversized write should not error")
 
 			err = db.Close()
 			require.NoError(t, err, "Closing the re-opened database should succeed")
@@ -1594,7 +1598,7 @@ func TestDB_MaxSizeExceededCanOpen(t *testing.T) {
 	path := db.Path()
 
 	// Insert a reasonable amount of data below the max size.
-	err := fillDBWithKeys(db, 2000)
+	err := fillDBWithKeys(db, 2000, 1000)
 	require.NoError(t, err, "fillDbWithKeys should succeed")
 
 	err = db.Close()
@@ -1652,7 +1656,7 @@ func TestDB_MaxSizeExceededCanOpenWithHighMmap(t *testing.T) {
 }
 
 // Ensure that when InitialMmapSize is above the limit, opening a database
-// that is beyond the maximum size fails in Windows.
+// that is beyond the maximum size does not grow the db on Windows.
 // In Windows, the file must be expanded to the mmap initial size.
 // https://github.com/etcd-io/bbolt/issues/928
 func TestDB_MaxSizeExceededDoesNotGrow(t *testing.T) {
@@ -1670,17 +1674,23 @@ func TestDB_MaxSizeExceededDoesNotGrow(t *testing.T) {
 
 	// The data file should be 4 MiB now (expanded once from zero).
 	minimumSizeForTest := int64(1024 * 1024)
-	newSz := fileSize(path)
-	assert.GreaterOrEqual(t, newSz, minimumSizeForTest, "unexpected new file size: %d. Expected at least %d", newSz, minimumSizeForTest)
+	expandedSize := fileSize(path)
+	assert.GreaterOrEqual(t, expandedSize, minimumSizeForTest, "unexpected new file size: %d. Expected at least %d", expandedSize, minimumSizeForTest)
 
 	// Now try to re-open the database with an extremely small max size and
 	// an initial mmap size to be greater than the actual file size, forcing an illegal grow on open
 	t.Logf("Reopening bbolt DB at: %s", path)
-	_, err = btesting.OpenDBWithOption(t, path, &bolt.Options{
+	db, err = btesting.OpenDBWithOption(t, path, &bolt.Options{
 		MaxSize:         1,
-		InitialMmapSize: int(newSz) * 2,
+		InitialMmapSize: int(expandedSize) * 2,
 	})
-	assert.Error(t, err, "Opening the DB with InitialMmapSize > MaxSize should cause an error on Windows")
+	require.NoError(t, err, "Opening the DB with InitialMmapSize > MaxSize should not cause an error, because it is not a write operation")
+
+	db.MustClose()
+
+	newSize := fileSize(path)
+
+	assert.Equal(t, expandedSize, newSize, "Expected the file size to stay the same when MaxSize set impossibly low")
 }
 
 func TestDB_HugeValue(t *testing.T) {
