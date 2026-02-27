@@ -598,6 +598,71 @@ func TestDB_Open_ReadOnly_NoCreate(t *testing.T) {
 	require.ErrorIs(t, err, os.ErrNotExist)
 }
 
+// TestDB_Open_NoLock_RequiresReadOnly verifies that setting NoLock without
+// ReadOnly returns ErrNoLockRequiresReadOnly.
+func TestDB_Open_NoLock_RequiresReadOnly(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "db")
+	_, err := bolt.Open(f, 0600, &bolt.Options{NoLock: true})
+	require.ErrorIs(t, err, berrors.ErrNoLockRequiresReadOnly)
+}
+
+// TestDB_Open_NoLock_ReadOnly verifies that a database opened with NoLock and
+// ReadOnly can read data but rejects write transactions.
+func TestDB_Open_NoLock_ReadOnly(t *testing.T) {
+	db := btesting.MustCreateDB(t)
+	require.NoError(t, db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucket([]byte("widgets"))
+		if err != nil {
+			return err
+		}
+		return b.Put([]byte("foo"), []byte("bar"))
+	}))
+	f := db.Path()
+	require.NoError(t, db.Close())
+
+	noLockDB, err := bolt.Open(f, 0600, &bolt.Options{ReadOnly: true, NoLock: true})
+	require.NoError(t, err)
+	defer noLockDB.Close()
+
+	require.True(t, noLockDB.IsReadOnly())
+
+	// Reads succeed.
+	require.NoError(t, noLockDB.View(func(tx *bolt.Tx) error {
+		value := tx.Bucket([]byte("widgets")).Get([]byte("foo"))
+		require.Equal(t, []byte("bar"), value)
+		return nil
+	}))
+
+	// Writes are rejected.
+	_, err = noLockDB.Begin(true)
+	require.ErrorIs(t, err, berrors.ErrDatabaseReadOnly)
+}
+
+// TestDB_Open_NoLock_WhileWriterHoldsLock verifies that NoLock+ReadOnly can open
+// a database while another handle holds an exclusive write lock on the file,
+// whereas a normal ReadOnly open would block until the lock is released.
+func TestDB_Open_NoLock_WhileWriterHoldsLock(t *testing.T) {
+	// Open a writable database, which acquires LOCK_EX on the file.
+	writerDB := btesting.MustCreateDB(t)
+	f := writerDB.Path()
+
+	// A normal ReadOnly open with a short timeout fails because the exclusive
+	// lock held by writerDB prevents a shared lock from being acquired.
+	_, err := bolt.Open(f, 0600, &bolt.Options{
+		ReadOnly: true,
+		Timeout:  200 * time.Millisecond,
+	})
+	require.ErrorIs(t, err, berrors.ErrTimeout)
+
+	// A NoLock+ReadOnly open bypasses the lock and succeeds immediately.
+	readerDB, err := bolt.Open(f, 0600, &bolt.Options{
+		ReadOnly: true,
+		NoLock:   true,
+	})
+	require.NoError(t, err)
+	require.NoError(t, readerDB.Close())
+}
+
 // TestOpen_BigPage checks the database uses bigger pages when
 // changing PageSize.
 func TestOpen_BigPage(t *testing.T) {

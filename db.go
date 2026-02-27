@@ -220,6 +220,10 @@ func Open(path string, mode os.FileMode, options *Options) (db *DB, err error) {
 		}()
 	}
 
+	if options.NoLock && !options.ReadOnly {
+		return nil, berrors.ErrNoLockRequiresReadOnly
+	}
+
 	flag := os.O_RDWR
 	if options.ReadOnly {
 		flag = os.O_RDONLY
@@ -250,10 +254,15 @@ func Open(path string, mode os.FileMode, options *Options) (db *DB, err error) {
 	// if !options.ReadOnly.
 	// The database file is locked using the shared lock (more than one process may
 	// hold a lock at the same time) otherwise (options.ReadOnly is set).
-	if err = flock(db, !db.readOnly, options.Timeout); err != nil {
-		_ = db.close()
-		lg.Errorf("failed to lock db file (%s), readonly: %t, error: %v", path, db.readOnly, err)
-		return nil, err
+	// The lock is skipped entirely when options.NoLock is set (requires ReadOnly).
+	if !options.NoLock {
+		if err = flock(db, !db.readOnly, options.Timeout); err != nil {
+			_ = db.close()
+			lg.Errorf("failed to lock db file (%s), readonly: %t, error: %v", path, db.readOnly, err)
+			return nil, err
+		}
+	} else {
+		lg.Infof("opening db (%s) in read-only mode without acquiring a shared lock", path)
 	}
 
 	// Default values for test hooks
@@ -1311,6 +1320,21 @@ type Options struct {
 	// grab a shared lock (UNIX).
 	ReadOnly bool
 
+	// NoLock skips acquiring the advisory file lock when opening the database.
+	// This option is only valid when ReadOnly is also set; Open will return
+	// ErrNoLockRequiresReadOnly otherwise.
+	//
+	// Use this option when another process holds an exclusive lock on the
+	// database and the filesystem correctly propagates advisory locks, which
+	// would cause a normal ReadOnly open to block indefinitely waiting to
+	// acquire a shared lock. This is common in Linux environments (e.g.
+	// Kubernetes containers sharing a PersistentVolume) where file locks are
+	// enforced across process boundaries.
+	//
+	// bbolt's copy-on-write design ensures read transactions see a consistent
+	// snapshot even if another process is actively writing to the database.
+	NoLock bool
+
 	// Sets the DB.MmapFlags flag before memory mapping the file.
 	MmapFlags int
 
@@ -1364,8 +1388,8 @@ func (o *Options) String() string {
 		return "{}"
 	}
 
-	return fmt.Sprintf("{Timeout: %s, NoGrowSync: %t, NoFreelistSync: %t, PreLoadFreelist: %t, FreelistType: %s, ReadOnly: %t, MmapFlags: %x, InitialMmapSize: %d, PageSize: %d, MaxSize: %d, NoSync: %t, OpenFile: %p, Mlock: %t, Logger: %p, NoStatistics: %t}",
-		o.Timeout, o.NoGrowSync, o.NoFreelistSync, o.PreLoadFreelist, o.FreelistType, o.ReadOnly, o.MmapFlags, o.InitialMmapSize, o.PageSize, o.MaxSize, o.NoSync, o.OpenFile, o.Mlock, o.Logger, o.NoStatistics)
+	return fmt.Sprintf("{Timeout: %s, NoGrowSync: %t, NoFreelistSync: %t, PreLoadFreelist: %t, FreelistType: %s, ReadOnly: %t, NoLock: %t, MmapFlags: %x, InitialMmapSize: %d, PageSize: %d, MaxSize: %d, NoSync: %t, OpenFile: %p, Mlock: %t, Logger: %p, NoStatistics: %t}",
+		o.Timeout, o.NoGrowSync, o.NoFreelistSync, o.PreLoadFreelist, o.FreelistType, o.ReadOnly, o.NoLock, o.MmapFlags, o.InitialMmapSize, o.PageSize, o.MaxSize, o.NoSync, o.OpenFile, o.Mlock, o.Logger, o.NoStatistics)
 
 }
 
