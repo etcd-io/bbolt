@@ -27,6 +27,10 @@ var (
 	// ErrTimeout is returned when a database cannot obtain an exclusive lock
 	// on the data file after the timeout passed to Open().
 	ErrTimeout = errors.New("timeout")
+
+	// ErrNoLockRequiresReadOnly is returned when Options.NoLock is set without
+	// also setting Options.ReadOnly.
+	ErrNoLockRequiresReadOnly = errors.New("NoLock requires ReadOnly to be set")
 )
 
 // These errors can occur when beginning or committing a Tx.
