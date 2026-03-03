@@ -20,6 +20,11 @@ const (
 	LeafPageFlag     = 0x02
 	MetaPageFlag     = 0x04
 	FreelistPageFlag = 0x10
+
+	// CompressedPageFlag is an orthogonal bit flag that indicates the page
+	// data (everything after the header) is snappy-compressed. It can be
+	// combined with any page-type flag above (e.g. LeafPageFlag | CompressedPageFlag).
+	CompressedPageFlag = 0x20
 )
 
 const (
@@ -59,19 +64,33 @@ func (p *Page) Typ() string {
 }
 
 func (p *Page) IsBranchPage() bool {
-	return p.flags == BranchPageFlag
+	return p.flags&BranchPageFlag != 0
 }
 
 func (p *Page) IsLeafPage() bool {
-	return p.flags == LeafPageFlag
+	return p.flags&LeafPageFlag != 0
 }
 
 func (p *Page) IsMetaPage() bool {
-	return p.flags == MetaPageFlag
+	return p.flags&MetaPageFlag != 0
 }
 
 func (p *Page) IsFreelistPage() bool {
-	return p.flags == FreelistPageFlag
+	return p.flags&FreelistPageFlag != 0
+}
+
+// IsCompressed returns true if the page data is snappy-compressed.
+func (p *Page) IsCompressed() bool {
+	return p.flags&CompressedPageFlag != 0
+}
+
+// SetCompressed sets or clears the compressed flag on the page.
+func (p *Page) SetCompressed(compressed bool) {
+	if compressed {
+		p.flags |= CompressedPageFlag
+	} else {
+		p.flags &^= CompressedPageFlag
+	}
 }
 
 // Meta returns a pointer to the metadata section of the page.
@@ -81,11 +100,12 @@ func (p *Page) Meta() *Meta {
 
 func (p *Page) FastCheck(id Pgid) {
 	Assert(p.id == id, "Page expected to be: %v, but self identifies as %v", id, p.id)
-	// Only one flag of page-type can be set.
-	Assert(p.IsBranchPage() ||
-		p.IsLeafPage() ||
-		p.IsMetaPage() ||
-		p.IsFreelistPage(),
+	// Mask out the compressed flag before checking page type.
+	typeFlags := p.flags &^ CompressedPageFlag
+	Assert(typeFlags == BranchPageFlag ||
+		typeFlags == LeafPageFlag ||
+		typeFlags == MetaPageFlag ||
+		typeFlags == FreelistPageFlag,
 		"page %v: has unexpected type/flags: %x", p.id, p.flags)
 }
 
