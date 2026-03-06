@@ -36,6 +36,11 @@ func (tx *Tx) Check(options ...CheckOption) <-chan error {
 }
 
 func (tx *Tx) check(cfg checkConfig, ch chan error) {
+	defer func() {
+		if r := recover(); r != nil {
+			ch <- panicked{r}
+		}
+	}()
 	// Force loading free list if opened in ReadOnly mode.
 	tx.db.loadFreelist()
 
