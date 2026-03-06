@@ -120,6 +120,43 @@ func TestTx_Check_WithNestBucket(t *testing.T) {
 	db.MustClose()
 }
 
+func TestTx_Check_Panic(t *testing.T) {
+	bucketName := []byte("data")
+	t.Log("Creating db file.")
+	db := btesting.MustCreateDBWithOption(t, &bbolt.Options{PageSize: 4096})
+
+	// Each page can hold roughly 20 key/values pair, so 100 such
+	// key/value pairs will consume about 5 leaf pages.
+	err := db.Fill(bucketName, 1, 100,
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
+		func(tx int, k int) []byte { return make([]byte, 100) },
+	)
+	require.NoError(t, err)
+
+	corruptRootPage(t, db.DB, bucketName)
+
+	path := db.Path()
+
+	require.NoError(t, db.Close())
+
+	db = btesting.MustOpenDBWithOption(t, path, &bbolt.Options{PageSize: 4096})
+
+	vErr := db.View(func(tx *bbolt.Tx) error {
+		errChan := tx.Check()
+		for cErr := range errChan {
+			fmt.Println("cErr", cErr)
+			return cErr
+		}
+		return nil
+	})
+	require.Error(t, vErr)
+	require.ErrorContains(t, vErr, "has unexpected type/flags: 0")
+
+	// Manually close the db, otherwise the PostTestCleanup will
+	// check the db again and accordingly fail the test.
+	db.MustClose()
+}
+
 // corruptRandomLeafPage corrupts one random leaf page.
 func corruptRandomLeafPageInBucket(t testing.TB, db *bbolt.DB, bucketName []byte) (victimPageId common.Pgid, validPageIds []common.Pgid) {
 	bucketRootPageId := mustGetBucketRootPage(t, db, bucketName)
@@ -150,6 +187,18 @@ func corruptRandomLeafPageInBucket(t testing.TB, db *bbolt.DB, bucketName []byte
 	err = guts_cli.WritePage(db.Path(), victimBuf)
 	require.NoError(t, err)
 	return victimPageId, validPageIds
+}
+
+func corruptRootPage(t testing.TB, db *bbolt.DB, bucketName []byte) {
+	bucketRootPageId := mustGetBucketRootPage(t, db, bucketName)
+	bucketRootPage, bucketRootPageBuf, err := guts_cli.ReadPage(db.Path(), uint64(bucketRootPageId))
+	require.NoError(t, err)
+	require.True(t, bucketRootPage.IsBranchPage())
+
+	bucketRootPage.SetFlags(0)
+
+	err = guts_cli.WritePage(db.Path(), bucketRootPageBuf)
+	require.NoError(t, err)
 }
 
 // mustGetBucketRootPage returns the root page for the provided bucket.
