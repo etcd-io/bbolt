@@ -1768,11 +1768,11 @@ Additional options include:
 
 type cmdKvStringer struct{}
 
-func (_ cmdKvStringer) KeyToString(key []byte) string {
+func (cmdKvStringer) KeyToString(key []byte) string {
 	return bytesToAsciiOrHex(key)
 }
 
-func (_ cmdKvStringer) ValueToString(value []byte) string {
+func (cmdKvStringer) ValueToString(value []byte) string {
 	return bytesToAsciiOrHex(value)
 }
 
@@ -1781,7 +1781,7 @@ func CmdKvStringer() bolt.KVStringer {
 }
 
 func findLastBucket(tx *bolt.Tx, bucketNames []string) (*bolt.Bucket, error) {
-	var lastbucket *bolt.Bucket = tx.Bucket([]byte(bucketNames[0]))
+	lastbucket := tx.Bucket([]byte(bucketNames[0]))
 	if lastbucket == nil {
 		return nil, berrors.ErrBucketNotFound
 	}

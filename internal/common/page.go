@@ -334,17 +334,17 @@ func (s Pgids) Len() int           { return len(s) }
 func (s Pgids) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s Pgids) Less(i, j int) bool { return s[i] < s[j] }
 
-// Merge returns the sorted union of a and b.
-func (a Pgids) Merge(b Pgids) Pgids {
+// Merge returns the sorted union of s and b.
+func (s Pgids) Merge(b Pgids) Pgids {
 	// Return the opposite slice if one is nil.
-	if len(a) == 0 {
+	if len(s) == 0 {
 		return b
 	}
 	if len(b) == 0 {
-		return a
+		return s
 	}
-	merged := make(Pgids, len(a)+len(b))
-	Mergepgids(merged, a, b)
+	merged := make(Pgids, len(s)+len(b))
+	Mergepgids(merged, s, b)
 	return merged
 }
 
