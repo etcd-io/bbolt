@@ -1166,12 +1166,25 @@ func (db *DB) allocate(txid common.Txid, count int) (*common.Page, error) {
 	p.SetId(db.rwtx.meta.Pgid())
 	var minsz = int((p.Id()+common.Pgid(count))+1) * db.pageSize
 	if minsz >= db.datasz {
-		if err := db.mmap(minsz); err != nil {
-			if err == berrors.ErrMaxSizeReached {
-				return nil, err
+		if db.MaxSize > 0 {
+			// this calculation matches the calculation in grow
+			// however, I don't quite understand it. Why is the allocation increment added to the size required,
+			// rather than the size required rounded up to the next multiple of the allocation increment?
+			nextAllocSize := minsz
+			if nextAllocSize < db.AllocSize {
+				nextAllocSize = db.AllocSize
 			} else {
-				return nil, fmt.Errorf("mmap allocate error: %s", err)
+				nextAllocSize += db.AllocSize
 			}
+
+			if nextAllocSize > db.MaxSize {
+				db.Logger().Errorf("[GOOS: %s, GOARCH: %s] maximum db size reached, size: %d, db.MaxSize: %d", runtime.GOOS, runtime.GOARCH, minsz, db.MaxSize)
+				return nil, berrors.ErrMaxSizeReached
+			}
+		}
+
+		if err := db.mmap(minsz); err != nil {
+			return nil, fmt.Errorf("mmap allocate error: %s", err)
 		}
 	}
 
@@ -1201,11 +1214,6 @@ func (db *DB) grow(sz int) error {
 		sz = db.datasz
 	} else {
 		sz += db.AllocSize
-	}
-
-	if !db.readOnly && db.MaxSize > 0 && sz > db.MaxSize {
-		lg.Errorf("[GOOS: %s, GOARCH: %s] maximum db size reached, size: %d, db.MaxSize: %d", runtime.GOOS, runtime.GOARCH, sz, db.MaxSize)
-		return berrors.ErrMaxSizeReached
 	}
 
 	// Truncate and fsync to ensure file size metadata is flushed.
