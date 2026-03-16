@@ -5,6 +5,20 @@ import (
 	"unsafe"
 )
 
+// makeCompressibleInodes builds n leaf inodes with compressible values (same byte repeated).
+func makeCompressibleInodes(n int, valSize int) Inodes {
+	inodes := make(Inodes, n)
+	for i := range inodes {
+		inodes[i].SetKey([]byte{byte(i + 1)})
+		val := make([]byte, valSize)
+		for j := range val {
+			val[j] = byte(i)
+		}
+		inodes[i].SetValue(val)
+	}
+	return inodes
+}
+
 func TestCompressDecompressInodes(t *testing.T) {
 	const pageSize = 4096
 	const numInodes = 30
@@ -218,4 +232,59 @@ func TestFastCheck_CompressedPage(t *testing.T) {
 
 	p.SetFlags(BranchPageFlag | CompressedPageFlag)
 	p.FastCheck(42)
+}
+
+// Benchmarks for compression/decompression. Run with:
+//   go test -bench=BenchmarkCompress -benchmem ./internal/common/
+//   go test -bench=BenchmarkDecompress -benchmem ./internal/common/
+// Compare allocs and ns/op before/after optimization changes.
+
+func BenchmarkCompressInodes_Small(b *testing.B) {
+	const pageSize = 4096
+	inodes := makeCompressibleInodes(30, 500)
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = CompressInodes(inodes, true, pageSize)
+	}
+}
+
+func BenchmarkCompressInodes_Large(b *testing.B) {
+	const pageSize = 4096
+	// ~50 inodes × (1 + 500) bytes → multi-page, still within pooled 64KB
+	inodes := makeCompressibleInodes(50, 500)
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = CompressInodes(inodes, true, pageSize)
+	}
+}
+
+func BenchmarkCompressInodes_OverPool(b *testing.B) {
+	const pageSize = 4096
+	// Exceeds maxPooledCompressionBytes (64KB) so we use non-pooled path
+	inodes := makeCompressibleInodes(100, 800)
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = CompressInodes(inodes, true, pageSize)
+	}
+}
+
+func BenchmarkDecompressPage(b *testing.B) {
+	const pageSize = 4096
+	inodes := makeCompressibleInodes(30, 500)
+	compressed := CompressInodes(inodes, true, pageSize)
+	if compressed == nil {
+		b.Fatal("compression returned nil")
+	}
+	cp := (*Page)(unsafe.Pointer(&compressed[0]))
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _, err := DecompressPage(cp, pageSize)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
 }

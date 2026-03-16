@@ -14,11 +14,36 @@ import (
 // the decompressor to know exactly how many bytes to read.
 const compressedDataLenSize = 4
 
+// maxPooledCompressionBytes is the maximum scratch size for which we use
+// pooled buffers in CompressInodes. Larger serializations allocate as needed.
+// maxPooledCompressionBytes is set as a multiple of the default bbolt page size (4096),
+// so pooled buffers efficiently match or exceed typical page-based serialization.
+var maxPooledCompressionBytes = 16 * DefaultPageSize
+
 var (
 	zstdEncoderOnce sync.Once
 	zstdDecoderOnce sync.Once
 	zstdEncoder     *zstd.Encoder
 	zstdDecoder     *zstd.Decoder
+	// compressionBufPool holds buffers for serialization + EncodeAll destination.
+	// Stored as *[]byte so Put is pointer-like and avoids allocs (SA6002).
+	// Buffers have cap 2*maxPooledCompressionBytes so we use [0:scratchSize] for
+	// serialization and [scratchSize:scratchSize] for EncodeAll(dst) (nil cap so
+	// the encoder allocates its own output; sharing the backing array with src
+	// as append target regressed benchmarks on typical page sizes).
+	compressionBufPool = sync.Pool{
+		New: func() interface{} {
+			b := make([]byte, 0, 2*maxPooledCompressionBytes)
+			return &b
+		},
+	}
+	// decompressBufPool holds buffers passed to DecodeAll. Stored as *[]byte (SA6002).
+	decompressBufPool = sync.Pool{
+		New: func() interface{} {
+			b := make([]byte, 0, maxPooledCompressionBytes)
+			return &b
+		},
+	}
 )
 
 func getZstdEncoder() *zstd.Encoder {
@@ -26,6 +51,7 @@ func getZstdEncoder() *zstd.Encoder {
 		var err error
 		zstdEncoder, err = zstd.NewWriter(nil,
 			zstd.WithEncoderLevel(zstd.SpeedDefault),
+			zstd.WithEncoderCRC(true),
 			zstd.WithEncoderConcurrency(1),
 		)
 		if err != nil {
@@ -60,24 +86,34 @@ func getZstdDecoder() *zstd.Decoder {
 // On success, the caller should allocate ceil(len(result)/pageSize) pages
 // and copy the result into the allocated page buffer.
 func CompressInodes(inodes Inodes, isLeaf bool, pageSize int) []byte {
-	// First, figure out how large the uncompressed page would be.
-	uncompressedSize := int(PageHeaderSize)
-	var elemSize uintptr
+	var ph Page
 	if isLeaf {
-		elemSize = LeafPageElementSize
+		ph.SetFlags(LeafPageFlag)
 	} else {
-		elemSize = BranchPageElementSize
+		ph.SetFlags(BranchPageFlag)
 	}
-	for i := 0; i < len(inodes); i++ {
-		uncompressedSize += int(elemSize) + len(inodes[i].Key()) + len(inodes[i].Value())
-	}
+	ph.SetCount(uint16(len(inodes)))
+	uncompressedSize := int(UsedSpaceInPage(inodes, &ph))
 	uncompressedPages := (uncompressedSize + pageSize - 1) / pageSize
 
 	// Serialize the inodes into a scratch buffer large enough for the
 	// uncompressed page(s). We need a real page layout so that
 	// WriteInodeToPage can use unsafe pointer arithmetic.
 	scratchSize := uncompressedPages * pageSize
-	scratch := make([]byte, scratchSize)
+	var scratch []byte
+	var encodeDst []byte
+	if scratchSize <= maxPooledCompressionBytes {
+		if ptr := compressionBufPool.Get().(*[]byte); cap(*ptr) >= 2*scratchSize {
+			pooled := *ptr
+			scratch = pooled[:scratchSize]
+			encodeDst = pooled[scratchSize:scratchSize]
+			defer func() { compressionBufPool.Put(ptr) }()
+		}
+	}
+	if scratch == nil {
+		scratch = make([]byte, scratchSize)
+		encodeDst = nil
+	}
 	p := (*Page)(unsafe.Pointer(&scratch[0]))
 	if isLeaf {
 		p.SetFlags(LeafPageFlag)
@@ -85,12 +121,9 @@ func CompressInodes(inodes Inodes, isLeaf bool, pageSize int) []byte {
 		p.SetFlags(BranchPageFlag)
 	}
 	p.SetCount(uint16(len(inodes)))
-	WriteInodeToPage(inodes, p)
-
-	// Compress the data portion (everything after the page header).
-	dataSize := scratchSize - int(PageHeaderSize)
-	data := scratch[PageHeaderSize:]
-	compressed := getZstdEncoder().EncodeAll(data[:dataSize], nil)
+	used := int(WriteInodeToPage(inodes, p))
+	data := scratch[PageHeaderSize:used]
+	compressed := getZstdEncoder().EncodeAll(data, encodeDst)
 
 	// Total compressed page size: header + 4-byte length + compressed data.
 	compressedTotalSize := int(PageHeaderSize) + compressedDataLenSize + len(compressed)
@@ -139,9 +172,11 @@ func DecompressPage(p *Page, pageSize int) (*Page, []byte, error) {
 	// Get the compressed data.
 	compressedData := UnsafeByteSlice(unsafe.Pointer(p), PageHeaderSize+uintptr(compressedDataLenSize), 0, compressedLen)
 
-	// Decompress the data.
-	decompressed, err := getZstdDecoder().DecodeAll(compressedData, nil)
+	// Decompress the data, reusing a pooled buffer when possible to avoid allocs.
+	ptr := decompressBufPool.Get().(*[]byte)
+	decompressed, err := getZstdDecoder().DecodeAll(compressedData, (*ptr)[:0])
 	if err != nil {
+		decompressBufPool.Put(ptr)
 		return nil, nil, fmt.Errorf("zstd DecodeAll on page %d: %w", p.Id(), err)
 	}
 
@@ -158,6 +193,7 @@ func DecompressPage(p *Page, pageSize int) (*Page, []byte, error) {
 
 	// Copy the decompressed data after the header.
 	copy(buf[PageHeaderSize:], decompressed)
+	decompressBufPool.Put(ptr)
 
 	// Clear the compressed flag. Overflow is preserved from the original
 	// page header — it reflects the on-disk allocation, not the
