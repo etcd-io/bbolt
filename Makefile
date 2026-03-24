@@ -1,7 +1,7 @@
 BRANCH=`git rev-parse --abbrev-ref HEAD`
 COMMIT=`git rev-parse --short HEAD`
 GOLDFLAGS="-X main.branch $(BRANCH) -X main.commit $(COMMIT)"
-GOFILES = $(shell find . -name \*.go)
+GOFILES = $(shell find . -name '*.go')
 
 TESTFLAGS_RACE=-race=false
 ifdef ENABLE_RACE
