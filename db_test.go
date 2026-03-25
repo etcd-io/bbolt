@@ -519,8 +519,14 @@ func TestDB_Open_InitialMmapSize(t *testing.T) {
 				done <- err
 			}()
 
+			// Windows needs more time due to immediate file expansion to InitialMmapSize
+			timeout := 5 * time.Second
+			if runtime.GOOS == "windows" {
+				timeout = 15 * time.Second
+			}
+
 			select {
-			case <-time.After(5 * time.Second):
+			case <-time.After(timeout):
 				t.Error("unexpected that the writer is blocked for a long time")
 			case err := <-done:
 				elapsed := time.Since(start)
