@@ -21,6 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - id: goversion
+        shell: bash
         run: echo "goversion=$(cat .go-version)" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
@@ -31,7 +32,7 @@ jobs:
         run: |
           case "${TARGET}" in
             windows-amd64-unit-test-4-cpu)
-              GOTOOLCHAIN=go$(cat .go-version) CPU=4 TIMEOUT=60m make test
+              CPU=4 TIMEOUT=60m make test
               ;;
             *)
               echo "Failed to find target"
@@ -43,13 +44,15 @@ jobs:
         uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
         with:
           version: v2.10.1
-
+        env:
+          GOTOOLCHAIN: go${{ steps.goversion.outputs.goversion }}
   coverage:
     needs: ["test-windows"]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - id: goversion
+        shell: bash
         run: echo "goversion=$(cat .go-version)" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
@@ -58,6 +61,8 @@ jobs:
         uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
         with:
           version: v2.10.1
+        env:
+          GOTOOLCHAIN: go${{ steps.goversion.outputs.goversion }}
       - run: make coverage GOTOOLCHAIN=go$(cat .go-version)
         env:
           TIMEOUT: 60m
