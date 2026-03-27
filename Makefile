@@ -2,6 +2,8 @@ BRANCH=`git rev-parse --abbrev-ref HEAD`
 COMMIT=`git rev-parse --short HEAD`
 GOLDFLAGS="-X main.branch $(BRANCH) -X main.commit $(COMMIT)"
 GOFILES = $(shell find . -name \*.go)
+REPOSITORY_ROOT := $(shell git rev-parse --show-toplevel)
+GOTOOLCHAIN ?= go$(shell cat $(REPOSITORY_ROOT)/.go-version)
 
 TESTFLAGS_RACE=-race=false
 ifdef ENABLE_RACE

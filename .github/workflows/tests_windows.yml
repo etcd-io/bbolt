@@ -31,7 +31,7 @@ jobs:
         run: |
           case "${TARGET}" in
             windows-amd64-unit-test-4-cpu)
-              CPU=4 TIMEOUT=60m make test
+              GOTOOLCHAIN=go$(cat .go-version) CPU=4 TIMEOUT=60m make test
               ;;
             *)
               echo "Failed to find target"
@@ -58,6 +58,6 @@ jobs:
         uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
         with:
           version: v2.10.1
-      - run: make coverage
+      - run: make coverage GOTOOLCHAIN=go$(cat .go-version)
         env:
           TIMEOUT: 60m
