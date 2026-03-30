@@ -1,6 +1,13 @@
 
 <hr>
 
+## v1.4.4(TBD)
+
+### BoltDB
+- Fix [`Bucket.Stats()` panic on branch pages with zero elements](https://github.com/etcd-io/bbolt/pull/1172)
+
+<hr>
+
 ## v1.4.3(2025-08-19)
 
 ### BoltDB
