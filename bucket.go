@@ -661,16 +661,20 @@ func (b *Bucket) Stats() BucketStats {
 			}
 		} else if p.IsBranchPage() {
 			s.BranchPageN++
-			lastElement := p.BranchPageElement(p.Count() - 1)
 
-			// used totals the used bytes for the page
-			// Add header and all element headers.
-			used := common.PageHeaderSize + (common.BranchPageElementSize * uintptr(p.Count()-1))
+			used := common.PageHeaderSize
+			if p.Count() != 0 {
+				lastElement := p.BranchPageElement(p.Count() - 1)
 
-			// Add size of all keys and values.
-			// Again, use the fact that last element's position equals to
-			// the total of key, value sizes of all previous elements.
-			used += uintptr(lastElement.Pos() + lastElement.Ksize())
+				// Add all element headers.
+				used += common.BranchPageElementSize * uintptr(p.Count()-1)
+
+				// Add size of all keys and values.
+				// Again, use the fact that last element's position equals to
+				// the total of key, value sizes of all previous elements.
+				used += uintptr(lastElement.Pos() + lastElement.Ksize())
+			}
+
 			s.BranchInuse += int(used)
 			s.BranchOverflowN += int(p.Overflow())
 		}
