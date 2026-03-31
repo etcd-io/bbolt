@@ -467,16 +467,20 @@ func (b *Bucket) Stats() BucketStats {
 			}
 		} else if (p.flags & branchPageFlag) != 0 {
 			s.BranchPageN++
-			lastElement := p.branchPageElement(p.count - 1)
 
-			// used totals the used bytes for the page
-			// Add header and all element headers.
-			used := pageHeaderSize + (branchPageElementSize * uintptr(p.count-1))
+			used := pageHeaderSize
+			if p.count != 0 {
+				lastElement := p.branchPageElement(p.count - 1)
 
-			// Add size of all keys and values.
-			// Again, use the fact that last element's position equals to
-			// the total of key, value sizes of all previous elements.
-			used += uintptr(lastElement.pos + lastElement.ksize)
+				// Add all element headers.
+				used += branchPageElementSize * uintptr(p.count-1)
+
+				// Add size of all keys and values.
+				// Again, use the fact that last element's position equals to
+				// the total of key, value sizes of all previous elements.
+				used += uintptr(lastElement.pos + lastElement.ksize)
+			}
+
 			s.BranchInuse += int(used)
 			s.BranchOverflowN += int(p.overflow)
 		}
