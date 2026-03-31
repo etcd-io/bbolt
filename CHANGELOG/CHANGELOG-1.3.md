@@ -2,6 +2,13 @@ Note that we start to track changes starting from v1.3.7.
 
 <hr>
 
+## v1.3.13(TBD)
+
+### BoltDB
+- Fix [`Bucket.Stats()` panic on branch pages with zero elements](https://github.com/etcd-io/bbolt/pull/1173)
+
+<hr>
+
 ## v1.3.12(2025-08-19)
 
 ### BoltDB
