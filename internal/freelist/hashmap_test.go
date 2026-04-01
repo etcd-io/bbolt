@@ -1,6 +1,7 @@
 package freelist
 
 import (
+	"fmt"
 	"math/rand"
 	"reflect"
 	"sort"
@@ -50,18 +51,19 @@ func TestFreelistHashmap_mergeWithExist(t *testing.T) {
 
 	bm2 := pidSet{5: struct{}{}}
 	tests := []struct {
-		name            string
-		ids             common.Pgids
-		pgid            common.Pgid
-		want            common.Pgids
-		wantForwardmap  map[common.Pgid]uint64
-		wantBackwardmap map[common.Pgid]uint64
-		wantfreemap     map[uint64]pidSet
+		name               string
+		ids                common.Pgids
+		startPgid, endPgid common.Pgid
+		want               common.Pgids
+		wantForwardmap     map[common.Pgid]uint64
+		wantBackwardmap    map[common.Pgid]uint64
+		wantfreemap        map[uint64]pidSet
 	}{
 		{
 			name:            "test1",
 			ids:             []common.Pgid{1, 2, 4, 5, 6},
-			pgid:            3,
+			startPgid:       3,
+			endPgid:         3,
 			want:            []common.Pgid{1, 2, 3, 4, 5, 6},
 			wantForwardmap:  map[common.Pgid]uint64{1: 6},
 			wantBackwardmap: map[common.Pgid]uint64{6: 6},
@@ -70,7 +72,8 @@ func TestFreelistHashmap_mergeWithExist(t *testing.T) {
 		{
 			name:            "test2",
 			ids:             []common.Pgid{1, 2, 5, 6},
-			pgid:            3,
+			startPgid:       3,
+			endPgid:         3,
 			want:            []common.Pgid{1, 2, 3, 5, 6},
 			wantForwardmap:  map[common.Pgid]uint64{1: 3, 5: 2},
 			wantBackwardmap: map[common.Pgid]uint64{6: 2, 3: 3},
@@ -79,7 +82,8 @@ func TestFreelistHashmap_mergeWithExist(t *testing.T) {
 		{
 			name:            "test3",
 			ids:             []common.Pgid{1, 2},
-			pgid:            3,
+			startPgid:       3,
+			endPgid:         3,
 			want:            []common.Pgid{1, 2, 3},
 			wantForwardmap:  map[common.Pgid]uint64{1: 3},
 			wantBackwardmap: map[common.Pgid]uint64{3: 3},
@@ -88,18 +92,39 @@ func TestFreelistHashmap_mergeWithExist(t *testing.T) {
 		{
 			name:            "test4",
 			ids:             []common.Pgid{2, 3},
-			pgid:            1,
+			startPgid:       1,
+			endPgid:         1,
 			want:            []common.Pgid{1, 2, 3},
 			wantForwardmap:  map[common.Pgid]uint64{1: 3},
 			wantBackwardmap: map[common.Pgid]uint64{3: 3},
 			wantfreemap:     map[uint64]pidSet{3: bm1},
+		},
+		{
+			name:            "test5",
+			ids:             []common.Pgid{1, 2, 6},
+			startPgid:       3,
+			endPgid:         5,
+			want:            []common.Pgid{1, 2, 3, 4, 5, 6},
+			wantForwardmap:  map[common.Pgid]uint64{1: 6},
+			wantBackwardmap: map[common.Pgid]uint64{6: 6},
+			wantfreemap:     map[uint64]pidSet{6: bm1},
+		},
+		{
+			name:            "test6",
+			ids:             []common.Pgid{1, 2, 6},
+			startPgid:       3,
+			endPgid:         4,
+			want:            []common.Pgid{1, 2, 3, 4, 6},
+			wantForwardmap:  map[common.Pgid]uint64{1: 4, 6: 1},
+			wantBackwardmap: map[common.Pgid]uint64{4: 4, 6: 1},
+			wantfreemap:     map[uint64]pidSet{4: bm1, 1: {6: struct{}{}}},
 		},
 	}
 	for _, tt := range tests {
 		f := newTestHashMapFreelist()
 		f.Init(tt.ids)
 
-		f.mergeWithExistingSpan(tt.pgid)
+		f.mergeWithExistingSpan(tt.startPgid, tt.endPgid)
 
 		if got := f.freePageIds(); !reflect.DeepEqual(tt.want, got) {
 			t.Fatalf("name %s; exp=%v; got=%v", tt.name, tt.want, got)
@@ -178,6 +203,115 @@ func Benchmark_freelist_hashmapGetFreePageIDs(b *testing.B) {
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		f.freePageIds()
+	}
+}
+
+func Benchmark_freelist_hashmapMergeSpans(b *testing.B) {
+	type testCase struct {
+		maxPgid    int
+		mergeCount int
+	}
+
+	testCases := []testCase{
+		{maxPgid: 1000, mergeCount: 500},
+		{maxPgid: 5000, mergeCount: 2500},
+		{maxPgid: 10000, mergeCount: 5000},
+	}
+	mergeSpanLens := []int{1, 16, 32, 64}
+
+	for _, tc := range testCases {
+		for _, mergeSpanLen := range mergeSpanLens {
+			benchmarkName := fmt.Sprintf("max%d_merge%d_span%d", tc.maxPgid, tc.mergeCount, mergeSpanLen)
+			initIDs, mergePgids := benchmarkInitAndMergePgids(tc.maxPgid, tc.mergeCount, mergeSpanLen)
+
+			b.Run(benchmarkName, func(b *testing.B) {
+				b.Run("nonBatch", func(b *testing.B) {
+					benchmarkHashMapMergeSpansNonBatch(b, initIDs, mergePgids)
+				})
+
+				b.Run("batch", func(b *testing.B) {
+					benchmarkHashMapMergeSpans(b, initIDs, mergePgids)
+				})
+			})
+		}
+	}
+}
+
+func benchmarkInitAndMergePgids(maxPgid, mergeCount, mergeSpanLen int) (common.Pgids, common.Pgids) {
+	const gapSize = 100
+
+	mergeSpanCount := (mergeCount + mergeSpanLen - 1) / mergeSpanLen
+	requiredPageCount := mergeCount + mergeSpanCount - 1
+	if requiredPageCount > maxPgid-1 {
+		panic("invalid benchmark parameters: insufficient pgid space")
+	}
+
+	initIDs := make(common.Pgids, 0, maxPgid-mergeCount-1)
+	mergePgids := make(common.Pgids, 0, mergeCount)
+	next := common.Pgid(2)
+	remaining := mergeCount
+
+	for remaining > 0 {
+		spanLen := mergeSpanLen
+		if remaining < spanLen {
+			spanLen = remaining
+		}
+
+		spanPgids := make(common.Pgids, 0, spanLen)
+		for i := 0; i < spanLen; i++ {
+			spanPgids = append(spanPgids, next+common.Pgid(i))
+		}
+		// Prepend each contiguous span so larger page IDs are merged first.
+		mergePgids = append(spanPgids, mergePgids...)
+
+		next += common.Pgid(spanLen)
+		remaining -= spanLen
+		if remaining == 0 {
+			break
+		}
+
+		for i := 0; i < gapSize; i++ {
+			initIDs = append(initIDs, next)
+			next++
+		}
+	}
+
+	for ; next <= common.Pgid(maxPgid); next++ {
+		initIDs = append(initIDs, next)
+	}
+
+	return initIDs, mergePgids
+}
+
+func benchmarkHashMapMergeSpans(b *testing.B, initIDs, mergePgids common.Pgids) {
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		f := newTestHashMapFreelist()
+		f.Init(initIDs)
+
+		mergeIDs := append(common.Pgids(nil), mergePgids...)
+
+		b.StartTimer()
+		f.mergeSpans(mergeIDs)
+	}
+}
+
+func benchmarkHashMapMergeSpansNonBatch(b *testing.B, initIDs, mergePgids common.Pgids) {
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		f := newTestHashMapFreelist()
+		f.Init(initIDs)
+
+		mergeIDs := append(common.Pgids(nil), mergePgids...)
+
+		b.StartTimer()
+		for _, id := range mergeIDs {
+			f.mergeWithExistingSpan(id, id)
+		}
 	}
 }
 
