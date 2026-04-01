@@ -1,0 +1,34 @@
+formatters:
+  enable:
+    - gofmt
+issues:
+  max-same-issues: 0
+linters:
+  default: none
+  enable: # please keep this alphabetized
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+  exclusions:
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+  settings: # please keep this alphabetized
+    staticcheck:
+      checks:
+        - all
+        - -QF1003 # Convert if/else-if chain to tagged switch
+        - -QF1004 # Use strings.ReplaceAll instead of strings.Replace with n == -1
+        - -QF1008 # Omit embedded fields from selector expression
+        - -QF1010 # Convert slice of bytes to string when printing it
+        - -QF1011 # Omit redundant type from variable declaration
+        - -ST1003 # Poorly chosen identifier
+        - -ST1005 # Incorrectly formatted error string
+        - -ST1006 # Poorly chosen receiver name
+        - -ST1012 # Poorly chosen name for error variable
+        - -ST1016 # Use consistent method receiver names
+version: "2"
