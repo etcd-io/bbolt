@@ -1,0 +1,11 @@
+---
+name: Lint
+permissions: read-all
+on: [push, pull_request]
+jobs:
+  lint-linux:
+    uses: ./.github/workflows/lint_template.yml
+  lint-windows:
+    uses: ./.github/workflows/lint_template.yml
+    with:
+      runs-on: windows-latest
