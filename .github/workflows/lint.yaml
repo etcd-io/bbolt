@@ -4,8 +4,8 @@ permissions: read-all
 on: [push, pull_request]
 jobs:
   lint-linux:
-    uses: ./.github/workflows/lint_template.yml
+    uses: ./.github/workflows/lint_template.yaml
   lint-windows:
-    uses: ./.github/workflows/lint_template.yml
+    uses: ./.github/workflows/lint_template.yaml
     with:
       runs-on: windows-latest
