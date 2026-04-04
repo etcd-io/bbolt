@@ -5,6 +5,7 @@
 
 ### BoltDB
 - Fix [`Bucket.Stats()` panic on branch pages with zero elements](https://github.com/etcd-io/bbolt/pull/1172)
+- [Improve performance by replacing Assert checks](https://github.com/etcd-io/bbolt/pull/1183)
 
 <hr>
 
