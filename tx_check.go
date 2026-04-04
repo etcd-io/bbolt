@@ -97,6 +97,9 @@ func (tx *Tx) recursivelyCheckPage(pageId common.Pgid, reachable map[common.Pgid
 func (tx *Tx) recursivelyCheckBucketInPage(pageId common.Pgid, reachable map[common.Pgid]*common.Page, freed map[common.Pgid]bool,
 	kvStringer KVStringer, ch chan error) {
 	p := tx.page(pageId)
+	if p.IsCompressed() {
+		p = tx.decompressedPage(p)
+	}
 
 	switch {
 	case p.IsBranchPage():
@@ -192,6 +195,9 @@ func (tx *Tx) recursivelyCheckPageKeyOrderInternal(
 	keyToString func([]byte) string, ch chan error) (maxKeyInSubtree []byte) {
 
 	p := tx.page(pgId)
+	if p.IsCompressed() {
+		p = tx.decompressedPage(p)
+	}
 	pagesStack = append(pagesStack, pgId)
 	switch {
 	case p.IsBranchPage():
