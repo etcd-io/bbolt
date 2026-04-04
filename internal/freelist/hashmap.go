@@ -108,8 +108,10 @@ func (f *hashMap) Allocate(txid common.Txid, n int) common.Pgid {
 func (f *hashMap) FreeCount() int {
 	common.Verify(func() {
 		expectedFreePageCount := f.hashmapFreeCountSlow()
-		common.Assert(int(f.freePagesCount) == expectedFreePageCount,
-			"freePagesCount (%d) is out of sync with free pages map (%d)", f.freePagesCount, expectedFreePageCount)
+		if int(f.freePagesCount) != expectedFreePageCount {
+			panic(fmt.Sprintf("assertion failed: freePagesCount (%d) is out of sync with free pages map (%d)",
+				f.freePagesCount, expectedFreePageCount))
+		}
 	})
 	return int(f.freePagesCount)
 }
