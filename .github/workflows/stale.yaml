@@ -17,3 +17,5 @@ jobs:
           days-before-close: 21
           stale-issue-label: stale
           stale-pr-label: stale
+          exempt-issue-labels: 'stage/tracked'
+          exempt-pr-labels: 'stage/tracked'
