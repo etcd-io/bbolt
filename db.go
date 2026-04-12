@@ -301,7 +301,7 @@ func Open(path string, mode os.FileMode, options *Options) (db *DB, err error) {
 	}
 
 	if db.PreLoadFreelist {
-		db.loadFreelist()
+		db.loadFreelist(nil)
 	}
 
 	if db.readOnly {
@@ -419,12 +419,23 @@ func (db *DB) getPageSizeFromSecondMeta() (int, bool, error) {
 // loadFreelist reads the freelist if it is synced, or reconstructs it
 // by scanning the DB if it is not synced. It assumes there are no
 // concurrent accesses being made to the freelist.
-func (db *DB) loadFreelist() {
+//
+// When sharedReadTx is non-nil, an unsynced freelist is reconstructed by
+// scanning using that transaction instead of opening a nested read-only
+// transaction. Tx.check passes the active read transaction so freelist
+// reconstruction does not call beginTx while another goroutine may still
+// hold the outer read transaction from View, which previously could block
+// indefinitely (see https://github.com/etcd-io/bbolt/issues/877).
+func (db *DB) loadFreelist(sharedReadTx *Tx) {
 	db.freelistLoad.Do(func() {
 		db.freelist = newFreelist(db.FreelistType)
 		if !db.hasSyncedFreelist() {
 			// Reconstruct free list by scanning the DB.
-			db.freelist.Init(db.freepages())
+			if sharedReadTx != nil {
+				db.freelist.Init(db.freepagesWithTx(sharedReadTx))
+			} else {
+				db.freelist.Init(db.freepages())
+			}
 		} else {
 			// Read free list from freelist page.
 			db.freelist.Read(db.page(db.meta().Freelist()))
@@ -1250,6 +1261,13 @@ func (db *DB) freepages() []common.Pgid {
 		panic("freepages: failed to open read only tx")
 	}
 
+	return db.freepagesWithTx(tx)
+}
+
+// freepagesWithTx lists page IDs that are not reachable from the bucket tree
+// for the given read-only transaction. The transaction must not be used
+// concurrently while this function runs.
+func (db *DB) freepagesWithTx(tx *Tx) []common.Pgid {
 	reachable := make(map[common.Pgid]*common.Page)
 	nofreed := make(map[common.Pgid]bool)
 	ech := make(chan error)
@@ -1267,7 +1285,7 @@ func (db *DB) freepages() []common.Pgid {
 	// TODO: If check bucket reported any corruptions (ech) we shouldn't proceed to freeing the pages.
 
 	var fids []common.Pgid
-	for i := common.Pgid(2); i < db.meta().Pgid(); i++ {
+	for i := common.Pgid(2); i < tx.meta.Pgid(); i++ {
 		if _, ok := reachable[i]; !ok {
 			fids = append(fids, i)
 		}
