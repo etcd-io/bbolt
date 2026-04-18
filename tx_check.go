@@ -179,7 +179,7 @@ func verifyPageReachable(p *common.Page, hwm common.Pgid, stack []common.Pgid, r
 //   - keys on pages must be sorted
 //   - keys on children pages are between 2 consecutive keys on the parent's branch page).
 func (tx *Tx) recursivelyCheckPageKeyOrder(pgId common.Pgid, keyToString func([]byte) string, ch chan error) {
-	tx.recursivelyCheckPageKeyOrderInternal(pgId, nil, nil, nil, keyToString, ch)
+	tx.recursivelyCheckPageKeyOrderInternal(pgId, nil, nil, nil, map[common.Pgid]struct{}{}, keyToString, ch)
 }
 
 // recursivelyCheckPageKeyOrderInternal verifies that all keys in the subtree rooted at `pgid` are:
@@ -189,7 +189,15 @@ func (tx *Tx) recursivelyCheckPageKeyOrder(pgId common.Pgid, keyToString func([]
 //     `pagesStack` is expected to contain IDs of pages from the tree root to `pgid` for the clean debugging message.
 func (tx *Tx) recursivelyCheckPageKeyOrderInternal(
 	pgId common.Pgid, minKeyClosed, maxKeyOpen []byte, pagesStack []common.Pgid,
-	keyToString func([]byte) string, ch chan error) (maxKeyInSubtree []byte) {
+	visited map[common.Pgid]struct{}, keyToString func([]byte) string, ch chan error) (maxKeyInSubtree []byte) {
+
+	// Short-circuit on a revisit so a corrupted db with a page cycle cannot
+	// drive this recursion to stack overflow.
+	if _, ok := visited[pgId]; ok {
+		ch <- fmt.Errorf("page cycle detected at pgId:%d. Stack: %v", pgId, append(pagesStack, pgId))
+		return maxKeyInSubtree
+	}
+	visited[pgId] = struct{}{}
 
 	p := tx.page(pgId)
 	pagesStack = append(pagesStack, pgId)
@@ -205,7 +213,7 @@ func (tx *Tx) recursivelyCheckPageKeyOrderInternal(
 			if i < len(p.BranchPageElements())-1 {
 				maxKey = p.BranchPageElement(uint16(i + 1)).Key()
 			}
-			maxKeyInSubtree = tx.recursivelyCheckPageKeyOrderInternal(elem.Pgid(), elem.Key(), maxKey, pagesStack, keyToString, ch)
+			maxKeyInSubtree = tx.recursivelyCheckPageKeyOrderInternal(elem.Pgid(), elem.Key(), maxKey, pagesStack, visited, keyToString, ch)
 			runningMin = maxKeyInSubtree
 		}
 		return maxKeyInSubtree
