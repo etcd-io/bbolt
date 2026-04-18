@@ -645,20 +645,29 @@ func (tx *Tx) page(id common.Pgid) *common.Page {
 func (tx *Tx) forEachPage(pgidnum common.Pgid, fn func(*common.Page, int, []common.Pgid)) {
 	stack := make([]common.Pgid, 10)
 	stack[0] = pgidnum
-	tx.forEachPageInternal(stack[:1], fn)
+	tx.forEachPageInternal(stack[:1], map[common.Pgid]struct{}{}, fn)
 }
 
-func (tx *Tx) forEachPageInternal(pgidstack []common.Pgid, fn func(*common.Page, int, []common.Pgid)) {
-	p := tx.page(pgidstack[len(pgidstack)-1])
+func (tx *Tx) forEachPageInternal(pgidstack []common.Pgid, visited map[common.Pgid]struct{}, fn func(*common.Page, int, []common.Pgid)) {
+	pgid := pgidstack[len(pgidstack)-1]
+	p := tx.page(pgid)
 
 	// Execute function.
 	fn(p, len(pgidstack)-1, pgidstack)
+
+	// Stop descending on a revisit so a corrupted db with a page cycle
+	// cannot drive this recursion to stack overflow. fn still runs above,
+	// so verifyPageReachable's "multiple references" diagnostic fires.
+	if _, ok := visited[pgid]; ok {
+		return
+	}
+	visited[pgid] = struct{}{}
 
 	// Recursively loop over children.
 	if p.IsBranchPage() {
 		for i := 0; i < int(p.Count()); i++ {
 			elem := p.BranchPageElement(uint16(i))
-			tx.forEachPageInternal(append(pgidstack, elem.Pgid()), fn)
+			tx.forEachPageInternal(append(pgidstack, elem.Pgid()), visited, fn)
 		}
 	}
 }
