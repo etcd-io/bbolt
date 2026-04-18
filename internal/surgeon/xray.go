@@ -21,8 +21,14 @@ func NewXRay(path string) XRay {
 	return XRay{path}
 }
 
-func (n XRay) traverse(stack []common.Pgid, callback func(page *common.Page, stack []common.Pgid) error) error {
-	p, data, err := guts_cli.ReadPage(n.path, uint64(stack[len(stack)-1]))
+func (n XRay) traverse(stack []common.Pgid, visited map[common.Pgid]struct{}, callback func(page *common.Page, stack []common.Pgid) error) error {
+	pgid := stack[len(stack)-1]
+	if _, ok := visited[pgid]; ok {
+		return fmt.Errorf("cycle detected at page %d (stack %v)", pgid, stack)
+	}
+	visited[pgid] = struct{}{}
+
+	p, data, err := guts_cli.ReadPage(n.path, uint64(pgid))
 	if err != nil {
 		return fmt.Errorf("failed reading page (stack %v): %w", stack, err)
 	}
@@ -35,13 +41,13 @@ func (n XRay) traverse(stack []common.Pgid, callback func(page *common.Page, sta
 		{
 			m := common.LoadPageMeta(data)
 			r := m.RootBucket().RootPage()
-			return n.traverse(append(stack, r), callback)
+			return n.traverse(append(stack, r), visited, callback)
 		}
 	case "branch":
 		{
 			for i := uint16(0); i < p.Count(); i++ {
 				bpe := p.BranchPageElement(i)
-				if err := n.traverse(append(stack, bpe.Pgid()), callback); err != nil {
+				if err := n.traverse(append(stack, bpe.Pgid()), visited, callback); err != nil {
 					return err
 				}
 			}
@@ -52,7 +58,7 @@ func (n XRay) traverse(stack []common.Pgid, callback func(page *common.Page, sta
 			if lpe.IsBucketEntry() {
 				pgid := lpe.Bucket().RootPage()
 				if pgid > 0 {
-					if err := n.traverse(append(stack, pgid), callback); err != nil {
+					if err := n.traverse(append(stack, pgid), visited, callback); err != nil {
 						return err
 					}
 				} else {
@@ -81,7 +87,7 @@ func (n XRay) FindPathsToKey(key []byte) ([][]common.Pgid, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = n.traverse([]common.Pgid{rootPage},
+	err = n.traverse([]common.Pgid{rootPage}, map[common.Pgid]struct{}{},
 		func(page *common.Page, stack []common.Pgid) error {
 			if page.Typ() == "leaf" {
 				for i := uint16(0); i < page.Count(); i++ {
