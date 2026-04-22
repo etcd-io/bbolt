@@ -83,6 +83,50 @@ func TestFindPathsToKey_CycleDetected(t *testing.T) {
 	require.Contains(t, err.Error(), "cycle detected")
 }
 
+// TestFindPathsToKey_MultipleBuckets ensures the shared visited map in
+// traverse does not suppress legitimate paths when the same key appears
+// in more than one bucket. Each top-level bucket owns a disjoint page
+// sub-tree, so both occurrences of the key must be returned.
+func TestFindPathsToKey_MultipleBuckets(t *testing.T) {
+	sharedKey := []byte("shared")
+	bucketA := []byte("bucketA")
+	bucketB := []byte("bucketB")
+
+	db := btesting.MustCreateDB(t)
+	// Fill each bucket with enough entries that it owns a real (non-inline)
+	// root page and its own leaf pages, so the shared key lands on a pgid
+	// the visited map actually tracks.
+	require.NoError(t, db.Update(func(tx *bbolt.Tx) error {
+		for _, name := range [][]byte{bucketA, bucketB} {
+			b, err := tx.CreateBucket(name)
+			require.NoError(t, err)
+			for i := 0; i < 500; i++ {
+				k := []byte(fmt.Sprintf("%04d", i))
+				require.NoError(t, b.Put(k, make([]byte, 100)))
+			}
+			require.NoError(t, b.Put(sharedKey, []byte("v")))
+		}
+		return nil
+	}))
+	require.NoError(t, db.Close())
+
+	paths, err := surgeon.NewXRay(db.Path()).FindPathsToKey(sharedKey)
+	require.NoError(t, err)
+	require.Len(t, paths, 2, "expected one path per bucket containing the shared key")
+
+	leafPgids := make(map[common.Pgid]struct{})
+	for _, p := range paths {
+		require.NotEmpty(t, p)
+		leaf := p[len(p)-1]
+		leafPgids[leaf] = struct{}{}
+
+		page, _, err := guts_cli.ReadPage(db.Path(), uint64(leaf))
+		require.NoError(t, err)
+		require.True(t, page.IsLeafPage(), "terminal page in stack must be a leaf")
+	}
+	require.Len(t, leafPgids, 2, "the two paths must terminate on distinct leaf pages")
+}
+
 func TestFindPathsToKey_Bucket(t *testing.T) {
 	rootBucket := []byte("data")
 	subBucket := []byte("0451A")
