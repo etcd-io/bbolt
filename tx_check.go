@@ -90,6 +90,10 @@ func (tx *Tx) check(cfg checkConfig, ch chan error) {
 
 func (tx *Tx) recursivelyCheckPage(pageId common.Pgid, reachable map[common.Pgid]*common.Page, freed map[common.Pgid]bool,
 	kvStringer KVStringer, ch chan error) {
+	if _, already := reachable[pageId]; already {
+		ch <- fmt.Errorf("page %d: cycle detected (already reachable)", int(pageId))
+		return
+	}
 	tx.checkInvariantProperties(pageId, reachable, freed, kvStringer, ch)
 	tx.recursivelyCheckBucketInPage(pageId, reachable, freed, kvStringer, ch)
 }
