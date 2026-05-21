@@ -63,11 +63,21 @@
 
 ### version
 
-- `version` print the current version information of bbolt command-line.
-- usage:
-  `bbolt version`
+`version` print the current version information of bbolt command-line.
 
-  Example:
+Usage:
+```
+$ bbolt version -h
+print the current version of bbolt
+
+Usage:
+  bbolt version [flags]
+
+Flags:
+  -h, --help   help for version
+```
+
+Example:
   
   ```bash
   $bbolt version
@@ -78,66 +88,107 @@
 
 ### info
 
-- `info` print the basic information about the given Bbolt database.
-- usage:
-  `bbolt info [path to the bbolt database]`
+`info` print the basic information about the given Bbolt database.
 
-    Example:
+Usage:
+```
+$ bbolt info -h
+prints basic information about the bbolt database.
 
-    ```bash
-    $bbolt info ~/default.etcd/member/snap/db
-    Page Size: 4096
-    ```
+Usage:
+  bbolt info <bbolt-file> [flags]
 
-  - **note**: page size is given in bytes
-  - Bbolt database is using page size of 4KB
+Flags:
+  -h, --help   help for info
+```
+
+Example:
+
+```bash
+$bbolt info ~/default.etcd/member/snap/db
+Page Size: 4096
+```
+
+- **note**: page size is given in bytes
+- Bbolt database is using page size of 4KB
 
 ### buckets
 
-- `buckets` print a list of buckets of Bbolt database is currently having. Find more information on buckets [here](https://github.com/etcd-io/bbolt#using-buckets)
-- usage:
-  `bbolt buckets [path to the bbolt database]`
+`buckets` print a list of buckets of Bbolt database is currently having. Find more information on buckets [here](https://github.com/etcd-io/bbolt#using-buckets)
 
-    Example:
+Usage:
+```
+$ bbolt buckets -h
+print a list of buckets in bbolt database
 
-    ```bash
-    $bbolt buckets ~/default.etcd/member/snap/db
-    alarm
-    auth
-    authRoles
-    authUsers
-    cluster
-    key
-    lease
-    members
-    members_removed
-    meta
-    ```
+Usage:
+  bbolt buckets <bbolt-file> [flags]
 
-  - It means when you start an etcd, it creates these `10` buckets using bbolt database.
+Flags:
+  -h, --help   help for buckets
+```
+
+Example:
+
+```bash
+$bbolt buckets ~/default.etcd/member/snap/db
+alarm
+auth
+authRoles
+authUsers
+cluster
+key
+lease
+members
+members_removed
+meta
+```
+
+- It means when you start an etcd, it creates these `10` buckets using bbolt database.
 
 ### check
 
-- `check` opens a database at a given `[PATH]` and runs an exhaustive check to verify that all pages are accessible or are marked as freed. It also verifies that no pages are double referenced.
-- usage:
-  `bbolt check [path to the bbolt database]`
+`check` opens a database at a given `[PATH]` and runs an exhaustive check to verify that all pages are accessible or are marked as freed. It also verifies that no pages are double referenced.
 
-    Example:
+Usage:
+```
+$ bbolt check -h
+verify integrity of bbolt database data
 
-    ```bash
-    $bbolt check ~/default.etcd/member/snap/db
-    ok
-    ```
+Usage:
+  bbolt check <bbolt-file> [flags]
 
-  - It returns `ok` as our database file `db` is not corrupted.
+Flags:
+      --from-page uint   check db integrity starting from the given page ID
+  -h, --help             help for check
+```
+
+Example:
+
+```bash
+$bbolt check ~/default.etcd/member/snap/db
+ok
+```
+
+- It returns `ok` as our database file `db` is not corrupted.
 
 ### stats
 
-- To gather essential statistics about the bbolt database: `stats` performs an extensive search of the database to track every page reference. It starts at the current meta page and recursively iterates through every accessible bucket.
-- usage:
-  `bbolt stats [path to the bbolt database]`
+To gather essential statistics about the bbolt database: `stats` performs an extensive search of the database to track every page reference. It starts at the current meta page and recursively iterates through every accessible bucket.
 
-  Example:
+Usage:
+```
+$ bbolt stats -h
+print stats of bbolt database
+
+Usage:
+  bbolt stats <bbolt-file> [flags]
+
+Flags:
+  -h, --help   help for stats
+```
+
+Example:
 
   ```bash
   $bbolt stats ~/default.etcd/member/snap/db
@@ -163,10 +214,22 @@
   ```
 
 ### inspect
-- `inspect` inspect the structure of the database.
-- Usage: `bbolt inspect [path to the bbolt database]`
 
-  Example:
+`inspect` inspect the structure of the database.
+
+Usage:
+```
+$ bbolt inspect -h
+inspect the structure of the database
+
+Usage:
+  bbolt inspect <bbolt-file> [flags]
+
+Flags:
+  -h, --help   help for inspect
+```
+
+Example:
 ```bash
 $ ./bbolt inspect ~/default.etcd/member/snap/db
 {
@@ -219,15 +282,25 @@ $ ./bbolt inspect ~/default.etcd/member/snap/db
 
 ### pages
 
-- Pages prints a table of pages with their type (meta, leaf, branch, freelist).
+Pages prints a table of pages with their type (meta, leaf, branch, freelist).
 - The `meta` will store the metadata information of database.
 - The `leaf` and `branch` pages will show a key count in the `items` column.
 - The `freelist` will show the number of free pages, which are free for writing again.
 - The `overflow` column shows the number of blocks that the page spills over into.
-- usage:
-  `bbolt pages [path to the bbolt database]`
 
-  Example:
+Usage:
+```
+$ bbolt pages -h
+print a list of pages in bbolt database
+
+Usage:
+  bbolt pages <bbolt-file> [flags]
+
+Flags:
+  -h, --help   help for pages
+```
+
+Example:
 
   ```bash
   $bbolt pages ~/default.etcd/member/snap/db
@@ -243,22 +316,23 @@ $ ./bbolt inspect ~/default.etcd/member/snap/db
 
 ### page
 
-- Page prints one or more pages in human readable format.
-- usage:
+Page prints one or more pages in human readable format.
 
-  ```bash
-  bolt page [path to the bbolt database] pageid [pageid...]
-  or: bolt page --all [path to the bbolt database]
+Usage:
+```
+$ bbolt page -h
+page prints one or more pages in human readable format.
 
-  Additional options include:
+Usage:
+  bbolt page <bbolt-file> [pageid...] [flags]
 
-  --all
-    prints all pages (only skips pages that were considered successful overflow pages)
-  --format-value=auto|ascii-encoded|hex|bytes|redacted (default: auto)
-    prints values (on the leaf page) using the given format
-  ```
+Flags:
+      --all                  List all pages (only skips pages that were considered successful overflow pages)
+      --format-value string  Output format one of: auto|ascii-encoded|hex|bytes|redacted. Applies to values on the leaf page. (default "auto")
+  -h, --help                 help for page
+```
 
-  Example:
+Example:
 
   ```bash
   $bbolt page ~/default.etcd/member/snap/db 3
@@ -284,22 +358,24 @@ $ ./bbolt inspect ~/default.etcd/member/snap/db
 
 ### page-item
 
-- page-item prints a page item's key and value.
-- usage:
+page-item prints a page item's key and value.
 
-  ```bash
-  bolt page-item [options] [path to the bbolt database] <pageId> <itemId>
-  Additional options include:
+Usage:
+```
+$ bbolt page-item -h
+print a page item key and value in a bbolt database
 
-      --key-only
-          Print only the key
-      --value-only
-          Print only the value
-      --format
-          Output format. One of: auto|ascii-encoded|hex|bytes|redacted (default=auto)
-  ```
+Usage:
+  bbolt page-item [options] <bbolt-file> pageid itemid [flags]
 
-  Example:
+Flags:
+      --format string   Output format one of: auto|ascii-encoded|hex|bytes|redacted (default "auto")
+  -h, --help            help for page-item
+      --key-only        Print only the key
+      --value-only      Print only the value
+```
+
+Example:
 
   ```bash
   $bbolt page-item --key-only ~/default.etcd/member/snap/db 3 7
@@ -310,24 +386,38 @@ $ ./bbolt inspect ~/default.etcd/member/snap/db
 
 ### dump
 
-- Dump prints a hexadecimal dump of one or more given pages.
-- usage:
-  `bolt dump [path to the bbolt database] [pageid...]`
+Dump prints a hexadecimal dump of one or more given pages.
+
+Usage:
+```
+$ bbolt dump -h
+prints a hexadecimal dump of one or more pages of bbolt database.
+
+Usage:
+  bbolt dump <bbolt-file> pageid [pageid...] [flags]
+
+Flags:
+  -h, --help   help for dump
+```
 
 ### keys
 
-- Print a list of keys in the given bucket.
-- usage:
+Print a list of keys in the given bucket.
 
-  ```bash
-  bolt keys [path to the bbolt database] [BucketName]
+Usage:
+```
+$ bbolt keys -h
+print a list of keys in the given (sub)bucket in bbolt database
 
-  Additional options include:
-  --format
-    Output format. One of: auto|ascii-encoded|hex|bytes|redacted (default=auto)
-  ```
+Usage:
+  bbolt keys <bbolt-file> <buckets> [flags]
 
-  Example 1:
+Flags:
+  -f, --format string   Output format one of: auto|ascii-encoded|hex|bytes|redacted (default "auto")
+  -h, --help            help for keys
+```
+
+Example 1:
 
   ```bash
   $bbolt keys ~/default.etcd/member/snap/db meta
@@ -338,7 +428,7 @@ $ ./bbolt inspect ~/default.etcd/member/snap/db
 
   - It list all the keys in bucket: `meta`
 
-  Example 2:
+Example 2:
 
   ```bash
   $bbolt keys ~/default.etcd/member/snap/db members
@@ -350,20 +440,23 @@ $ ./bbolt inspect ~/default.etcd/member/snap/db
 
 ### get
 
-- Print the value of the given key in the given bucket.
-- usage:
-  
-  ```bash
-  bolt get [path to the bbolt database] [BucketName] [Key]
+Print the value of the given key in the given bucket.
 
-  Additional options include:
-  --format
-    Output format. One of: auto|ascii-encoded|hex|bytes|redacted (default=auto)
-  --parse-format
-    Input format (of key). One of: ascii-encoded|hex (default=ascii-encoded)"
-  ```
+Usage:
+```
+$ bbolt get -h
+get the value of a key from a (sub)bucket in a bbolt database
 
-  Example 1:
+Usage:
+  bbolt get PATH [BUCKET..] KEY [flags]
+
+Flags:
+      --format string        Output format one of: auto|ascii-encoded|hex|bytes|redacted (default: auto) (default "auto")
+  -h, --help                 help for get
+      --parse-format string  Input format one of: ascii-encoded|hex (default "ascii-encoded")
+```
+
+Example 1:
 
   ```bash
   $bbolt get --format=hex ~/default.etcd/member/snap/db meta term
@@ -372,7 +465,7 @@ $ ./bbolt inspect ~/default.etcd/member/snap/db
 
   - It returns the value present in bucket: `meta` for key: `term` in hexadecimal format.
 
-  Example 2:
+Example 2:
 
   ```bash
   $bbolt get ~/default.etcd/member/snap/db members 8e9e05c52164694d
@@ -383,20 +476,24 @@ $ ./bbolt inspect ~/default.etcd/member/snap/db
 
 ### compact
 
-- Compact opens a database at given `[Source Path]` and walks it recursively, copying keys as they are found from all buckets, to a newly created database at `[Destination Path]`. The original database is left untouched.
-- usage:
+Compact opens a database at given `[Source Path]` and walks it recursively, copying keys as they are found from all buckets, to a newly created database at `[Destination Path]`. The original database is left untouched.
 
-  ```bash
-  bbolt compact [options] -o [Destination Path] [Source Path]
+Usage:
+```
+$ bbolt compact -h
+creates a compacted copy of the database from source path to the destination path, preserving the original.
 
-  Additional options include:
+Usage:
+  bbolt compact [options] -o <dst-bbolt-file> <src-bbolt-file> [flags]
 
-  -tx-max-size NUM
-    Specifies the maximum size of individual transactions.
-    Defaults to 64KB
-  ```
+Flags:
+  -h, --help              help for compact
+      --no-sync
+  -o, --output string
+      --tx-max-size int   (default 65536)
+```
 
-  Example:
+Example:
 
   ```bash
   $bbolt compact -o ~/db.compact ~/default.etcd/member/snap/db
@@ -407,42 +504,38 @@ $ ./bbolt inspect ~/default.etcd/member/snap/db
 
 ### bench
 
-- run synthetic benchmark against bbolt database.
-- usage:
+run synthetic benchmark against bbolt database.
 
-    ```bash
-    Usage:
-    -batch-size int
+Usage:
+```
+$ bbolt bench -h
+run synthetic benchmark against bbolt
 
-    -blockprofile string
+Usage:
+  bbolt bench [flags]
 
-    -count int
-            (default 1000)
-    -cpuprofile string
+Flags:
+      --batch-size int          (default 0)
+      --blockprofile string
+      --count int               (default 1000)
+      --cpuprofile string
+      --fill-percent float      (default 0.5)
+      --gobench-output
+  -h, --help                    help for bench
+      --initial-mmap-size int   Set initial mmap size in bytes for database file.
+      --key-size int            (default 8)
+      --memprofile string
+      --no-sync
+      --page-size int           Set page size in bytes. (default 16384)
+      --path string
+      --profile-mode string     (default "rw")
+      --read-mode string        (default "seq")
+      --value-size int          (default 32)
+      --work
+      --write-mode string       (default "seq")
+```
 
-    -fill-percent float
-            (default 0.5)
-    -key-size int
-            (default 8)
-    -memprofile string
-
-    -no-sync
-
-    -path string
-
-    -profile-mode string
-            (default "rw")
-    -read-mode string
-            (default "seq")
-    -value-size int
-            (default 32)
-    -work
-
-    -write-mode string
-            (default "seq")
-    ```
-
-    Example:
+Example:
 
     ```bash
     $bbolt bench ~/default.etcd/member/snap/db -batch-size 400 -key-size 16
@@ -454,28 +547,48 @@ $ ./bbolt inspect ~/default.etcd/member/snap/db
 
 ### surgery
 
-- `surgery` perform surgery on bbolt database for repair and recovery operations.
-- usage:
-  `bbolt surgery <subcommand> [arguments]`
+`surgery` perform surgery on bbolt database for repair and recovery operations.
 
-  The surgery subcommands are:
-  - `revert-meta-page` - revert to previous transaction state
-  - `copy-page` - copy page from source to destination
-  - `clear-page` - clear all elements from a page
-  - `clear-page-elements` - clear specific elements from a page
-  - `freelist` - freelist related surgery commands
-  - `meta` - meta page related surgery commands
+Usage:
+```
+$ bbolt surgery -h
+surgery related commands
+
+Usage:
+  bbolt surgery <subcommand> [flags]
+
+Available Commands:
+  clear-page          Clears all elements from the given page, which can be a branch or leaf page
+  clear-page-elements Clears elements from the given page, which can be a branch or leaf page
+  copy-page           Copy page from the source page Id to the destination page Id
+  freelist            freelist related surgery commands
+  meta                meta page related surgery commands
+  revert-meta-page    Revert the meta page to revert the changes performed by the latest transaction
+
+Flags:
+  -h, --help   help for surgery
+
+Use "bbolt surgery [command] --help" for more information about a command.
+```
 
 #### surgery revert-meta-page
 
-- `surgery revert-meta-page` reverts to the previous transaction state by replacing the active meta page with the inactive one.
-- usage:
+`surgery revert-meta-page` reverts to the previous transaction state by replacing the active meta page with the inactive one.
 
-  ```bash
-  bbolt surgery revert-meta-page [path to the bbolt database] --output [output-file]
-  ```
+Usage:
+```
+$ bbolt surgery revert-meta-page -h
+Revert the meta page to revert the changes performed by the latest transaction
 
-  Example:
+Usage:
+  bbolt surgery revert-meta-page <bbolt-file> [flags]
+
+Flags:
+  -h, --help            help for revert-meta-page
+      --output string   path to the filePath db file
+```
+
+Example:
 
   ```bash
   $bbolt surgery revert-meta-page ~/default.etcd/member/snap/db --output reverted.db
@@ -486,14 +599,24 @@ $ ./bbolt inspect ~/default.etcd/member/snap/db
 
 #### surgery copy-page
 
-- `surgery copy-page` copies content from one page to another.
-- usage:
+`surgery copy-page` copies content from one page to another.
 
-  ```bash
-  bbolt surgery copy-page [path to the bbolt database] --output [output-file] --from-page [source-id] --to-page [destination-id]
-  ```
+Usage:
+```
+$ bbolt surgery copy-page -h
+Copy page from the source page Id to the destination page Id
 
-  Example:
+Usage:
+  bbolt surgery copy-page <bbolt-file> [flags]
+
+Flags:
+      --from-page uint    source page Id
+  -h, --help              help for copy-page
+      --output string     path to the filePath db file
+      --to-page uint      destination page Id
+```
+
+Example:
 
   ```bash
   $bbolt surgery copy-page ~/default.etcd/member/snap/db --output copied.db --from-page 3 --to-page 2
@@ -506,14 +629,23 @@ $ ./bbolt inspect ~/default.etcd/member/snap/db
 
 #### surgery clear-page
 
-- `surgery clear-page` removes all elements from a branch or leaf page.
-- usage:
+`surgery clear-page` removes all elements from a branch or leaf page.
 
-  ```bash
-  bbolt surgery clear-page [path to the bbolt database] --output [output-file] --pageId [page-id]
-  ```
+Usage:
+```
+$ bbolt surgery clear-page -h
+Clears all elements from the given page, which can be a branch or leaf page
 
-  Example:
+Usage:
+  bbolt surgery clear-page <bbolt-file> [flags]
+
+Flags:
+  -h, --help            help for clear-page
+      --output string   path to the filePath db file
+      --pageId uint     page Id
+```
+
+Example:
 
   ```bash
   $bbolt surgery clear-page ~/default.etcd/member/snap/db --output cleared.db --pageId 3
@@ -526,14 +658,25 @@ $ ./bbolt inspect ~/default.etcd/member/snap/db
 
 #### surgery clear-page-elements
 
-- `surgery clear-page-elements` removes specific elements from a branch or leaf page by index range.
-- usage:
+`surgery clear-page-elements` removes specific elements from a branch or leaf page by index range.
 
-  ```bash
-  bbolt surgery clear-page-elements [path to the bbolt database] --output [output-file] --pageId [page-id] --from-index [start] --to-index [end]
-  ```
+Usage:
+```
+$ bbolt surgery clear-page-elements -h
+Clears elements from the given page, which can be a branch or leaf page
 
-  Example:
+Usage:
+  bbolt surgery clear-page-elements <bbolt-file> [flags]
+
+Flags:
+      --from-index int    start element index (included) to clear, starting from 0
+  -h, --help              help for clear-page-elements
+      --output string     path to the filePath db file
+      --pageId uint       page id
+      --to-index int      end element index (excluded) to clear, starting from 0, -1 means to the end of page
+```
+
+Example:
 
   ```bash
   $bbolt surgery clear-page-elements ~/default.etcd/member/snap/db --output partial.db --pageId 3 --from-index 1 --to-index 4
@@ -546,28 +689,44 @@ $ ./bbolt inspect ~/default.etcd/member/snap/db
 
 #### surgery freelist
 
-- `surgery freelist` provides commands for managing the database's free page list.
-- usage:
+`surgery freelist` provides commands for managing the database's free page list.
 
-  ```bash
-  bbolt surgery freelist <subcommand> [arguments]
-  ```
+Usage:
+```
+$ bbolt surgery freelist -h
+freelist related surgery commands
 
-  The freelist subcommands are:
+Usage:
+  bbolt surgery freelist [command]
 
-  - `abandon` - remove freelist references from meta pages
-  - `rebuild` - rebuild the freelist by scanning the database
+Available Commands:
+  abandon     abandon freelist
+  rebuild     rebuild freelist
+
+Flags:
+  -h, --help   help for freelist
+
+Use "bbolt surgery freelist [command] --help" for more information about a command.
+```
 
 ##### surgery freelist abandon
 
-- `surgery freelist abandon` removes freelist references from both meta pages, forcing Bbolt to reconstruct the freelist when the database is next opened.
-- usage:
+`surgery freelist abandon` removes freelist references from both meta pages, forcing Bbolt to reconstruct the freelist when the database is next opened.
 
-  ```bash
-  bbolt surgery freelist abandon [path to the bbolt database] --output [output-file]
-  ```
+Usage:
+```
+$ bbolt surgery freelist abandon -h
+Abandon the freelist from both meta pages
 
-  Example:
+Usage:
+  bbolt surgery freelist abandon <bbolt-file> [flags]
+
+Flags:
+  -h, --help            help for abandon
+      --output string   path to the filePath db file
+```
+
+Example:
 
   ```bash
   $bbolt surgery freelist abandon ~/default.etcd/member/snap/db --output abandoned.db
@@ -579,14 +738,22 @@ $ ./bbolt inspect ~/default.etcd/member/snap/db
 
 ##### surgery freelist rebuild
 
-- `surgery freelist rebuild` rebuilds the freelist in a database where the freelist has been abandoned.
-- usage:
+`surgery freelist rebuild` rebuilds the freelist in a database where the freelist has been abandoned.
 
-  ```bash
-  bbolt surgery freelist rebuild [path to the bbolt database] --output [output-file]
-  ```
+Usage:
+```
+$ bbolt surgery freelist rebuild -h
+Rebuild the freelist
 
-  Example:
+Usage:
+  bbolt surgery freelist rebuild <bbolt-file> [flags]
+
+Flags:
+  -h, --help            help for rebuild
+      --output string   path to the filePath db file
+```
+
+Example:
 
   ```bash
   $bbolt surgery freelist rebuild ~/default.etcd/member/snap/db --output rebuilt.db
@@ -597,27 +764,43 @@ $ ./bbolt inspect ~/default.etcd/member/snap/db
 
 #### surgery meta
 
-- `surgery meta` provides commands for working with database metadata pages.
-- usage:
+`surgery meta` provides commands for working with database metadata pages.
 
-  ```bash
-  bbolt surgery meta <subcommand> [arguments]
-  ```
-  
-  The meta subcommands are:
-  - `validate` - validate integrity of meta pages
-  - `update` - update specific fields in meta pages
+Usage:
+```
+$ bbolt surgery meta -h
+meta page related surgery commands
+
+Usage:
+  bbolt surgery meta [command]
+
+Available Commands:
+  update      update meta page
+  validate    validate meta page
+
+Flags:
+  -h, --help   help for meta
+
+Use "bbolt surgery meta [command] --help" for more information about a command.
+```
 
 ##### surgery meta validate
 
-- `surgery meta validate` validates the integrity of both meta pages in the database.
-- usage:
+`surgery meta validate` validates the integrity of both meta pages in the database.
 
-  ```bash
-  bbolt surgery meta validate [path to the bbolt database]
-  ```
+Usage:
+```
+$ bbolt surgery meta validate -h
+Validate both meta pages
 
-  Example:
+Usage:
+  bbolt surgery meta validate <bbolt-file> [flags]
+
+Flags:
+  -h, --help   help for validate
+```
+
+Example:
 
   ```bash
   $bbolt surgery meta validate ~/default.etcd/member/snap/db
@@ -629,20 +812,30 @@ $ ./bbolt inspect ~/default.etcd/member/snap/db
 
 ##### surgery meta update
 
-- `surgery meta update` updates specific fields in a meta page for manual repair of corrupted metadata.
-- usage:
+`surgery meta update` updates specific fields in a meta page for manual repair of corrupted metadata.
 
-  ```bash
-  bbolt surgery meta update [path to the bbolt database] --output [output-file] --meta-page [0|1] --fields [field:value,...]
-  ```
+Usage:
+```
+$ bbolt surgery meta update -h
+Update fields in meta pages
 
-  Supported fields:
-  - `pageSize` - Size of database pages
-  - `root` - Root bucket page ID
-  - `freelist` - Freelist page ID
-  - `pgid` - Next page ID to allocate
+Usage:
+  bbolt surgery meta update <bbolt-file> [flags]
 
-  Example:
+Flags:
+      --fields strings     comma separated list of fields (supported fields: pageSize, root, freelist and pgid) to be updated, and each item is a colon-separated key-value pair
+  -h, --help               help for update
+      --meta-page uint32   the meta page ID to operate on, valid values are 0 and 1
+      --output string      path to the filePath db file
+```
+
+Supported fields:
+- `pageSize` - Size of database pages
+- `root` - Root bucket page ID
+- `freelist` - Freelist page ID
+- `pgid` - Next page ID to allocate
+
+Example:
 
   ```bash
   $bbolt surgery meta update ~/default.etcd/member/snap/db --output fixed.db --meta-page 0 --fields root:16,freelist:8
