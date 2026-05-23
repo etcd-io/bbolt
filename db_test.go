@@ -1688,7 +1688,7 @@ func TestDB_MaxSizeExceededDoesNotGrow(t *testing.T) {
 		maxSize         int // 0 means unset
 		// expected file size after re-open (0 means "same as baseSize")
 		wantSize    int64
-		wantOpenErr error // nil means open must succeed
+		wantOpenErr error
 	}{
 		{
 			// On Windows, mmap expands the file to the mapped size immediately.
