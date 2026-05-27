@@ -1731,10 +1731,7 @@ func TestDB_MaxSizeExceededDoesNotGrow(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			path := copyDB(t)
 
-			opts := &bolt.Options{InitialMmapSize: tc.initialMmapSize}
-			if tc.maxSize > 0 {
-				opts.MaxSize = tc.maxSize
-			}
+			opts := &bolt.Options{InitialMmapSize: tc.initialMmapSize, MaxSize: tc.maxSize}
 
 			db, err := btesting.OpenDBWithOption(t, path, opts)
 			if tc.wantOpenErr != nil {
