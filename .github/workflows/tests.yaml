@@ -69,6 +69,7 @@ jobs:
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - id: goversion
+      shell: bash
       run: echo "goversion=$(cat .go-version)" >> "$GITHUB_OUTPUT"
     - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
       with:
@@ -97,6 +98,7 @@ jobs:
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - id: goversion
+      shell: bash
       run: echo "goversion=$(cat .go-version)" >> "$GITHUB_OUTPUT"
     - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
       with:
