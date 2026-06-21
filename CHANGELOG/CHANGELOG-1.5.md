@@ -1,3 +1,9 @@
+
+<hr>
+
+## v1.5.0(2026-06-21)
+There isn't any production code change since v1.5.0-rc.0. Only golang patch version is bumped.
+
 <hr>
 
 ## v1.5.0-rc.0(2026-05-27)
