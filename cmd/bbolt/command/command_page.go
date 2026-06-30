@@ -71,7 +71,7 @@ func printPages(cmd *cobra.Command, pageIDs []uint64, path string, formatValue s
 		}
 		_, pErr := printPage(cmd, path, pageID, formatValue)
 		if pErr != nil {
-			fmt.Fprintf(cmd.OutOrStdout(), "Prining page %d failed: %s. Continuing...\n", pageID, pErr)
+			fmt.Fprintf(cmd.OutOrStdout(), "Printing page %d failed: %s. Continuing...\n", pageID, pErr)
 		}
 	}
 }
@@ -128,7 +128,7 @@ func printAllPages(cmd *cobra.Command, path string, formatValue string) {
 		}
 		overflow, pErr := printPage(cmd, path, pageID, formatValue)
 		if pErr != nil {
-			fmt.Fprintf(cmd.OutOrStdout(), "Prining page %d failed: %s. Continuing...\n", pageID, pErr)
+			fmt.Fprintf(cmd.OutOrStdout(), "Printing page %d failed: %s. Continuing...\n", pageID, pErr)
 			pageID++
 		} else {
 			pageID += uint64(overflow) + 1
