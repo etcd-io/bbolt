@@ -1295,7 +1295,7 @@ func (db *DB) freepages() []common.Pgid {
 		tx.recursivelyCheckBucket(&tx.root, reachable, nofreed, HexKVStringer(), ech)
 	}()
 	// following for loop will exit once channel is closed in the above goroutine.
-	// we don't need to wait explictly with a waitgroup
+	// we don't need to wait explicitly with a waitgroup
 	for e := range ech {
 		panic(fmt.Sprintf("freepages: failed to get all reachable pages (%v)", e))
 	}
