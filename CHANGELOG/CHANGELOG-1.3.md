@@ -6,7 +6,7 @@ Note that we start to track changes starting from v1.3.7.
 
 ### BoltDB
 - Fix [`Bucket.Stats()` panic on branch pages with zero elements](https://github.com/etcd-io/bbolt/pull/1173)
-- Backported [Changes for Android 14](https://github.com/etcd-io/bbolt/pull/571) [into v1.3 release](https://github.com/etcd-io/bbolt/pull/1161)
+- [Support Android platform](https://github.com/etcd-io/bbolt/pull/1161)
 
 <hr>
 
