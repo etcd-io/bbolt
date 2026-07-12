@@ -1,6 +1,3 @@
-//go:build !windows && !plan9 && !solaris && !aix && !android
-// +build !windows,!plan9,!solaris,!aix,!android
-
 package bbolt
 
 import (
@@ -19,18 +16,19 @@ func flock(db *DB, exclusive bool, timeout time.Duration) error {
 		t = time.Now()
 	}
 	fd := db.file.Fd()
-	flag := syscall.LOCK_NB
+	var lockType int16
 	if exclusive {
-		flag |= syscall.LOCK_EX
+		lockType = syscall.F_WRLCK
 	} else {
-		flag |= syscall.LOCK_SH
+		lockType = syscall.F_RDLCK
 	}
 	for {
 		// Attempt to obtain an exclusive lock.
-		err := syscall.Flock(int(fd), flag)
+		lock := syscall.Flock_t{Type: lockType}
+		err := syscall.FcntlFlock(fd, syscall.F_SETLK, &lock)
 		if err == nil {
 			return nil
-		} else if err != syscall.EWOULDBLOCK {
+		} else if err != syscall.EAGAIN {
 			return err
 		}
 
@@ -46,7 +44,12 @@ func flock(db *DB, exclusive bool, timeout time.Duration) error {
 
 // funlock releases an advisory lock on a file descriptor.
 func funlock(db *DB) error {
-	return syscall.Flock(int(db.file.Fd()), syscall.LOCK_UN)
+	var lock syscall.Flock_t
+	lock.Start = 0
+	lock.Len = 0
+	lock.Type = syscall.F_UNLCK
+	lock.Whence = 0
+	return syscall.FcntlFlock(uintptr(db.file.Fd()), syscall.F_SETLK, &lock)
 }
 
 // mmap memory maps a DB's data file.
