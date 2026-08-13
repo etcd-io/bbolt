@@ -1,6 +1,6 @@
 BRANCH=`git rev-parse --abbrev-ref HEAD`
 COMMIT=`git rev-parse --short HEAD`
-GOLDFLAGS="-X main.branch $(BRANCH) -X main.commit $(COMMIT)"
+GOLDFLAGS="-X go.etcd.io/bbolt/version.Branch=$(BRANCH) -X go.etcd.io/bbolt/version.Commit=$(COMMIT)"
 GOFILES = $(shell find . -name \*.go)
 REPOSITORY_ROOT := $(shell git rev-parse --show-toplevel)
 GOTOOLCHAIN ?= go$(shell cat $(REPOSITORY_ROOT)/.go-version)
@@ -66,7 +66,7 @@ coverage:
 BOLT_CMD=bbolt
 
 build:
-	go build -o bin/${BOLT_CMD} ./cmd/${BOLT_CMD}
+	go build -ldflags ${GOLDFLAGS} -o bin/${BOLT_CMD} ./cmd/${BOLT_CMD}
 
 .PHONY: clean
 clean: # Clean binaries
