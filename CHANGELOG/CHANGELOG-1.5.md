@@ -5,6 +5,7 @@
 
 ### BoltDB
 - [Fix version string not updated for v1.5.0 release](https://github.com/etcd-io/bbolt/pull/1230)
+- [Generate unified version output for both 'bbolt version' and 'bbolt -v'](https://github.com/etcd-io/bbolt/pull/1251)
 
 <hr>
 
