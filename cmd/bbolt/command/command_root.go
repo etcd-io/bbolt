@@ -2,6 +2,8 @@ package command
 
 import (
 	"github.com/spf13/cobra"
+
+	"go.etcd.io/bbolt/version"
 )
 
 const (
@@ -13,8 +15,9 @@ func NewRootCommand() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:     cliName,
 		Short:   cliDescription,
-		Version: "dev",
+		Version: version.Version,
 	}
+	rootCmd.SetVersionTemplate(versionOutput())
 
 	rootCmd.AddCommand(
 		newVersionCommand(),
