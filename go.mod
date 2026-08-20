@@ -2,7 +2,7 @@ module go.etcd.io/bbolt
 
 go 1.25
 
-toolchain go1.25.13
+toolchain go1.25.14
 
 require (
 	github.com/spf13/cobra v1.8.1
