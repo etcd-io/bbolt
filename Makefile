@@ -33,7 +33,7 @@ fmt:
 	@!(gofmt -l -s -d ${GOFILES} | grep '[a-z]')
 
 	@echo "Verifying goimports, failures can be fixed with ./scripts/fix.sh"
-	@!(go run golang.org/x/tools/cmd/goimports@latest -l -d ${GOFILES} | grep '[a-z]')
+	@!(go tool golang.org/x/tools/cmd/goimports -l -d ${GOFILES} | grep '[a-z]')
 
 .PHONY: lint
 lint:
@@ -99,10 +99,6 @@ test-robustness: gofail-enable build
 .PHONY: test-benchmark-compare
 # Runs benchmark tests on the current git ref and the given REF, and compares
 # the two.
-test-benchmark-compare: install-benchstat
+test-benchmark-compare:
 	@git fetch
 	./scripts/compare_benchmarks.sh $(REF)
-
-.PHONY: install-benchstat
-install-benchstat:
-	go install golang.org/x/perf/cmd/benchstat@latest
