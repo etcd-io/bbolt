@@ -57,12 +57,12 @@ function main() {
   echo "BASE=${BASE_TO_COMPARE} HEAD=${REF_CURRENT}"
 
   if [[ "${BENCHSTAT_FORMAT}" == "csv" ]]; then
-    benchstat -format=csv -confidence="${BENCHSTAT_CONFIDENCE_LEVEL}" BASE="${RESULT_TO_COMPARE}" HEAD="${RESULT_CURRENT}" 2>/dev/null 1>"${BENCHSTAT_OUTPUT_FILE}"
+    go tool golang.org/x/perf/cmd/benchstat -format=csv -confidence="${BENCHSTAT_CONFIDENCE_LEVEL}" BASE="${RESULT_TO_COMPARE}" HEAD="${RESULT_CURRENT}" 2>/dev/null 1>"${BENCHSTAT_OUTPUT_FILE}"
   else
     if [[ -z "${BENCHSTAT_OUTPUT_FILE}" ]]; then
-      benchstat -confidence="${BENCHSTAT_CONFIDENCE_LEVEL}" BASE="${RESULT_TO_COMPARE}" HEAD="${RESULT_CURRENT}"
+      go tool golang.org/x/perf/cmd/benchstat -confidence="${BENCHSTAT_CONFIDENCE_LEVEL}" BASE="${RESULT_TO_COMPARE}" HEAD="${RESULT_CURRENT}"
     else
-      benchstat -confidence="${BENCHSTAT_CONFIDENCE_LEVEL}" BASE="${RESULT_TO_COMPARE}" HEAD="${RESULT_CURRENT}" 1>"${BENCHSTAT_OUTPUT_FILE}"
+      go tool golang.org/x/perf/cmd/benchstat -confidence="${BENCHSTAT_CONFIDENCE_LEVEL}" BASE="${RESULT_TO_COMPARE}" HEAD="${RESULT_CURRENT}" 1>"${BENCHSTAT_OUTPUT_FILE}"
     fi
   fi
 }
