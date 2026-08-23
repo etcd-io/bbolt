@@ -350,7 +350,6 @@ func (n *node) spill() error {
 	// If the root node split and created a new root then we need to spill that
 	// as well. We'll clear out the children to make sure it doesn't try to respill.
 	if n.parent != nil && n.parent.pgid == 0 {
-		n.children = nil
 		return n.parent.spill()
 	}
 
