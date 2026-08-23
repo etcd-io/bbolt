@@ -315,10 +315,7 @@ func (n *node) spill() error {
 	var nodes = n.split(uintptr(tx.db.pageSize))
 	for _, node := range nodes {
 		// Add node's page to the freelist if it's not new.
-		if node.pgid > 0 {
-			tx.db.freelist.Free(tx.meta.Txid(), tx.page(node.pgid))
-			node.pgid = 0
-		}
+		node.free()
 
 		// Allocate contiguous space for the node.
 		p, err := tx.allocate((node.size() + tx.db.pageSize - 1) / tx.db.pageSize)
