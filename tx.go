@@ -543,7 +543,7 @@ func (tx *Tx) write() error {
 			buf := common.UnsafeByteSlice(unsafe.Pointer(p), written, 0, int(sz))
 
 			if _, err := tx.db.ops.writeAt(buf, offset); err != nil {
-				lg.Errorf("writeAt failed, offset: %d: %w", offset, err)
+				lg.Errorf("writeAt failed, offset: %d: %v", offset, err)
 				return err
 			}
 
@@ -566,7 +566,7 @@ func (tx *Tx) write() error {
 	if !tx.db.NoSync || common.IgnoreNoSync {
 		// gofail: var beforeSyncDataPages struct{}
 		if err := fdatasync(tx.db); err != nil {
-			lg.Errorf("[GOOS: %s, GOARCH: %s] fdatasync failed: %w", runtime.GOOS, runtime.GOARCH, err)
+			lg.Errorf("[GOOS: %s, GOARCH: %s] fdatasync failed: %v", runtime.GOOS, runtime.GOARCH, err)
 			return err
 		}
 	}
@@ -613,7 +613,7 @@ func (tx *Tx) writeMeta() error {
 	if !tx.db.NoSync || common.IgnoreNoSync {
 		// gofail: var beforeSyncMetaPage struct{}
 		if err := fdatasync(tx.db); err != nil {
-			lg.Errorf("[GOOS: %s, GOARCH: %s] fdatasync failed: %w", runtime.GOOS, runtime.GOARCH, err)
+			lg.Errorf("[GOOS: %s, GOARCH: %s] fdatasync failed: %v", runtime.GOOS, runtime.GOARCH, err)
 			return err
 		}
 	}
