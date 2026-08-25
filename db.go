@@ -456,7 +456,7 @@ func (db *DB) mmap(minsz int) (err error) {
 	var fileSize int
 	fileSize, err = db.fileSize()
 	if err != nil {
-		lg.Errorf("getting file size failed: %w", err)
+		lg.Errorf("getting file size failed: %v", err)
 		return err
 	}
 	var size = fileSize
@@ -465,7 +465,7 @@ func (db *DB) mmap(minsz int) (err error) {
 	}
 	size, err = db.mmapSize(size)
 	if err != nil {
-		lg.Errorf("getting map size failed: %w", err)
+		lg.Errorf("getting map size failed: %v", err)
 		return err
 	}
 
@@ -653,11 +653,11 @@ func (db *DB) init() error {
 
 	// Write the buffer to our data file.
 	if _, err := db.ops.writeAt(buf, 0); err != nil {
-		db.Logger().Errorf("writeAt failed: %w", err)
+		db.Logger().Errorf("writeAt failed: %v", err)
 		return err
 	}
 	if err := fdatasync(db); err != nil {
-		db.Logger().Errorf("[GOOS: %s, GOARCH: %s] fdatasync failed: %w", runtime.GOOS, runtime.GOARCH, err)
+		db.Logger().Errorf("[GOOS: %s, GOARCH: %s] fdatasync failed: %v", runtime.GOOS, runtime.GOARCH, err)
 		return err
 	}
 
@@ -1183,7 +1183,7 @@ func (db *DB) grow(sz int) error {
 	lg := db.Logger()
 	fileSize, err := db.fileSize()
 	if err != nil {
-		lg.Errorf("getting file size failed: %w", err)
+		lg.Errorf("getting file size failed: %v", err)
 		return err
 	}
 	if sz <= fileSize {
