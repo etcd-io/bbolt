@@ -407,6 +407,22 @@ func TestTx_DeleteBucket_ErrTxClosed(t *testing.T) {
 	}
 }
 
+// Ensure that calling Page on a closed transaction returns an error.
+func TestTx_Page_ErrTxClosed(t *testing.T) {
+	db := btesting.MustCreateDB(t)
+	tx, err := db.Begin(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := tx.Page(0); err != berrors.ErrTxClosed {
+		t.Fatalf("unexpected error: %s", err)
+	}
+}
+
 // Ensure that deleting a bucket with a read-only transaction returns an error.
 func TestTx_DeleteBucket_ReadOnly(t *testing.T) {
 	db := btesting.MustCreateDB(t)
