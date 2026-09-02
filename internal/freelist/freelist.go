@@ -22,6 +22,9 @@ type Interface interface {
 	// Init initializes this freelist with the given list of pages.
 	Init(ids common.Pgids)
 
+	// AddCurrentTXID adds the latest known ID to the list.
+	AddCurrentTXID(tid common.Txid)
+
 	// Allocate tries to allocate the given number of contiguous pages
 	// from the free list pages. It returns the starting page ID if
 	// available; otherwise, it returns 0.
