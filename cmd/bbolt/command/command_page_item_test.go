@@ -104,3 +104,40 @@ func TestPageItemCommand_NoArgs(t *testing.T) {
 	err := rootCmd.Execute()
 	require.ErrorContains(t, err, expErr.Error())
 }
+
+func TestPageItemCommand_ItemIDOverflow(t *testing.T) {
+	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
+	srcPath := db.Path()
+
+	err := db.Update(func(tx *bolt.Tx) error {
+		b, bErr := tx.CreateBucketIfNotExists([]byte("data"))
+		if bErr != nil {
+			return bErr
+		}
+		return b.Put([]byte("key_0"), []byte("value_0"))
+	})
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+	defer requireDBNoChange(t, dbData(t, srcPath), srcPath)
+
+	meta := readMetaPage(t, srcPath)
+	leafPageID := 0
+	for i := 2; i < int(meta.Pgid()); i++ {
+		p, _, err := guts_cli.ReadPage(srcPath, uint64(i))
+		require.NoError(t, err)
+		if p.IsLeafPage() && p.Count() > 0 {
+			leafPageID = int(p.Id())
+		}
+	}
+	require.NotEqual(t, 0, leafPageID)
+
+	rootCmd := command.NewRootCommand()
+	outBuf := &bytes.Buffer{}
+	rootCmd.SetOut(outBuf)
+	rootCmd.SetArgs([]string{"page-item", db.Path(), fmt.Sprintf("%d", leafPageID), "65536"})
+
+	err = rootCmd.Execute()
+	require.ErrorContains(t, err, "itemid")
+	require.NotContains(t, outBuf.String(), "key_0")
+	require.NotContains(t, outBuf.String(), "value_0")
+}

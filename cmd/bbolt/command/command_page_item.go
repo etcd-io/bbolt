@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 
 	"github.com/spf13/cobra"
@@ -52,6 +53,9 @@ func (o *pageItemOptions) AddFlags(fs *pflag.FlagSet) {
 func pageItemFunc(cmd *cobra.Command, cfg pageItemOptions, dbPath string, pageID, itemID uint64) (err error) {
 	if cfg.keyOnly && cfg.valueOnly {
 		return errors.New("the --key-only or --value-only flag may be set, but not both")
+	}
+	if itemID > math.MaxUint16 {
+		return fmt.Errorf("itemid must be less than or equal to %d, but got %d", math.MaxUint16, itemID)
 	}
 
 	if _, err := checkSourceDBPath(dbPath); err != nil {
