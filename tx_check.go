@@ -41,8 +41,9 @@ func (tx *Tx) check(cfg checkConfig, ch chan error) {
 			ch <- panicked{r}
 		}
 	}()
-	// Force loading free list if opened in ReadOnly mode.
-	tx.db.loadFreelist()
+	// Force loading free list if opened in ReadOnly mode. Pass this tx so
+	// freelist reconstruction does not open a nested read transaction.
+	tx.db.loadFreelist(tx)
 
 	// Check if any pages are double freed.
 	freed := make(map[common.Pgid]bool)
