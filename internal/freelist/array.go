@@ -95,7 +95,7 @@ func (f *array) mergeSpans(ids common.Pgids) {
 			}
 		}
 	})
-	f.ids = common.Pgids(f.ids).Merge(ids)
+	f.ids = common.Pgids(f.ids).MergeInPlace(ids)
 }
 
 func NewArrayFreelist() Interface {
