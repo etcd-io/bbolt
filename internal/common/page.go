@@ -346,26 +346,12 @@ func (s Pgids) Len() int           { return len(s) }
 func (s Pgids) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s Pgids) Less(i, j int) bool { return s[i] < s[j] }
 
-// Merge returns the sorted concatenation of a and b.
-// Both inputs must be sorted and must not contain the same page ID.
+// Merge returns the sorted union of a and b, reusing the backing array of s
+// when it has enough spare capacity. The backing array of s is overwritten,
+// so the returned slice must be used instead of s. Both inputs must be sorted
+// and must not contain the same page ID or alias each other.
 func (s Pgids) Merge(b Pgids) Pgids {
 	// Return the opposite slice if one is nil.
-	if len(s) == 0 {
-		return b
-	}
-	if len(b) == 0 {
-		return s
-	}
-	merged := make(Pgids, len(s)+len(b))
-	mergepgids(merged, s, b)
-	return merged
-}
-
-// MergeInPlace merges b into s, reusing the backing array of s when it has
-// enough spare capacity. The backing array of s is always overwritten. The
-// returned slice must be used instead of s. Both inputs must be sorted, must
-// not contain the same page ID, and must not alias each other.
-func (s Pgids) MergeInPlace(b Pgids) Pgids {
 	if len(s) == 0 {
 		return b
 	}
@@ -379,17 +365,14 @@ func (s Pgids) MergeInPlace(b Pgids) Pgids {
 	return merged
 }
 
-// Mergepgids copies the sorted concatenation of a and b into dst.
-// The inputs must be sorted and dst must not overlap either input.
-// If dst is too small, it panics.
+// Mergepgids copies the sorted union of a and b into dst.
+// The inputs must be sorted and must not contain the same page ID.
+// The dst must not overlap either input. If dst is too small, it panics.
 func Mergepgids(dst, a, b Pgids) {
 	if len(dst) < len(a)+len(b) {
 		panic(fmt.Errorf("mergepgids bad len %d < %d + %d", len(dst), len(a), len(b)))
 	}
-	mergepgids(dst, a, b)
-}
 
-func mergepgids(dst, a, b Pgids) {
 	i, j, k := 0, 0, 0
 	for i < len(a) && j < len(b) {
 		if a[i] < b[j] {

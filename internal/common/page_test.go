@@ -90,10 +90,10 @@ func TestPgids_mergeInPlace(t *testing.T) {
 			backing := make(Pgids, len(tt.a), len(tt.a)+len(tt.b))
 			copy(backing, tt.a)
 
-			got := backing.MergeInPlace(tt.b)
+			got := backing.Merge(tt.b)
 			require.Equal(t, tt.want, got)
 			if len(tt.a) != 0 && len(tt.b) != 0 && &got[0] != &backing[0] {
-				t.Fatal("MergeInPlace did not reuse the destination backing array")
+				t.Fatal("Merge did not reuse the destination backing array")
 			}
 		})
 	}
@@ -135,6 +135,6 @@ func BenchmarkPgids_mergeInPlace(b *testing.B) {
 	for b.Loop() {
 		s := dst[:size]
 		copy(s, srcA)
-		benchmarkPgidsMergeSink = s.MergeInPlace(srcB)
+		benchmarkPgidsMergeSink = s.Merge(srcB)
 	}
 }
