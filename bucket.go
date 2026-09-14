@@ -391,13 +391,22 @@ func (b *Bucket) MoveBucket(key []byte, dstBucket *Bucket) (err error) {
 		return errors.ErrIncompatibleValue
 	}
 
-	// remove the sub-bucket from the source bucket
+	// remove the sub-bucket from the source bucket. If it was materialized
+	// earlier in this transaction it may hold pending changes in memory, so keep
+	// a reference to carry over to the destination below.
+	movedChild := b.buckets[string(newKey)]
 	delete(b.buckets, string(newKey))
 	c.node().del(newKey)
 
 	// add te sub-bucket to the destination bucket
 	newValue := cloneBytes(v)
 	curDst.node().put(newKey, newKey, newValue, 0, common.BucketLeafFlag)
+
+	// carry the materialized sub-bucket over so its pending changes are spilled
+	// under the destination at commit; otherwise they would be silently lost.
+	if movedChild != nil && dstBucket.buckets != nil {
+		dstBucket.buckets[string(newKey)] = movedChild
+	}
 
 	return nil
 }

@@ -396,3 +396,68 @@ func populateSampleDataInBucket(t testing.TB, bk *bbolt.Bucket, n int) {
 		require.NoError(t, err)
 	}
 }
+
+// TestTx_MoveBucket_PendingChanges verifies that changes made to a sub-bucket in
+// the same transaction as a MoveBucket are preserved rather than silently dropped.
+func TestTx_MoveBucket_PendingChanges(t *testing.T) {
+	t.Run("modify committed bucket, then move in same tx", func(t *testing.T) {
+		db := btesting.MustCreateDB(t)
+
+		// tx1: create src/dst and a child with a committed key.
+		require.NoError(t, db.Update(func(tx *bbolt.Tx) error {
+			src, err := tx.CreateBucket([]byte("src"))
+			require.NoError(t, err)
+			if _, err := tx.CreateBucket([]byte("dst")); err != nil {
+				return err
+			}
+			child, err := src.CreateBucket([]byte("child"))
+			require.NoError(t, err)
+			return child.Put([]byte("committed"), []byte("v1"))
+		}))
+
+		// tx2: add a key to the child, then move it, in the same transaction.
+		require.NoError(t, db.Update(func(tx *bbolt.Tx) error {
+			src := tx.Bucket([]byte("src"))
+			require.NoError(t, src.Bucket([]byte("child")).Put([]byte("pending"), []byte("v2")))
+			return tx.MoveBucket([]byte("child"), src, tx.Bucket([]byte("dst")))
+		}))
+
+		require.NoError(t, db.View(func(tx *bbolt.Tx) error {
+			child := tx.Bucket([]byte("dst")).Bucket([]byte("child"))
+			require.NotNil(t, child)
+			require.Equal(t, []byte("v1"), child.Get([]byte("committed")))
+			require.Equal(t, []byte("v2"), child.Get([]byte("pending")))
+			return nil
+		}))
+	})
+
+	t.Run("create, populate and move in the same tx", func(t *testing.T) {
+		db := btesting.MustCreateDB(t)
+
+		require.NoError(t, db.Update(func(tx *bbolt.Tx) error {
+			src, err := tx.CreateBucket([]byte("src"))
+			require.NoError(t, err)
+			dst, err := tx.CreateBucket([]byte("dst"))
+			require.NoError(t, err)
+
+			child, err := src.CreateBucket([]byte("child"))
+			require.NoError(t, err)
+			require.NoError(t, child.Put([]byte("k"), []byte("v")))
+			// a nested sub-bucket with its own data
+			grand, err := child.CreateBucket([]byte("grand"))
+			require.NoError(t, err)
+			require.NoError(t, grand.Put([]byte("gk"), []byte("gv")))
+
+			return src.MoveBucket([]byte("child"), dst)
+		}))
+
+		require.NoError(t, db.View(func(tx *bbolt.Tx) error {
+			require.Nil(t, tx.Bucket([]byte("src")).Bucket([]byte("child")))
+			child := tx.Bucket([]byte("dst")).Bucket([]byte("child"))
+			require.NotNil(t, child)
+			require.Equal(t, []byte("v"), child.Get([]byte("k")))
+			require.Equal(t, []byte("gv"), child.Bucket([]byte("grand")).Get([]byte("gk")))
+			return nil
+		}))
+	})
+}
