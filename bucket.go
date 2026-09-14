@@ -395,7 +395,7 @@ func (b *Bucket) MoveBucket(key []byte, dstBucket *Bucket) (err error) {
 	delete(b.buckets, string(newKey))
 	c.node().del(newKey)
 
-	// add te sub-bucket to the destination bucket
+	// add the sub-bucket to the destination bucket
 	newValue := cloneBytes(v)
 	curDst.node().put(newKey, newKey, newValue, 0, common.BucketLeafFlag)
 
