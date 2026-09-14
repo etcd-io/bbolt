@@ -3,7 +3,9 @@ package freelist
 import (
 	"fmt"
 	"math"
+	"slices"
 	"sort"
+	"sync/atomic"
 	"unsafe"
 
 	"go.etcd.io/bbolt/internal/common"
@@ -15,13 +17,18 @@ type txPending struct {
 	lastReleaseBegin common.Txid   // beginning txid of last matching releaseRange
 }
 
+type txIdReference struct {
+	txid common.Txid
+	refs atomic.Int32
+}
+
 type shared struct {
 	Interface
 
-	readonlyTXIDs []common.Txid               // all readonly transaction IDs.
-	allocs        map[common.Pgid]common.Txid // mapping of Txid that allocated a pgid.
-	cache         map[common.Pgid]struct{}    // fast lookup of all free and pending page ids.
-	pending       map[common.Txid]*txPending  // mapping of soon-to-be free page ids by tx.
+	readerRefs []*txIdReference
+	allocs     map[common.Pgid]common.Txid // mapping of Txid that allocated a pgid.
+	cache      map[common.Pgid]struct{}    // fast lookup of all free and pending page ids.
+	pending    map[common.Txid]*txPending  // mapping of soon-to-be free page ids by tx.
 }
 
 func newShared() *shared {
@@ -118,15 +125,18 @@ func (t *shared) Rollback(txid common.Txid) {
 }
 
 func (t *shared) AddReadonlyTXID(tid common.Txid) {
-	t.readonlyTXIDs = append(t.readonlyTXIDs, tid)
+	for _, r := range t.readerRefs {
+		if r.txid == tid {
+			r.refs.Add(1)
+			break
+		}
+	}
 }
 
 func (t *shared) RemoveReadonlyTXID(tid common.Txid) {
-	for i := range t.readonlyTXIDs {
-		if t.readonlyTXIDs[i] == tid {
-			last := len(t.readonlyTXIDs) - 1
-			t.readonlyTXIDs[i] = t.readonlyTXIDs[last]
-			t.readonlyTXIDs = t.readonlyTXIDs[:last]
+	for _, r := range t.readerRefs {
+		if r.txid == tid {
+			r.refs.Add(-1)
 			break
 		}
 	}
@@ -140,21 +150,35 @@ func (t txIDx) Less(i, j int) bool { return t[i] < t[j] }
 
 func (t *shared) ReleasePendingPages() {
 	// Free all pending pages prior to the earliest open transaction.
-	sort.Sort(txIDx(t.readonlyTXIDs))
 	minid := common.Txid(math.MaxUint64)
-	if len(t.readonlyTXIDs) > 0 {
-		minid = t.readonlyTXIDs[0]
+
+	for i := range t.readerRefs {
+		if t.readerRefs[i].refs.Load() != 0 && minid > t.readerRefs[i].txid {
+			minid = t.readerRefs[i].txid
+		}
 	}
 	if minid > 0 {
 		t.release(minid - 1)
 	}
 	// Release unused txid extents.
-	for _, tid := range t.readonlyTXIDs {
-		t.releaseRange(minid, tid-1)
-		minid = tid + 1
+	for _, e := range t.readerRefs {
+		t.releaseRange(minid, e.txid-1)
+		minid = e.txid + 1
 	}
 	t.releaseRange(minid, common.Txid(math.MaxUint64))
 	// Any page both allocated and freed in an extent is safe to release.
+}
+
+func (t *shared) AddCurrentTXID(tid common.Txid) {
+	inUseID := tid - 1 // New readers can still use it till meta pages are updated.
+
+	t.readerRefs = slices.DeleteFunc(t.readerRefs, func(e *txIdReference) bool {
+		// tid can be left by previous unsuccessful transaction, there
+		// can't be any readers using it, but we'll append it anyway
+		// below (this just simplifies code).
+		return (e.txid < inUseID && e.refs.Load() == 0) || e.txid == tid
+	})
+	t.readerRefs = append(t.readerRefs, &txIdReference{txid: tid})
 }
 
 func (t *shared) release(txid common.Txid) {
