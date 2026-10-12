@@ -1,10 +1,13 @@
 package command_test
 
 import (
+	"bytes"
 	crypto "crypto/rand"
 	"errors"
 	"fmt"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -98,4 +101,70 @@ func TestCompactCommand_NoArgs(t *testing.T) {
 	rootCmd.SetArgs([]string{"compact"})
 	err := rootCmd.Execute()
 	require.ErrorContains(t, err, expErr.Error())
+}
+
+func TestCompactCommand_SourceAsDestination(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		// dst returns the destination path for the given source path.
+		dst func(t *testing.T, src string) string
+	}{
+		{
+			name: "same path",
+			dst:  func(_ *testing.T, src string) string { return src },
+		},
+		{
+			name: "relative path",
+			dst: func(t *testing.T, src string) string {
+				t.Chdir(filepath.Dir(src))
+				return filepath.Base(src)
+			},
+		},
+		{
+			name: "hard link",
+			dst: func(t *testing.T, src string) string {
+				dst := filepath.Join(t.TempDir(), "db-link")
+				if err := os.Link(src, dst); err != nil {
+					t.Skipf("hard links unavailable: %v", err)
+				}
+				return dst
+			},
+		},
+		{
+			name: "symbolic link",
+			dst: func(t *testing.T, src string) string {
+				dst := filepath.Join(t.TempDir(), "db-symlink")
+				if err := os.Symlink(src, dst); err != nil {
+					t.Skipf("symbolic links unavailable: %v", err)
+				}
+				return dst
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := btesting.MustCreateDB(t)
+			err := db.Update(func(tx *bolt.Tx) error {
+				b, err := tx.CreateBucket([]byte("widgets"))
+				if err != nil {
+					return err
+				}
+				return b.Put([]byte("foo"), []byte("bar"))
+			})
+			require.NoError(t, err)
+			require.NoError(t, db.Close())
+
+			before, err := os.ReadFile(db.Path())
+			require.NoError(t, err)
+			dstPath := tc.dst(t, db.Path())
+
+			rootCmd := command.NewRootCommand()
+			rootCmd.SetArgs([]string{"compact", "-o", dstPath, db.Path()})
+			err = rootCmd.Execute()
+			require.ErrorIs(t, err, command.ErrCompactSourceIsDestination)
+
+			after, err := os.ReadFile(db.Path())
+			require.NoError(t, err)
+			require.True(t, bytes.Equal(before, after), "compact changed the source database")
+		})
+	}
 }
