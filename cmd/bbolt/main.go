@@ -64,6 +64,10 @@ var (
 
 	// ErrNotEnoughArgs is returned with a cmd is being executed with fewer arguments.
 	ErrNotEnoughArgs = errors.New("not enough arguments")
+
+	// ErrCompactSourceIsDestination is returned when running the compact command, while source
+	// and destination are the same database file.
+	ErrCompactSourceIsDestination = errors.New("source and destination are the same database file")
 )
 
 func main() {
@@ -1638,6 +1642,9 @@ func (cmd *compactCommand) Run(args ...string) (err error) {
 		return ErrFileNotFound
 	} else if err != nil {
 		return err
+	}
+	if dstInfo, err := os.Stat(cmd.DstPath); err == nil && os.SameFile(fi, dstInfo) {
+		return ErrCompactSourceIsDestination
 	}
 	initialSize := fi.Size()
 
