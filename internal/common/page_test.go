@@ -99,8 +99,8 @@ func TestLoadBucket_UnalignedOddKey(t *testing.T) {
 	if uintptr(unsafe.Pointer(&val[0]))%unsafe.Alignof(InBucket{}) == 0 {
 		t.Fatal("fixture is aligned; odd key length did not shift the header")
 	}
-	binary.LittleEndian.PutUint64(val[0:8], 7)
-	binary.LittleEndian.PutUint64(val[8:16], 9)
+	binary.NativeEndian.PutUint64(val[0:8], 7)
+	binary.NativeEndian.PutUint64(val[8:16], 9)
 
 	bkt := elem.Bucket()
 	if bkt == nil {
@@ -135,8 +135,8 @@ func TestInlinePage_ShortAndUnaligned(t *testing.T) {
 	if uintptr(unsafe.Pointer(&v[BucketHeaderSize]))%unsafe.Alignof(Page{}) == 0 {
 		t.Fatal("fixture page is aligned")
 	}
-	binary.LittleEndian.PutUint64(v[BucketHeaderSize:], 3)
-	v[BucketHeaderSize+8] = LeafPageFlag
+	binary.NativeEndian.PutUint64(v[BucketHeaderSize:], 3)
+	binary.NativeEndian.PutUint16(v[BucketHeaderSize+8:], LeafPageFlag)
 
 	p := b.InlinePage(v)
 	if p == nil {

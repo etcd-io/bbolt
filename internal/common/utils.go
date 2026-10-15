@@ -18,11 +18,9 @@ func LoadBucket(buf []byte) *InBucket {
 	if len(buf) < BucketHeaderSize {
 		return nil
 	}
-	var raw [BucketHeaderSize]byte
-	copy(raw[:], buf[:BucketHeaderSize])
 	b := NewInBucket(
-		Pgid(binary.LittleEndian.Uint64(raw[0:8])),
-		binary.LittleEndian.Uint64(raw[8:16]),
+		Pgid(binary.NativeEndian.Uint64(buf[0:8])),
+		binary.NativeEndian.Uint64(buf[8:16]),
 	)
 	return &b
 }
