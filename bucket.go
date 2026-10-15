@@ -58,6 +58,12 @@ func (b *Bucket) Tx() *Tx {
 	return b.tx
 }
 
+// String returns a human-readable representation of the bucket, identifying
+// it by its root page id.
+func (b *Bucket) String() string {
+	return fmt.Sprintf("Bucket<pgid=%d>", b.RootPage())
+}
+
 // Root returns the root of the bucket.
 func (b *Bucket) Root() common.Pgid {
 	return b.RootPage()
@@ -113,8 +119,12 @@ func (b *Bucket) Bucket(name []byte) *Bucket {
 // Helper method that re-interprets a sub-bucket value
 // from a parent into a Bucket
 func (b *Bucket) openBucket(value []byte) *Bucket {
-	var child = newBucket(b.tx)
+	child := newBucket(b.tx)
+	child.initializeBucket(value)
+	return &child
+}
 
+func (b *Bucket) initializeBucket(value []byte) {
 	// Unaligned access requires a copy to be made.
 	const unalignedMask = unsafe.Alignof(struct {
 		common.InBucket
@@ -128,18 +138,16 @@ func (b *Bucket) openBucket(value []byte) *Bucket {
 	// If this is a writable transaction then we need to copy the bucket entry.
 	// Read-only transactions can point directly at the mmap entry.
 	if b.tx.writable && !unaligned {
-		child.InBucket = &common.InBucket{}
-		*child.InBucket = *(*common.InBucket)(unsafe.Pointer(&value[0]))
+		b.InBucket = &common.InBucket{}
+		*b.InBucket = *(*common.InBucket)(unsafe.Pointer(&value[0]))
 	} else {
-		child.InBucket = (*common.InBucket)(unsafe.Pointer(&value[0]))
+		b.InBucket = (*common.InBucket)(unsafe.Pointer(&value[0]))
 	}
 
 	// Save a reference to the inline page if the bucket is inline.
-	if child.RootPage() == 0 {
-		child.page = (*common.Page)(unsafe.Pointer(&value[common.BucketHeaderSize]))
+	if b.RootPage() == 0 {
+		b.page = (*common.Page)(unsafe.Pointer(&value[common.BucketHeaderSize]))
 	}
-
-	return &child
 }
 
 // CreateBucket creates a new bucket at the given key and returns the new bucket.
@@ -378,6 +386,16 @@ func (b *Bucket) MoveBucket(key []byte, dstBucket *Bucket) (err error) {
 		return errors.ErrSameBuckets
 	}
 
+	// Return an error if the destination bucket is the bucket being moved
+	// itself or one of its descendants. Allowing this would create a cycle
+	// in the bucket structure, since the moved bucket would end up nested
+	// inside its own subtree.
+	childBucket := b.Bucket(newKey)
+	if bucketContainsBucket(childBucket, dstBucket) {
+		lg.Errorf("The target bucket (%s) is the same as or a descendant of the bucket (%s) being moved", dstBucket, childBucket)
+		return errors.ErrCyclicBucketMove
+	}
+
 	// check whether the key already exists in the destination bucket
 	curDst := dstBucket.Cursor()
 	k, _, flags = curDst.seek(newKey)
@@ -395,11 +413,45 @@ func (b *Bucket) MoveBucket(key []byte, dstBucket *Bucket) (err error) {
 	delete(b.buckets, string(newKey))
 	c.node().del(newKey)
 
-	// add te sub-bucket to the destination bucket
+	// Add the sub-bucket to the destination bucket.
+	// The header stored in the parent is only refreshed on spill, so it can
+	// lag behind the in-memory header (e.g. sequence) of the child bucket.
+	// Carry the child's current header into the new value, because
+	// initializeBucket below re-reads the header from it.
 	newValue := cloneBytes(v)
+	*(*common.InBucket)(unsafe.Pointer(&newValue[0])) = *childBucket.InBucket
 	curDst.node().put(newKey, newKey, newValue, 0, common.BucketLeafFlag)
 
+	// Reuse the already opened child bucket instead of opening a new one,
+	// so that applications which already hold a pointer to it, or to any
+	// of its descendants, aren't affected: they keep working on the same
+	// bucket instances, and their in-memory state (nodes and sub-buckets)
+	// is retained and written on spill. Re-initialize it so that it points
+	// at the value now stored in the destination bucket.
+	childBucket.initializeBucket(newValue)
+	dstBucket.buckets[string(newKey)] = childBucket
+
 	return nil
+}
+
+// bucketContainsBucket reports whether target is ancestor itself or is
+// nested anywhere within ancestor's subtree of sub-buckets.
+func bucketContainsBucket(ancestor, target *Bucket) bool {
+	if ancestor == target || (ancestor.RootPage() == target.RootPage() && ancestor.RootPage() != 0) {
+		return true
+	}
+
+	found := false
+	_ = ancestor.ForEachBucket(func(k []byte) error {
+		if found {
+			return nil
+		}
+		if child := ancestor.Bucket(k); child != nil && bucketContainsBucket(child, target) {
+			found = true
+		}
+		return nil
+	})
+	return found
 }
 
 // Inspect returns the structure of the bucket.

@@ -84,4 +84,9 @@ var (
 	// ErrDifferentDB is returned when trying to move a sub-bucket between
 	// source and target buckets, while source and target buckets are in different database files.
 	ErrDifferentDB = errors.New("the source and target buckets are in different database files")
+
+	// ErrCyclicBucketMove is returned when trying to move a sub-bucket into
+	// its own subtree, i.e. the target bucket is the sub-bucket itself or one
+	// of its descendants.
+	ErrCyclicBucketMove = errors.New("the target bucket is the same as or a descendant of the bucket being moved")
 )
