@@ -1292,7 +1292,7 @@ func (db *DB) freepages() []common.Pgid {
 
 	go func() {
 		defer close(ech)
-		tx.recursivelyCheckBucket(&tx.root, reachable, nofreed, HexKVStringer(), ech)
+		tx.recursivelyCheckBucket(tx.root, reachable, nofreed, HexKVStringer(), ech)
 	}()
 	// following for loop will exit once channel is closed in the above goroutine.
 	// we don't need to wait explictly with a waitgroup

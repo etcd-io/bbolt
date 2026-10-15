@@ -29,7 +29,7 @@ type Tx struct {
 	managed        bool
 	db             *DB
 	meta           *common.Meta
-	root           Bucket
+	root           *Bucket
 	pages          map[common.Pgid]*common.Page
 	stats          TxStats
 	commitHandlers []func()
@@ -142,10 +142,10 @@ func (tx *Tx) DeleteBucket(name []byte) error {
 // If dst is nil, it means converting the child bucket into a top level bucket.
 func (tx *Tx) MoveBucket(child []byte, src *Bucket, dst *Bucket) error {
 	if src == nil {
-		src = &tx.root
+		src = tx.root
 	}
 	if dst == nil {
-		dst = &tx.root
+		dst = tx.root
 	}
 	return src.MoveBucket(child, dst)
 }
@@ -373,7 +373,7 @@ func (tx *Tx) close() {
 	// Clear all references.
 	tx.db = nil
 	tx.meta = nil
-	tx.root = Bucket{tx: tx}
+	tx.root = &Bucket{tx: tx}
 	tx.pages = nil
 }
 

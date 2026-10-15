@@ -26,8 +26,29 @@ const (
 // This value can be changed by setting Bucket.FillPercent.
 const DefaultFillPercent = 0.5
 
+// noCopy may be added to structs which must not be copied after the first
+// use. It makes `go vet` (copylocks check) report any by-value copy.
+//
+// See https://golang.org/issues/8005#issuecomment-190753527 for details.
+//
+// Note that it must not be embedded, due to the Lock and Unlock methods.
+type noCopy struct{}
+
+// Lock is a no-op used by the `go vet` copylocks check.
+func (*noCopy) Lock() {}
+
+// Unlock is a no-op used by the `go vet` copylocks check.
+func (*noCopy) Unlock() {}
+
 // Bucket represents a collection of key/value pairs inside the database.
+//
+// A Bucket must not be copied by value. It holds mutable state (node cache,
+// sub-bucket cache, root node, etc.) that is shared by pointer across the
+// transaction, so a copy would diverge from the original and lead to lost
+// writes or corruption. Always use *Bucket.
 type Bucket struct {
+	_ noCopy
+
 	*common.InBucket
 	tx       *Tx                   // the associated transaction
 	buckets  map[string]*Bucket    // subbucket cache
@@ -44,8 +65,8 @@ type Bucket struct {
 }
 
 // newBucket returns a new bucket associated with a transaction.
-func newBucket(tx *Tx) Bucket {
-	var b = Bucket{tx: tx, FillPercent: DefaultFillPercent}
+func newBucket(tx *Tx) *Bucket {
+	b := &Bucket{tx: tx, FillPercent: DefaultFillPercent}
 	if tx.writable {
 		b.buckets = make(map[string]*Bucket)
 		b.nodes = make(map[common.Pgid]*node)
@@ -121,7 +142,7 @@ func (b *Bucket) Bucket(name []byte) *Bucket {
 func (b *Bucket) openBucket(value []byte) *Bucket {
 	child := newBucket(b.tx)
 	child.initializeBucket(value)
-	return &child
+	return child
 }
 
 func (b *Bucket) initializeBucket(value []byte) {
@@ -190,7 +211,7 @@ func (b *Bucket) CreateBucket(key []byte) (rb *Bucket, err error) {
 	}
 
 	// Create empty, inline bucket.
-	var bucket = Bucket{
+	bucket := &Bucket{
 		InBucket:    &common.InBucket{},
 		rootNode:    &node{isLeaf: true},
 		FillPercent: DefaultFillPercent,
@@ -259,7 +280,7 @@ func (b *Bucket) CreateBucketIfNotExists(key []byte) (rb *Bucket, err error) {
 	}
 
 	// Create empty, inline bucket.
-	var bucket = Bucket{
+	bucket := &Bucket{
 		InBucket:    &common.InBucket{},
 		rootNode:    &node{isLeaf: true},
 		FillPercent: DefaultFillPercent,

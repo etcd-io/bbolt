@@ -68,7 +68,7 @@ func (tx *Tx) check(cfg checkConfig, ch chan error) {
 	if cfg.pageId == 0 {
 		// Check the whole db file, starting from the root bucket and
 		// recursively check all child buckets.
-		tx.recursivelyCheckBucket(&tx.root, reachable, freed, cfg.kvStringer, ch)
+		tx.recursivelyCheckBucket(tx.root, reachable, freed, cfg.kvStringer, ch)
 
 		// Ensure all pages below high water mark are either reachable or freed.
 		for i := common.Pgid(0); i < tx.meta.Pgid(); i++ {
@@ -109,7 +109,7 @@ func (tx *Tx) recursivelyCheckBucketInPage(pageId common.Pgid, reachable map[com
 			elem := p.LeafPageElement(uint16(i))
 			if elem.IsBucketEntry() {
 				inBkt := common.NewInBucket(pageId, 0)
-				tmpBucket := Bucket{
+				tmpBucket := &Bucket{
 					InBucket:    &inBkt,
 					rootNode:    &node{isLeaf: p.IsLeafPage()},
 					FillPercent: DefaultFillPercent,
