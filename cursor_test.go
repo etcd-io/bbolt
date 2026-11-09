@@ -632,6 +632,54 @@ func TestCursor_First_EmptyPages(t *testing.T) {
 	}
 }
 
+// Ensure that Prev skips over empty pages in the middle of the bucket.
+func TestCursor_Prev_EmptyPages(t *testing.T) {
+	db := btesting.MustCreateDB(t)
+
+	// Create 1000 keys in the "widgets" bucket.
+	err := db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucket([]byte("widgets"))
+		require.NoError(t, err)
+		for i := 0; i < 1000; i++ {
+			require.NoError(t, b.Put(u64tob(uint64(i)), []byte{}))
+		}
+		return nil
+	})
+	require.NoError(t, err)
+
+	// Delete the keys in the middle so that some pages in the middle are
+	// empty, and then iterate in reverse direction in the same transaction.
+	err = db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("widgets"))
+		for i := 200; i < 800; i++ {
+			require.NoError(t, b.Delete(u64tob(uint64(i))))
+		}
+
+		var keys []uint64
+		c := b.Cursor()
+		for k, _ := c.Last(); k != nil; k, _ = c.Prev() {
+			keys = append(keys, binary.BigEndian.Uint64(k))
+		}
+		require.Len(t, keys, 400)
+		for i, k := range keys {
+			want := uint64(999 - i)
+			if i >= 200 {
+				want = uint64(199 - (i - 200))
+			}
+			require.Equal(t, want, k)
+		}
+
+		k, _ := c.Seek(u64tob(800))
+		require.Equal(t, uint64(800), binary.BigEndian.Uint64(k))
+		k, _ = c.Prev()
+		require.NotNil(t, k)
+		require.Equal(t, uint64(199), binary.BigEndian.Uint64(k))
+
+		return nil
+	})
+	require.NoError(t, err)
+}
+
 // Ensure that a cursor can skip over empty pages that have been deleted.
 func TestCursor_Last_EmptyPages(t *testing.T) {
 	db := btesting.MustCreateDB(t)
