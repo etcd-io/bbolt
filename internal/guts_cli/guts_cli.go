@@ -46,7 +46,9 @@ func ReadPage(path string, pageID uint64) (*common.Page, []byte, error) {
 		return nil, nil, fmt.Errorf("error: %w due to unexpected Page id: %d != %d", ErrCorrupt, p.Id(), pageID)
 	}
 	overflowN := p.Overflow()
-	if overflowN >= uint32(hwm)-3 { // we exclude 2 Meta pages and the current Page.
+	// uint32(hwm)-3 underflows when hwm is below 3, letting any overflow count
+	// through the check below.
+	if hwm < 3 || uint64(overflowN) >= uint64(hwm)-3 { // we exclude 2 Meta pages and the current Page.
 		return nil, nil, fmt.Errorf("error: %w, Page claims to have %d overflow pages (>=hwm=%d). Interrupting to avoid risky OOM", ErrCorrupt, overflowN, hwm)
 	}
 
