@@ -213,3 +213,23 @@ func mustGetBucketRootPage(t testing.TB, db *bbolt.DB, bucketName []byte) common
 
 	return rootPageId
 }
+
+func TestOpen_NoFreelistSyncCorruptReturnsError(t *testing.T) {
+	bucketName := []byte("data")
+	db := btesting.MustCreateDBWithOption(t, &bbolt.Options{PageSize: 4096, NoFreelistSync: true})
+
+	err := db.Fill(bucketName, 1, 100,
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
+		func(tx int, k int) []byte { return make([]byte, 100) },
+	)
+	require.NoError(t, err)
+
+	corruptRootPage(t, db.DB, bucketName)
+	path := db.Path()
+	require.NoError(t, db.Close())
+
+	opened, oerr := bbolt.Open(path, 0666, &bbolt.Options{PageSize: 4096, NoFreelistSync: true})
+	require.Error(t, oerr)
+	require.Nil(t, opened)
+	require.ErrorContains(t, oerr, "freepages")
+}

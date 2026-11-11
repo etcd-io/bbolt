@@ -134,8 +134,9 @@ type DB struct {
 	rwtx     *Tx
 	stats    *Stats
 
-	freelist     fl.Interface
-	freelistLoad sync.Once
+	freelist        fl.Interface
+	freelistLoad    sync.Once
+	freelistLoadErr error
 
 	pagePool sync.Pool
 
@@ -301,7 +302,11 @@ func Open(path string, mode os.FileMode, options *Options) (db *DB, err error) {
 	}
 
 	if db.PreLoadFreelist {
-		db.loadFreelist()
+		if err = db.loadFreelist(); err != nil {
+			_ = db.close()
+			lg.Errorf("failed to load freelist from db file (%s): %v", path, err)
+			return nil, err
+		}
 	}
 
 	if db.readOnly {
@@ -419,12 +424,17 @@ func (db *DB) getPageSizeFromSecondMeta() (int, bool, error) {
 // loadFreelist reads the freelist if it is synced, or reconstructs it
 // by scanning the DB if it is not synced. It assumes there are no
 // concurrent accesses being made to the freelist.
-func (db *DB) loadFreelist() {
+func (db *DB) loadFreelist() error {
 	db.freelistLoad.Do(func() {
 		db.freelist = newFreelist(db.FreelistType)
 		if !db.hasSyncedFreelist() {
 			// Reconstruct free list by scanning the DB.
-			db.freelist.Init(db.freepages())
+			ids, err := db.freepages()
+			if err != nil {
+				db.freelistLoadErr = err
+				return
+			}
+			db.freelist.Init(ids)
 		} else {
 			// Read free list from freelist page.
 			db.freelist.Read(db.page(db.meta().Freelist()))
@@ -433,6 +443,7 @@ func (db *DB) loadFreelist() {
 			db.stats.FreePageN = db.freelist.FreeCount()
 		}
 	})
+	return db.freelistLoadErr
 }
 
 func (db *DB) hasSyncedFreelist() bool {
@@ -1274,17 +1285,16 @@ func (db *DB) IsReadOnly() bool {
 	return db.readOnly
 }
 
-func (db *DB) freepages() []common.Pgid {
+func (db *DB) freepages() (fids []common.Pgid, err error) {
 	tx, err := db.beginTx()
+	if err != nil {
+		return nil, fmt.Errorf("freepages: failed to open read only tx: %w", err)
+	}
 	defer func() {
-		err = tx.Rollback()
-		if err != nil {
-			panic("freepages: failed to rollback tx")
+		if rerr := tx.Rollback(); rerr != nil && err == nil {
+			err = fmt.Errorf("freepages: failed to rollback tx: %w", rerr)
 		}
 	}()
-	if err != nil {
-		panic("freepages: failed to open read only tx")
-	}
 
 	reachable := make(map[common.Pgid]*common.Page)
 	nofreed := make(map[common.Pgid]bool)
@@ -1292,23 +1302,30 @@ func (db *DB) freepages() []common.Pgid {
 
 	go func() {
 		defer close(ech)
+		defer func() {
+			if r := recover(); r != nil {
+				ech <- fmt.Errorf("%v", r)
+			}
+		}()
 		tx.recursivelyCheckBucket(tx.root, reachable, nofreed, HexKVStringer(), ech)
 	}()
-	// following for loop will exit once channel is closed in the above goroutine.
-	// we don't need to wait explictly with a waitgroup
+	// Drain every error so the walker is not left blocked on a send if we
+	// return after the first finding.
 	for e := range ech {
-		panic(fmt.Sprintf("freepages: failed to get all reachable pages (%v)", e))
+		if err == nil {
+			err = fmt.Errorf("freepages: failed to get all reachable pages: %w", e)
+		}
+	}
+	if err != nil {
+		return nil, err
 	}
 
-	// TODO: If check bucket reported any corruptions (ech) we shouldn't proceed to freeing the pages.
-
-	var fids []common.Pgid
 	for i := common.Pgid(2); i < db.meta().Pgid(); i++ {
 		if _, ok := reachable[i]; !ok {
 			fids = append(fids, i)
 		}
 	}
-	return fids
+	return fids, nil
 }
 
 func newFreelist(freelistType FreelistType) fl.Interface {
