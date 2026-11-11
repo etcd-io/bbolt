@@ -213,3 +213,33 @@ func mustGetBucketRootPage(t testing.TB, db *bbolt.DB, bucketName []byte) common
 
 	return rootPageId
 }
+
+func TestTx_Check_AbandonedReceiverDoesNotHang(t *testing.T) {
+	bucketName := []byte("data")
+	db := btesting.MustCreateDBWithOption(t, &bbolt.Options{PageSize: 4096})
+
+	err := db.Fill(bucketName, 1, 100,
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
+		func(tx int, k int) []byte { return make([]byte, 100) },
+	)
+	require.NoError(t, err)
+
+	corruptRootPage(t, db.DB, bucketName)
+	path := db.Path()
+	require.NoError(t, db.Close())
+
+	db = btesting.MustOpenDBWithOption(t, path, &bbolt.Options{PageSize: 4096})
+
+	vErr := db.View(func(tx *bbolt.Tx) error {
+		// Take only the first error and return, leaving the rest of the
+		// channel unread. Check must still return and not leave a goroutine
+		// blocked on a send.
+		errChan := tx.Check()
+		cErr := <-errChan
+		require.Error(t, cErr)
+		return cErr
+	})
+	require.Error(t, vErr)
+
+	db.MustClose()
+}
