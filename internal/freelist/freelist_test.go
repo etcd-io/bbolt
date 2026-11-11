@@ -620,3 +620,170 @@ func newTestFreelist() Interface {
 
 	return NewArrayFreelist()
 }
+
+// TestFreelist_MultiPageRewritesDoNotGrowFile simulates a database whose live
+// data stays the same size while its values are rewritten. Every allocation
+// that the freelist cannot satisfy extends the end of the file. The file must
+// settle instead of growing, so free pages stay well below the live data.
+func TestFreelist_MultiPageRewritesDoNotGrowFile(t *testing.T) {
+	const (
+		objects       = 2000
+		rewritesPerTx = 20
+		txs           = 10000
+	)
+	r := rand.New(rand.NewSource(42))
+	f := newTestFreelist()
+	f.Init([]common.Pgid{})
+
+	hwm := common.Pgid(2) // pages 0 and 1 are the meta pages
+	allocate := func(txid common.Txid, n int) common.Pgid {
+		if pid := f.Allocate(txid, n); pid != 0 {
+			return pid
+		}
+		pid := hwm
+		hwm += common.Pgid(n)
+		return pid
+	}
+
+	// 95% of the values span 1-3 pages, 5% span 4-128 pages.
+	baseSize := make([]int, objects)
+	start := make([]common.Pgid, objects)
+	size := make([]int, objects)
+	for i := range baseSize {
+		if r.Intn(100) < 95 {
+			baseSize[i] = 1 + r.Intn(3)
+		} else {
+			baseSize[i] = int(math.Exp(math.Log(4) + r.Float64()*(math.Log(128)-math.Log(4))))
+		}
+		size[i] = baseSize[i]
+		start[i] = allocate(1, size[i])
+	}
+
+	for txid := common.Txid(2); txid < 2+txs; txid++ {
+		for _, i := range r.Perm(objects)[:rewritesPerTx] {
+			// jitter the value size by +-15%
+			n := int(math.Round(float64(baseSize[i]) * (0.85 + 0.3*r.Float64())))
+			n = max(n, 1)
+			pid := allocate(txid, n)
+			f.Free(txid, common.NewPage(start[i], common.LeafPageFlag, 0, uint32(size[i]-1)))
+			start[i], size[i] = pid, n
+		}
+		f.release(txid)
+	}
+
+	live := 0
+	for _, n := range size {
+		live += n
+	}
+	ratio := float64(hwm-2) / float64(live)
+	t.Logf("live pages: %d, file pages: %d, free pages: %d, file/live: %.2f",
+		live, hwm-2, f.FreeCount(), ratio)
+	require.LessOrEqualf(t, ratio, 1.5, "file is %.2f times the live data", ratio)
+}
+
+// Benchmark_FreelistAllocateMultiPage measures Allocate for 2-8 page requests
+// on large freelists. "mixed" has spans of all sizes, so most requests find a
+// span of exactly the requested size. "distinct" has no span shorter than 9
+// pages and every span size occurs once, so no request matches exactly and
+// the number of distinct span sizes is the largest possible for the number
+// of free pages.
+func Benchmark_FreelistAllocateMultiPage(b *testing.B) {
+	for _, freePages := range []int{1_000_000, 6_000_000} {
+		for _, layout := range []struct {
+			name string
+			ids  func(r *rand.Rand, freePages int) common.Pgids
+		}{{"mixed", mixedSpans}, {"distinct", distinctSpans}} {
+			ids := layout.ids(rand.New(rand.NewSource(1)), freePages)
+			for _, typ := range []struct {
+				name string
+				new  func() Interface
+			}{{"array", NewArrayFreelist}, {"hashmap", NewHashMapFreelist}} {
+				b.Run(fmt.Sprintf("%s/%s/%dK", typ.name, layout.name, freePages/1000), func(b *testing.B) {
+					benchmarkAllocateMultiPage(b, typ.new(), ids)
+				})
+			}
+		}
+	}
+}
+
+func benchmarkAllocateMultiPage(b *testing.B, f Interface, ids common.Pgids) {
+	// the array freelist keeps and modifies the slice it is given
+	f.Init(append(common.Pgids(nil), ids...))
+	r := rand.New(rand.NewSource(2))
+	type span struct {
+		pid common.Pgid
+		n   int
+	}
+	const batch = 1000
+	spans := make([]span, 0, batch)
+	txid := common.Txid(1)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		n := 2 + r.Intn(7)
+		pid := f.Allocate(txid, n)
+		if pid == 0 {
+			b.Fatalf("no span of %d pages", n)
+		}
+		spans = append(spans, span{pid, n})
+		if len(spans) == batch || i == b.N-1 {
+			// give the pages back, so that every batch starts from the
+			// same freelist
+			b.StopTimer()
+			txid++
+			for _, s := range spans {
+				f.Free(txid, common.NewPage(s.pid, common.LeafPageFlag, 0, uint32(s.n-1)))
+			}
+			f.release(txid)
+			txid++
+			spans = spans[:0]
+			b.StartTimer()
+		}
+	}
+}
+
+// mixedSpans returns free spans of 1 to 4096 pages, most of them short,
+// separated by 1-4 allocated pages.
+func mixedSpans(r *rand.Rand, freePages int) common.Pgids {
+	ids := make(common.Pgids, 0, freePages+4096)
+	pid := common.Pgid(2)
+	for len(ids) < freePages {
+		var size int
+		switch p := r.Intn(100); {
+		case p < 50:
+			size = 1
+		case p < 80:
+			size = 2 + r.Intn(7)
+		case p < 95:
+			size = 9 + r.Intn(120)
+		default:
+			size = int(math.Exp(math.Log(129) + r.Float64()*(math.Log(4096)-math.Log(129))))
+		}
+		for i := 0; i < size; i++ {
+			ids = append(ids, pid)
+			pid++
+		}
+		pid += common.Pgid(1 + r.Intn(4))
+	}
+	return ids
+}
+
+// distinctSpans returns free spans of 9, 10, 11, ... pages in random order,
+// separated by one allocated page.
+func distinctSpans(r *rand.Rand, freePages int) common.Pgids {
+	var sizes []int
+	for size, total := 9, 0; total < freePages; size++ {
+		sizes = append(sizes, size)
+		total += size
+	}
+	r.Shuffle(len(sizes), func(i, j int) { sizes[i], sizes[j] = sizes[j], sizes[i] })
+	ids := make(common.Pgids, 0, freePages+len(sizes))
+	pid := common.Pgid(2)
+	for _, size := range sizes {
+		for i := 0; i < size; i++ {
+			ids = append(ids, pid)
+			pid++
+		}
+		pid++
+	}
+	return ids
+}

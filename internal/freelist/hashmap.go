@@ -2,7 +2,9 @@ package freelist
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
+	"slices"
 	"sort"
 
 	"go.etcd.io/bbolt/internal/common"
@@ -18,6 +20,12 @@ type hashMap struct {
 	freemaps       map[uint64]pidSet      // key is the size of continuous pages(span), value is a set which contains the starting pgids of same size
 	forwardMap     map[common.Pgid]uint64 // key is start pgid, value is its span size
 	backwardMap    map[common.Pgid]uint64 // key is end pgid, value is its span size
+
+	// sizes holds the keys of freemaps in ascending order. Allocate uses it to
+	// find the smallest span that fits a request with a binary search instead
+	// of a scan over every span size, which takes microseconds on a freelist
+	// with millions of free pages.
+	sizes []uint64
 }
 
 func (f *hashMap) Init(pgids common.Pgids) {
@@ -26,6 +34,7 @@ func (f *hashMap) Init(pgids common.Pgids) {
 	f.freemaps = make(map[uint64]pidSet)
 	f.forwardMap = make(map[common.Pgid]uint64)
 	f.backwardMap = make(map[common.Pgid]uint64)
+	f.sizes = nil
 
 	if len(pgids) == 0 {
 		return
@@ -78,13 +87,12 @@ func (f *hashMap) Allocate(txid common.Txid, n int) common.Pgid {
 		}
 	}
 
-	// lookup the map to find larger span
-	for size, bm := range f.freemaps {
-		if size < uint64(n) {
-			continue
-		}
-
-		for pid := range bm {
+	// take the smallest larger span (best fit). Taking an arbitrary larger
+	// span cuts up the long spans that multi-page requests need, and the
+	// file then grows while the live data does not.
+	if i, _ := slices.BinarySearch(f.sizes, uint64(n)+1); i < len(f.sizes) {
+		size := f.sizes[i]
+		for pid := range f.freemaps[size] {
 			// remove the initial
 			f.delSpan(pid, size)
 
@@ -154,6 +162,8 @@ func (f *hashMap) addSpan(start common.Pgid, size uint64) {
 	f.forwardMap[start] = size
 	if _, ok := f.freemaps[size]; !ok {
 		f.freemaps[size] = make(map[common.Pgid]struct{})
+		i, _ := slices.BinarySearch(f.sizes, size)
+		f.sizes = slices.Insert(f.sizes, i, size)
 	}
 
 	f.freemaps[size][start] = struct{}{}
@@ -166,6 +176,9 @@ func (f *hashMap) delSpan(start common.Pgid, size uint64) {
 	delete(f.freemaps[size], start)
 	if len(f.freemaps[size]) == 0 {
 		delete(f.freemaps, size)
+		if i, ok := slices.BinarySearch(f.sizes, size); ok {
+			f.sizes = slices.Delete(f.sizes, i, i+1)
+		}
 	}
 	f.freePagesCount -= size
 }
@@ -186,6 +199,9 @@ func (f *hashMap) mergeSpans(ids common.Pgids) {
 		}
 		if !reflect.DeepEqual(ids1Freemap, ids3Backward) {
 			panic(fmt.Sprintf("Detected mismatch, f.freemaps: %v, f.backwardMap: %v", f.freemaps, f.backwardMap))
+		}
+		if sizes := slices.Sorted(maps.Keys(f.freemaps)); !slices.Equal(f.sizes, sizes) {
+			panic(fmt.Sprintf("Detected mismatch, f.freemaps sizes: %v, f.sizes: %v", sizes, f.sizes))
 		}
 
 		prev := common.Pgid(0)
