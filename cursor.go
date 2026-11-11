@@ -249,34 +249,43 @@ func (c *Cursor) next() (key []byte, value []byte, flags uint32) {
 // prev moves the cursor to the previous item in the bucket and returns its key and value.
 // If the cursor is at the beginning of the bucket then a nil key and value are returned.
 func (c *Cursor) prev() (key []byte, value []byte, flags uint32) {
-	// Attempt to move back one element until we're successful.
-	// Move up the stack as we hit the beginning of each page in our stack.
-	for i := len(c.stack) - 1; i >= 0; i-- {
-		elem := &c.stack[i]
-		if elem.index > 0 {
-			elem.index--
-			break
+	for {
+		// Attempt to move back one element until we're successful.
+		// Move up the stack as we hit the beginning of each page in our stack.
+		for i := len(c.stack) - 1; i >= 0; i-- {
+			elem := &c.stack[i]
+			if elem.index > 0 {
+				elem.index--
+				break
+			}
+			// If we've hit the beginning, we should stop moving the cursor,
+			// and stay at the first element, so that users can continue to
+			// iterate over the elements in reverse direction by calling `Next`.
+			// We should return nil in such case.
+			// Refer to https://github.com/etcd-io/bbolt/issues/733
+			if len(c.stack) == 1 {
+				c.first()
+				return nil, nil, 0
+			}
+			c.stack = c.stack[:i]
 		}
-		// If we've hit the beginning, we should stop moving the cursor,
-		// and stay at the first element, so that users can continue to
-		// iterate over the elements in reverse direction by calling `Next`.
-		// We should return nil in such case.
-		// Refer to https://github.com/etcd-io/bbolt/issues/733
-		if len(c.stack) == 1 {
-			c.first()
+
+		// If we've hit the end then return nil.
+		if len(c.stack) == 0 {
 			return nil, nil, 0
 		}
-		c.stack = c.stack[:i]
-	}
 
-	// If we've hit the end then return nil.
-	if len(c.stack) == 0 {
-		return nil, nil, 0
-	}
+		// Move down the stack to find the last element of the last leaf under this branch.
+		c.last()
 
-	// Move down the stack to find the last element of the last leaf under this branch.
-	c.last()
-	return c.keyValue()
+		// If this is an empty page (calling Delete may result in empty pages)
+		// then keep moving back to the previous page.
+		if c.stack[len(c.stack)-1].count() == 0 {
+			continue
+		}
+
+		return c.keyValue()
+	}
 }
 
 // search recursively performs a binary search against a given page/node until it finds a given key.
