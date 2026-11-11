@@ -434,13 +434,13 @@ func (cmd *pageItemCommand) Run(args ...string) error {
 	}
 
 	if !options.valueOnly {
-		err := cmd.PrintLeafItemKey(cmd.Stdout, buf, uint16(itemID), options.format)
+		err := cmd.PrintLeafItemKey(cmd.Stdout, buf, itemID, options.format)
 		if err != nil {
 			return err
 		}
 	}
 	if !options.keyOnly {
-		err := cmd.PrintLeafItemValue(cmd.Stdout, buf, uint16(itemID), options.format)
+		err := cmd.PrintLeafItemValue(cmd.Stdout, buf, itemID, options.format)
 		if err != nil {
 			return err
 		}
@@ -448,16 +448,16 @@ func (cmd *pageItemCommand) Run(args ...string) error {
 	return nil
 }
 
-func (cmd *pageItemCommand) leafPageElement(pageBytes []byte, index uint16) ([]byte, []byte, error) {
+func (cmd *pageItemCommand) leafPageElement(pageBytes []byte, index uint64) ([]byte, []byte, error) {
 	p := common.LoadPage(pageBytes)
-	if index >= p.Count() {
+	if index >= uint64(p.Count()) {
 		return nil, nil, fmt.Errorf("leafPageElement: expected item index less than %d, but got %d", p.Count(), index)
 	}
 	if p.Typ() != "leaf" {
 		return nil, nil, fmt.Errorf("leafPageElement: expected page type of 'leaf', but got '%s'", p.Typ())
 	}
 
-	e := p.LeafPageElement(index)
+	e := p.LeafPageElement(uint16(index))
 	return e.Key(), e.Value(), nil
 }
 
@@ -507,7 +507,7 @@ func writelnBytes(w io.Writer, b []byte, format string) error {
 }
 
 // PrintLeafItemKey writes the bytes of a leaf element's key.
-func (cmd *pageItemCommand) PrintLeafItemKey(w io.Writer, pageBytes []byte, index uint16, format string) error {
+func (cmd *pageItemCommand) PrintLeafItemKey(w io.Writer, pageBytes []byte, index uint64, format string) error {
 	k, _, err := cmd.leafPageElement(pageBytes, index)
 	if err != nil {
 		return err
@@ -517,7 +517,7 @@ func (cmd *pageItemCommand) PrintLeafItemKey(w io.Writer, pageBytes []byte, inde
 }
 
 // PrintLeafItemValue writes the bytes of a leaf element's value.
-func (cmd *pageItemCommand) PrintLeafItemValue(w io.Writer, pageBytes []byte, index uint16, format string) error {
+func (cmd *pageItemCommand) PrintLeafItemValue(w io.Writer, pageBytes []byte, index uint64, format string) error {
 	_, v, err := cmd.leafPageElement(pageBytes, index)
 	if err != nil {
 		return err
