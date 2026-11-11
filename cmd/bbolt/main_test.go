@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"go.etcd.io/bbolt/internal/btesting"
+	"go.etcd.io/bbolt/internal/guts_cli"
 
 	"github.com/stretchr/testify/require"
 
@@ -284,6 +285,59 @@ func TestPagesCommand_Run(t *testing.T) {
 	m := NewMain()
 	err = m.Run("pages", db.Path())
 	require.NoError(t, err)
+}
+
+func TestPageItemCommand_ItemIDOutOfRange(t *testing.T) {
+	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
+	srcPath := db.Path()
+
+	err := db.Update(func(tx *bolt.Tx) error {
+		b, bErr := tx.CreateBucketIfNotExists([]byte("data"))
+		if bErr != nil {
+			return bErr
+		}
+		for i := 0; i < 100; i++ {
+			if bErr = b.Put([]byte(fmt.Sprintf("key_%d", i)), []byte(fmt.Sprintf("value_%d", i))); bErr != nil {
+				return bErr
+			}
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	db.Close()
+
+	defer requireDBNoChange(t, dbData(t, srcPath), srcPath)
+
+	_, hwm, err := guts_cli.ReadPageAndHWMSize(srcPath)
+	require.NoError(t, err)
+	leafPageId := 0
+	for i := 2; i < int(hwm); i++ {
+		p, _, err := guts_cli.ReadPage(srcPath, uint64(i))
+		require.NoError(t, err)
+		if p.Type() == "leaf" && p.Count() > 1 {
+			leafPageId = int(p.Id())
+		}
+	}
+	require.NotEqual(t, 0, leafPageId)
+
+	testCases := []struct {
+		name   string
+		itemId string
+	}{
+		// Congruent to the valid index 0 modulo 2^16.
+		{name: "wraps onto a valid index", itemId: "65536"},
+		// Congruent to the out of range index 100 modulo 2^16, so the
+		// id reported back to the user has to be the one that was typed.
+		{name: "wraps onto an out of range index", itemId: "65636"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := NewMain()
+			err := m.Run("page-item", srcPath, fmt.Sprintf("%d", leafPageId), tc.itemId)
+			require.ErrorContains(t, err, fmt.Sprintf("expected item index less than 100, but got %s", tc.itemId))
+		})
+	}
 }
 
 // Main represents a test wrapper for main.Main that records output.
