@@ -26,12 +26,25 @@ func (tx *Tx) Check(options ...CheckOption) <-chan error {
 		op(&chkConfig)
 	}
 
-	ch := make(chan error)
+	// Collect every finding first, then return a buffered channel that is
+	// already closed. Each send in check() used to block on the unbuffered
+	// channel this function returned, so a caller that took only the first
+	// error (or cancelled) left the checker goroutine parked for the rest
+	// of the process, holding the Tx and mmap pages.
+	collected := make(chan error)
 	go func() {
-		// Close the channel to signal completion.
-		defer close(ch)
-		tx.check(chkConfig, ch)
+		defer close(collected)
+		tx.check(chkConfig, collected)
 	}()
+	var errs []error
+	for e := range collected {
+		errs = append(errs, e)
+	}
+	ch := make(chan error, len(errs))
+	for _, e := range errs {
+		ch <- e
+	}
+	close(ch)
 	return ch
 }
 
