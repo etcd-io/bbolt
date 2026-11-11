@@ -124,3 +124,15 @@ func prepareData(t *testing.T) (string, error) {
 
 	return fileName, nil
 }
+
+// A failed beginTx in freepages must report its own panic, not a nil
+// pointer dereference from rolling back the nil tx.
+func TestFreepages_BeginTxError(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "db"), 0600, nil)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	assert.PanicsWithValue(t, "freepages: failed to open read only tx", func() {
+		db.freepages()
+	})
+}
