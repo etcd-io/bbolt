@@ -634,7 +634,9 @@ func TestCursor_First_EmptyPages(t *testing.T) {
 
 // Ensure that Prev skips over empty pages in the middle of the bucket.
 func TestCursor_Prev_EmptyPages(t *testing.T) {
-	db := btesting.MustCreateDB(t)
+	// Use a fixed page size so that deleting the keys in the middle empties
+	// whole leaf pages regardless of the OS page size.
+	db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: 4096})
 
 	// Create 1000 keys in the "widgets" bucket.
 	err := db.Update(func(tx *bolt.Tx) error {
