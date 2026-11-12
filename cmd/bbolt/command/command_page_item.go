@@ -50,6 +50,16 @@ func (o *pageItemOptions) AddFlags(fs *pflag.FlagSet) {
 }
 
 func pageItemFunc(cmd *cobra.Command, cfg pageItemOptions, dbPath string, pageID, itemID uint64) (err error) {
+	// A corrupt leaf element can make the key/value slice bounds exceed
+	// MaxAllocSize and panic while reading it. The sibling "page" command
+	// already recovers per page; recover here too so an unreadable item is
+	// reported as an error rather than crashing the process.
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("page-item: %v", r)
+		}
+	}()
+
 	if cfg.keyOnly && cfg.valueOnly {
 		return errors.New("the --key-only or --value-only flag may be set, but not both")
 	}
