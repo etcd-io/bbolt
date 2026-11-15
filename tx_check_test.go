@@ -1,6 +1,7 @@
 package bbolt_test
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -118,6 +119,94 @@ func TestTx_Check_WithNestBucket(t *testing.T) {
 	// Manually close the db, otherwise the PostTestCleanup will
 	// check the db again and accordingly fail the test.
 	db.MustClose()
+}
+
+func TestTx_Check_SingleElementBranchPage(t *testing.T) {
+	bucketName := []byte("data")
+
+	t.Log("Creating db file.")
+	db := btesting.MustCreateDBWithOption(t, &bbolt.Options{PageSize: 4096, NoFreelistSync: true})
+
+	// Fill enough keys to grow a tree that is at least three levels deep,
+	// so that it contains branch pages below the root branch page.
+	err := db.Fill(bucketName, 1, 10000,
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
+		func(tx int, k int) []byte { return make([]byte, 100) },
+	)
+	require.NoError(t, err)
+
+	t.Log("Running consistency check on the uncorrupted db.")
+	vErr := db.View(func(tx *bbolt.Tx) error {
+		var cErrs []error
+		for cErr := range tx.Check() {
+			cErrs = append(cErrs, cErr)
+		}
+		require.Equal(t, 0, len(cErrs))
+		return nil
+	})
+	require.NoError(t, vErr)
+
+	t.Log("Reducing a non-root branch page to a single element.")
+	victimPageId := corruptBranchPageElementCount(t, db.DB, bucketName)
+
+	t.Log("Running consistency check.")
+	vErr = db.View(func(tx *bbolt.Tx) error {
+		var cErrs []error
+		for cErr := range tx.Check() {
+			cErrs = append(cErrs, cErr)
+		}
+		require.Greater(t, len(cErrs), 0)
+		require.ErrorContains(t, errors.Join(cErrs...), fmt.Sprintf("page %d: branch page has 1 elements", victimPageId))
+
+		t.Log("Check starting from the corrupted page.")
+		cErrs = cErrs[:0]
+		for cErr := range tx.Check(bbolt.WithPageId(uint64(victimPageId))) {
+			cErrs = append(cErrs, cErr)
+		}
+		require.Greater(t, len(cErrs), 0)
+		require.ErrorContains(t, errors.Join(cErrs...), fmt.Sprintf("page %d: branch page has 1 elements", victimPageId))
+		return nil
+	})
+	require.NoError(t, vErr)
+	t.Log("All check passed")
+
+	// Manually close the db, otherwise the PostTestCleanup will
+	// check the db again and accordingly fail the test.
+	db.MustClose()
+}
+
+// corruptBranchPageElementCount reduces the element count of a non-root
+// branch page to one, keeping only the first element. This mirrors a
+// two-byte edit of the count field of a branch page in the database file.
+func corruptBranchPageElementCount(t testing.TB, db *bbolt.DB, bucketName []byte) common.Pgid {
+	bucketRootPageId := mustGetBucketRootPage(t, db, bucketName)
+	bucketRootPage, _, err := guts_cli.ReadPage(db.Path(), uint64(bucketRootPageId))
+	require.NoError(t, err)
+	require.True(t, bucketRootPage.IsBranchPage())
+
+	// Find a branch page below the root branch page.
+	var victimPageId common.Pgid
+	for _, bpe := range bucketRootPage.BranchPageElements() {
+		child, _, err := guts_cli.ReadPage(db.Path(), uint64(bpe.Pgid()))
+		require.NoError(t, err)
+		if child.IsBranchPage() {
+			victimPageId = bpe.Pgid()
+			break
+		}
+	}
+	require.NotEqual(t, common.Pgid(0), victimPageId, "no non-root branch page found")
+
+	victimPage, victimBuf, err := guts_cli.ReadPage(db.Path(), uint64(victimPageId))
+	require.NoError(t, err)
+	require.True(t, victimPage.IsBranchPage())
+	require.Greater(t, victimPage.Count(), uint16(1))
+
+	victimPage.SetCount(1)
+
+	// Write the corrupt page to db file.
+	err = guts_cli.WritePage(db.Path(), victimBuf)
+	require.NoError(t, err)
+	return victimPageId
 }
 
 func TestTx_Check_Panic(t *testing.T) {
