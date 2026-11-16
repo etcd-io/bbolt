@@ -1,6 +1,7 @@
 package bbolt
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 
@@ -200,6 +201,11 @@ func (tx *Tx) recursivelyCheckPageKeyOrderInternal(
 		for i := range p.BranchPageElements() {
 			elem := p.BranchPageElement(uint16(i))
 			verifyKeyOrder(elem.Pgid(), "branch", i, elem.Key(), runningMin, maxKeyOpen, ch, keyToString, pagesStack)
+			// The writer keeps each separator equal to its child's first key (node.spill); first < separator is reported by verifyKeyOrder.
+			if first := firstKey(tx.page(elem.Pgid())); first != nil && bytes.Compare(first, elem.Key()) > 0 {
+				ch <- fmt.Errorf("key[%d]=(hex)%s on branch page(%d) does not match the first key (hex)%s of its child page(%d). Stack: %v",
+					i, keyToString(elem.Key()), pgId, keyToString(first), elem.Pgid(), pagesStack)
+			}
 
 			maxKey := maxKeyOpen
 			if i < len(p.BranchPageElements())-1 {
@@ -292,4 +298,16 @@ func (hexKvStringer) KeyToString(key []byte) string {
 
 func (hexKvStringer) ValueToString(value []byte) string {
 	return hex.EncodeToString(value)
+}
+
+func firstKey(p *common.Page) []byte {
+	switch {
+	case p.Count() == 0:
+		return nil
+	case p.IsBranchPage():
+		return p.BranchPageElement(0).Key()
+	case p.IsLeafPage():
+		return p.LeafPageElement(0).Key()
+	}
+	return nil
 }
