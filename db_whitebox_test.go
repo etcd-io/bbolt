@@ -1,6 +1,7 @@
 package bbolt
 
 import (
+	"math"
 	"path/filepath"
 	"testing"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"go.etcd.io/bbolt/errors"
+	"go.etcd.io/bbolt/internal/common"
 )
 
 func TestOpenWithPreLoadFreelist(t *testing.T) {
@@ -123,4 +125,172 @@ func prepareData(t *testing.T) (string, error) {
 	}
 
 	return fileName, nil
+}
+
+func TestPrefetchRange(t *testing.T) {
+	const mmapSize = 1 << 20
+
+	testCases := []struct {
+		name        string
+		first, last common.Pgid
+		pageSize    int
+		osPageSize  int
+
+		expectedStart, expectedEnd int
+		expectedOK                 bool
+	}{
+		{
+			name:  "single page",
+			first: 3, last: 3, pageSize: 4096, osPageSize: 4096,
+			expectedStart: 3 * 4096, expectedEnd: 4 * 4096, expectedOK: true,
+		},
+		{
+			name:  "multiple pages",
+			first: 3, last: 7, pageSize: 4096, osPageSize: 4096,
+			expectedStart: 3 * 4096, expectedEnd: 8 * 4096, expectedOK: true,
+		},
+		{
+			name:  "pages smaller than OS pages",
+			first: 5, last: 6, pageSize: 1024, osPageSize: 4096,
+			expectedStart: 4096, expectedEnd: 8192, expectedOK: true,
+		},
+		{
+			name:  "pages smaller than OS pages across a boundary",
+			first: 7, last: 8, pageSize: 1024, osPageSize: 4096,
+			expectedStart: 4096, expectedEnd: 3 * 4096, expectedOK: true,
+		},
+		{
+			name:  "pages larger than OS pages",
+			first: 1, last: 1, pageSize: 16384, osPageSize: 4096,
+			expectedStart: 16384, expectedEnd: 2 * 16384, expectedOK: true,
+		},
+		{
+			name:  "last page of the mmap",
+			first: 255, last: 255, pageSize: 4096, osPageSize: 16384,
+			expectedStart: 252 * 4096, expectedEnd: mmapSize, expectedOK: true,
+		},
+		{
+			name:  "beyond the mmap",
+			first: 255, last: 256, pageSize: 4096, osPageSize: 4096,
+		},
+		{
+			name:  "page id overflowing the offset",
+			first: 1, last: common.Pgid(math.MaxUint64), pageSize: 4096, osPageSize: 4096,
+		},
+		{
+			name:  "empty range",
+			first: 4, last: 3, pageSize: 4096, osPageSize: 4096,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			start, end, ok := prefetchRange(tc.first, tc.last, tc.pageSize, tc.osPageSize, mmapSize)
+			require.Equal(t, tc.expectedOK, ok)
+			require.Equal(t, tc.expectedStart, start)
+			require.Equal(t, tc.expectedEnd, end)
+		})
+	}
+}
+
+func TestForEachOverflowRead(t *testing.T) {
+	const pageSize = 4096
+
+	type pageRange struct{ first, last common.Pgid }
+
+	bucket := make([]byte, common.BucketHeaderSize)
+
+	testCases := []struct {
+		name     string
+		flags    uint16
+		overflow uint32
+		inodes   []struct {
+			flags      uint32
+			key, value []byte
+		}
+		expected []pageRange
+	}{
+		{
+			name:  "leaf page without overflow",
+			flags: common.LeafPageFlag,
+			inodes: []struct {
+				flags      uint32
+				key, value []byte
+			}{
+				{key: []byte("a"), value: make([]byte, 100)},
+				{key: []byte("b"), value: make([]byte, 100)},
+			},
+		},
+		{
+			// The second key starts on the second page and the third
+			// one on the third page. The last two pages only hold the
+			// value of the third key.
+			name:     "leaf page with overflow",
+			flags:    common.LeafPageFlag,
+			overflow: 4,
+			inodes: []struct {
+				flags      uint32
+				key, value []byte
+			}{
+				{key: []byte("a"), value: make([]byte, 6000)},
+				{key: []byte("b"), value: make([]byte, 5000)},
+				{key: []byte("c"), value: make([]byte, 9000)},
+			},
+			expected: []pageRange{{11, 11}, {12, 12}},
+		},
+		{
+			// Both the second key and the bucket are on the second
+			// page, which must be reported only once.
+			name:     "leaf page with keys sharing an overflow page",
+			flags:    common.LeafPageFlag,
+			overflow: 1,
+			inodes: []struct {
+				flags      uint32
+				key, value []byte
+			}{
+				{key: []byte("a"), value: make([]byte, 6000)},
+				{key: []byte("b"), value: make([]byte, 100)},
+				{flags: common.BucketLeafFlag, key: []byte("c"), value: bucket},
+			},
+			expected: []pageRange{{11, 11}},
+		},
+		{
+			name:     "branch page with overflow",
+			flags:    common.BranchPageFlag,
+			overflow: 2,
+			inodes: []struct {
+				flags      uint32
+				key, value []byte
+			}{
+				{key: make([]byte, 5000)},
+				{key: make([]byte, 5000)},
+			},
+			expected: []pageRange{{11, 12}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			buf := make([]byte, (int(tc.overflow)+1)*pageSize)
+			p := common.LoadPage(buf)
+			p.SetId(10)
+			p.SetFlags(tc.flags)
+			p.SetCount(uint16(len(tc.inodes)))
+			p.SetOverflow(tc.overflow)
+
+			inodes := make(common.Inodes, len(tc.inodes))
+			for i, in := range tc.inodes {
+				inodes[i].SetFlags(in.flags)
+				inodes[i].SetKey(in.key)
+				inodes[i].SetValue(in.value)
+			}
+			common.WriteInodeToPage(inodes, p)
+
+			var got []pageRange
+			forEachOverflowRead(p, pageSize, func(first, last common.Pgid) {
+				got = append(got, pageRange{first, last})
+			})
+			require.Equal(t, tc.expected, got)
+		})
+	}
 }

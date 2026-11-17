@@ -163,6 +163,11 @@ func (tx *Tx) recursivelyCheckBucketPages(rootPageId common.Pgid, reachable map[
 
 	visitPage := func(p *common.Page, stack []common.Pgid) {
 		verifyPageReachable(p, tx.meta.Pgid(), stack, reachable, freed, ch)
+
+		// The children of a branch page are visited next. Reading them
+		// one by one as they are accessed is slow on storage with a high
+		// latency, so have the kernel start reading all of them already.
+		tx.db.prefetchChildren(p)
 	}
 	visitBucket := func(value []byte) {
 		child := tx.root.openBucket(value)

@@ -1132,6 +1132,134 @@ func (db *DB) page(id common.Pgid) *common.Page {
 	return (*common.Page)(unsafe.Pointer(&db.data[pos]))
 }
 
+// prefetchChildren hints to the kernel that the children of the given branch
+// page are about to be read, so that it can start reading all of them from
+// disk right away rather than one after the other as they are accessed. That
+// includes the overflow pages of the children that are read. It does nothing
+// for any other type of page.
+func (db *DB) prefetchChildren(p *common.Page) {
+	if !p.IsBranchPage() || p.Count() == 0 {
+		return
+	}
+
+	// Children that are next to each other in the file are requested with
+	// a single call.
+	first := p.BranchPageElement(0).Pgid()
+	last := first
+	for i := uint16(1); i < p.Count(); i++ {
+		id := p.BranchPageElement(i).Pgid()
+		if id == last+1 {
+			last = id
+			continue
+		}
+
+		db.prefetchPages(first, last)
+		first, last = id, id
+	}
+	db.prefetchPages(first, last)
+
+	// Whether a child has overflow pages is only known from its header,
+	// which is being read by now. Request these before any of the
+	// children is visited, so that they are read at the same time too.
+	limit := common.Pgid(db.datasz / db.pageSize)
+	for i := uint16(0); i < p.Count(); i++ {
+		id := p.BranchPageElement(i).Pgid()
+		if id >= limit {
+			continue
+		}
+		forEachOverflowRead(db.page(id), db.pageSize, db.prefetchPages)
+	}
+}
+
+// forEachOverflowRead calls fn with every range of overflow pages of the
+// given page that is read when the freelist is reconstructed. For a branch
+// page that is all of them. For a leaf page it is only those that hold a key
+// or a bucket, the rest of the values is not looked at.
+func forEachOverflowRead(p *common.Page, pageSize int, fn func(first, last common.Pgid)) {
+	overflow := common.Pgid(p.Overflow())
+	if overflow == 0 || pageSize <= 0 {
+		return
+	}
+
+	if p.IsBranchPage() {
+		fn(p.Id()+1, p.Id()+overflow)
+		return
+	}
+	if !p.IsLeafPage() {
+		return
+	}
+
+	// The elements are stored in order, so remembering the last page that
+	// was reported is enough to not report a page twice.
+	var reported common.Pgid
+	base := uintptr(unsafe.Pointer(p))
+	for i := uint16(0); i < p.Count(); i++ {
+		elem := p.LeafPageElement(i)
+		size := uintptr(elem.Ksize())
+		if elem.IsBucketEntry() {
+			size += uintptr(elem.Vsize())
+		}
+		if size == 0 {
+			continue
+		}
+
+		start := uintptr(unsafe.Pointer(elem)) - base + uintptr(elem.Pos())
+		first := common.Pgid(start / uintptr(pageSize))
+		last := common.Pgid((start + size - 1) / uintptr(pageSize))
+		if first <= reported {
+			first = reported + 1
+		}
+		if last > overflow {
+			last = overflow
+		}
+		if first > last {
+			continue
+		}
+
+		fn(p.Id()+first, p.Id()+last)
+		reported = last
+	}
+}
+
+// prefetchPages hints to the kernel that the given range of pages is about to
+// be read.
+func (db *DB) prefetchPages(first, last common.Pgid) {
+	start, end, ok := prefetchRange(first, last, db.pageSize, os.Getpagesize(), db.datasz)
+	if !ok {
+		return
+	}
+
+	madviseWillNeed(db.data[start:end:end])
+}
+
+// prefetchRange returns the range of bytes within a mmap of the given size
+// that holds the given range of pages. The range is widened to start and end
+// at boundaries of OS pages, which can be larger than the pages of a database.
+func prefetchRange(first, last common.Pgid, pageSize, osPageSize, mmapSize int) (int, int, bool) {
+	if first > last || pageSize <= 0 || osPageSize <= 0 {
+		return 0, 0, false
+	}
+
+	// Don't touch anything beyond the mmap. That also takes care of page
+	// ids that are too large for the offsets below to be computed.
+	if uint64(last) >= uint64(mmapSize)/uint64(pageSize) {
+		return 0, 0, false
+	}
+
+	start := int(first) * pageSize
+	end := (int(last) + 1) * pageSize
+
+	start -= start % osPageSize
+	if rem := end % osPageSize; rem != 0 {
+		end += osPageSize - rem
+	}
+	if end > mmapSize {
+		end = mmapSize
+	}
+
+	return start, end, true
+}
+
 // pageInBuffer retrieves a page reference from a given byte array based on the current page size.
 func (db *DB) pageInBuffer(b []byte, id common.Pgid) *common.Page {
 	return (*common.Page)(unsafe.Pointer(&b[id*common.Pgid(db.pageSize)]))
