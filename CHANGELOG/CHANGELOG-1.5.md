@@ -10,6 +10,7 @@
 
 ### CMD
 - [Reject compacting a database onto itself](https://github.com/etcd-io/bbolt/pull/1295)
+- [Reject out of range item ids in page-item](https://github.com/etcd-io/bbolt/pull/1327)
 
 <hr>
 
