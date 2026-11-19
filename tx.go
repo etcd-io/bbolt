@@ -664,10 +664,16 @@ func (tx *Tx) forEachPageInternal(pgidstack []common.Pgid, fn func(*common.Page,
 }
 
 // Page returns page information for a given page number.
-// This is only safe for concurrent use when used by a writable transaction.
+//
+// It requires a writable transaction, unless the database was opened in
+// read-only mode. Page reads the freelist, which a concurrent write
+// transaction may modify, so calling it from a read-only transaction on a
+// writable database returns ErrTxNotWritable.
 func (tx *Tx) Page(id int) (*common.PageInfo, error) {
 	if tx.db == nil {
 		return nil, berrors.ErrTxClosed
+	} else if !tx.writable && !tx.db.IsReadOnly() {
+		return nil, berrors.ErrTxNotWritable
 	} else if common.Pgid(id) >= tx.meta.Pgid() {
 		return nil, nil
 	}
