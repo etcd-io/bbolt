@@ -3,7 +3,10 @@ package bbolt_test
 import (
 	"fmt"
 	"math/rand"
+	"runtime"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -212,4 +215,75 @@ func mustGetBucketRootPage(t testing.TB, db *bbolt.DB, bucketName []byte) common
 	})
 
 	return rootPageId
+}
+
+func TestTx_Check_AbandonedReceiverDoesNotLeakGoroutine(t *testing.T) {
+	bucketName := []byte("data")
+	db := btesting.MustCreateDBWithOption(t, &bbolt.Options{PageSize: 4096})
+
+	err := db.Fill(bucketName, 1, 100,
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
+		func(tx int, k int) []byte { return make([]byte, 100) },
+	)
+	require.NoError(t, err)
+
+	corruptEveryLeafPageInBucket(t, db.DB, bucketName)
+
+	// The checker must have more than one finding to report, otherwise it
+	// never blocks on a second send and there is nothing to leak.
+	var all []error
+	require.NoError(t, db.View(func(tx *bbolt.Tx) error {
+		for cErr := range tx.Check() {
+			all = append(all, cErr)
+		}
+		return nil
+	}))
+	require.Greater(t, len(all), 1, "the corrupted db must report several errors")
+
+	vErr := db.View(func(tx *bbolt.Tx) error {
+		// Take only the first error and return, leaving the rest of the
+		// channel unread.
+		cErr := <-tx.Check()
+		require.Error(t, cErr)
+		return cErr
+	})
+	require.Error(t, vErr)
+
+	// No goroutine may stay parked inside the checker once the caller is gone.
+	require.Eventually(t, func() bool {
+		return !checkerGoroutineRunning()
+	}, 2*time.Second, 10*time.Millisecond, "the Check goroutine is still blocked after the caller stopped receiving")
+
+	db.MustClose()
+}
+
+// corruptEveryLeafPageInBucket breaks the key order of every leaf page under
+// the bucket's root, so a full check reports one error per leaf page.
+func corruptEveryLeafPageInBucket(t testing.TB, db *bbolt.DB, bucketName []byte) {
+	bucketRootPage, _, err := guts_cli.ReadPage(db.Path(), uint64(mustGetBucketRootPage(t, db, bucketName)))
+	require.NoError(t, err)
+	require.True(t, bucketRootPage.IsBranchPage())
+
+	for _, bpe := range bucketRootPage.BranchPageElements() {
+		leaf, buf, err := guts_cli.ReadPage(db.Path(), uint64(bpe.Pgid()))
+		require.NoError(t, err)
+		require.True(t, leaf.IsLeafPage())
+		require.Greater(t, leaf.Count(), uint16(1))
+
+		// Make the second key sort before the first.
+		leaf.LeafPageElement(1).Key()[0] = 0
+		require.NoError(t, guts_cli.WritePage(db.Path(), buf))
+	}
+}
+
+// checkerGoroutineRunning reports whether any goroutine is executing Tx.check.
+func checkerGoroutineRunning() bool {
+	buf := make([]byte, 1<<20)
+	for {
+		n := runtime.Stack(buf, true)
+		if n < len(buf) {
+			return strings.Contains(string(buf[:n]), "go.etcd.io/bbolt.(*Tx).check(")
+		}
+		buf = make([]byte, 2*len(buf))
+	}
 }
