@@ -147,9 +147,24 @@ func (tx *Tx) checkInvariantProperties(pageId common.Pgid, reachable map[common.
 	kvStringer KVStringer, ch chan error) {
 	tx.forEachPage(pageId, func(p *common.Page, _ int, stack []common.Pgid) {
 		verifyPageReachable(p, tx.meta.Pgid(), stack, reachable, freed, ch)
+		verifyBranchPageElements(p, stack, ch)
 	})
 
 	tx.recursivelyCheckPageKeyOrder(pageId, kvStringer.KeyToString, ch)
+}
+
+// verifyBranchPageElements reports branch pages with fewer than two
+// elements. The writer never produces such pages: a branch node is
+// merged with a sibling before it can underflow below two children,
+// and a root branch node left with a single child is collapsed into
+// its child. A branch page with zero or one element is therefore
+// corrupt, and it is dangerous to keep using the database: rebalancing
+// a child of such a page panics on the assertion that a parent must
+// have at least two children (see node.rebalance).
+func verifyBranchPageElements(p *common.Page, stack []common.Pgid, ch chan error) {
+	if p.IsBranchPage() && p.Count() < 2 {
+		ch <- fmt.Errorf("page %d: branch page has fewer than 2 elements: %d (stack: %v)", int(p.Id()), int(p.Count()), stack)
+	}
 }
 
 func verifyPageReachable(p *common.Page, hwm common.Pgid, stack []common.Pgid, reachable map[common.Pgid]*common.Page, freed map[common.Pgid]bool, ch chan error) {
