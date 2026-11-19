@@ -13,7 +13,7 @@ import (
 func TestFreelistArray_allocate(t *testing.T) {
 	f := NewArrayFreelist()
 	ids := []common.Pgid{3, 4, 5, 6, 7, 9, 12, 13, 18}
-	f.Init(ids)
+	f.init(ids)
 	if id := int(f.Allocate(1, 3)); id != 3 {
 		t.Fatalf("exp=3; got=%v", id)
 	}
@@ -57,16 +57,16 @@ func TestInvalidArrayAllocation(t *testing.T) {
 	f := NewArrayFreelist()
 	// page 0 and 1 are reserved for meta pages, so they should never be free pages.
 	ids := []common.Pgid{1}
-	f.Init(ids)
+	f.init(ids)
 	require.Panics(t, func() {
 		f.Allocate(common.Txid(1), 1)
 	})
 }
 
 func Test_Freelist_Array_Rollback(t *testing.T) {
-	f := newTestArrayFreelist()
+	f := NewArrayFreelist()
 
-	f.Init([]common.Pgid{3, 5, 6, 7, 12, 13})
+	f.init([]common.Pgid{3, 5, 6, 7, 12, 13})
 
 	f.Free(100, common.NewPage(20, 0, 0, 1))
 	f.Allocate(100, 3)
@@ -83,9 +83,4 @@ func Test_Freelist_Array_Rollback(t *testing.T) {
 
 	require.Equal(t, map[common.Pgid]common.Txid{}, f.allocs)
 	require.Equal(t, map[common.Txid]*txPending{}, f.pending)
-}
-
-func newTestArrayFreelist() *array {
-	f := NewArrayFreelist()
-	return f.(*array)
 }

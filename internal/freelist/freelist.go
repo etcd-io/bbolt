@@ -5,7 +5,7 @@ import (
 )
 
 type ReadWriter interface {
-	// Read calls Init with the page ids stored in the given page.
+	// Read initializes this freelist with the page ids stored in the given page.
 	Read(page *common.Page)
 
 	// Write writes the freelist into the given page.
@@ -19,8 +19,9 @@ type ReadWriter interface {
 type Interface interface {
 	ReadWriter
 
-	// Init initializes this freelist with the given list of pages.
-	Init(ids common.Pgids)
+	// InitFromPageIds initializes the free pages with the given page ids, filtering out
+	// any ids that are currently pending. It panics if pgIds are not sorted.
+	InitFromPageIds(pgIds common.Pgids)
 
 	// Allocate tries to allocate the given number of contiguous pages
 	// from the free list pages. It returns the starting page ID if
@@ -55,28 +56,31 @@ type Interface interface {
 	// Rollback removes the pages from a given pending tx.
 	Rollback(txId common.Txid)
 
-	// Copyall copies a list of all free ids and all pending ids in one sorted list.
-	// f.count returns the minimum length required for dst.
-	Copyall(dst []common.Pgid)
+	// FreeAndPendingPages returns a sorted copy of all free and pending page ids.
+	FreeAndPendingPages() common.Pgids
 
 	// Reload reads the freelist from a page and filters out pending items.
 	Reload(p *common.Page)
+}
 
-	// NoSyncReload reads the freelist from Pgids and filters out pending items.
-	NoSyncReload(pgIds common.Pgids)
+// backend stores the free pages and implements the allocation strategy.
+// It knows nothing about transactions; txFreelist owns a backend and does all the
+// transaction bookkeeping (pending pages, allocations, the freed cache) around it.
+type backend interface {
+	// init replaces all free pages with the given sorted ids.
+	init(ids common.Pgids)
 
-	// freePageIds returns the IDs of all free pages. Returns an empty slice if no free pages are available.
+	// allocate removes n contiguous free pages and returns the first page id,
+	// or 0 if there is no span of n contiguous free pages.
+	allocate(n int) common.Pgid
+
+	// freeCount returns the number of free pages.
+	freeCount() int
+
+	// freePageIds returns the sorted IDs of all free pages. Returns an empty slice if no free pages are available.
+	// The returned slice may alias internal state and must not be modified.
 	freePageIds() common.Pgids
 
-	// pendingPageIds returns all pending pages by transaction id.
-	pendingPageIds() map[common.Txid]*txPending
-
-	// release moves all page ids for a transaction id (or older) to the freelist.
-	release(txId common.Txid)
-
-	// releaseRange moves pending pages allocated within an extent [begin,end] to the free list.
-	releaseRange(begin, end common.Txid)
-
-	// mergeSpans is merging the given pages into the freelist
+	// mergeSpans is merging the given pages into the free pages.
 	mergeSpans(ids common.Pgids)
 }
