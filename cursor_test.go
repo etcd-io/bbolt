@@ -632,6 +632,75 @@ func TestCursor_First_EmptyPages(t *testing.T) {
 	}
 }
 
+// Ensure that Prev skips over empty pages in the middle of the bucket.
+func TestCursor_Prev_EmptyPages(t *testing.T) {
+	// Pin page size and scale the key count so deleting the middle keys
+	// empties whole leaf pages regardless of the host OS page size.
+	// With 8-byte keys, empty values and the default 50% fill, 1000 keys
+	// produce 11 leaf pages at 4KB; larger pages keep the same layout
+	// when the count is scaled linearly with the page size.
+	testCases := []struct {
+		pageSize int
+		nkeys    int
+	}{
+		{pageSize: 4096, nkeys: 1000},
+		{pageSize: 8192, nkeys: 2000},
+		{pageSize: 16384, nkeys: 4000},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("PageSize_%d", tc.pageSize), func(t *testing.T) {
+			db := btesting.MustCreateDBWithOption(t, &bolt.Options{PageSize: tc.pageSize})
+
+			err := db.Update(func(tx *bolt.Tx) error {
+				b, err := tx.CreateBucket([]byte("widgets"))
+				require.NoError(t, err)
+				for i := 0; i < tc.nkeys; i++ {
+					require.NoError(t, b.Put(u64tob(uint64(i)), []byte{}))
+				}
+				return nil
+			})
+			require.NoError(t, err)
+
+			// Delete the middle 60% so some pages in the middle are empty,
+			// and then iterate in reverse direction in the same transaction.
+			lo := tc.nkeys / 5
+			hi := tc.nkeys * 4 / 5
+			remain := tc.nkeys - (hi - lo)
+
+			err = db.Update(func(tx *bolt.Tx) error {
+				b := tx.Bucket([]byte("widgets"))
+				for i := lo; i < hi; i++ {
+					require.NoError(t, b.Delete(u64tob(uint64(i))))
+				}
+
+				var keys []uint64
+				c := b.Cursor()
+				for k, _ := c.Last(); k != nil; k, _ = c.Prev() {
+					keys = append(keys, binary.BigEndian.Uint64(k))
+				}
+				require.Len(t, keys, remain)
+				for i, k := range keys {
+					want := uint64(tc.nkeys - 1 - i)
+					if i >= tc.nkeys-hi {
+						want = uint64(lo - 1 - (i - (tc.nkeys - hi)))
+					}
+					require.Equal(t, want, k)
+				}
+
+				k, _ := c.Seek(u64tob(uint64(hi)))
+				require.Equal(t, uint64(hi), binary.BigEndian.Uint64(k))
+				k, _ = c.Prev()
+				require.NotNil(t, k)
+				require.Equal(t, uint64(lo-1), binary.BigEndian.Uint64(k))
+
+				return nil
+			})
+			require.NoError(t, err)
+		})
+	}
+}
+
 // Ensure that a cursor can skip over empty pages that have been deleted.
 func TestCursor_Last_EmptyPages(t *testing.T) {
 	db := btesting.MustCreateDB(t)
