@@ -8,7 +8,7 @@ import "golang.org/x/sys/unix"
 func mlock(db *DB, fileSize int) error {
 	sizeToLock := fileSize
 	if sizeToLock > db.datasz {
-		// Can't lock more than mmaped slice
+		// Can't lock more than mapped slice
 		sizeToLock = db.datasz
 	}
 	if err := unix.Mlock(db.dataref[:sizeToLock]); err != nil {
@@ -25,7 +25,7 @@ func munlock(db *DB, fileSize int) error {
 
 	sizeToUnlock := fileSize
 	if sizeToUnlock > db.datasz {
-		// Can't unlock more than mmaped slice
+		// Can't unlock more than mapped slice
 		sizeToUnlock = db.datasz
 	}
 
