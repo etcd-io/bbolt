@@ -332,7 +332,7 @@ func (tx *Tx) rollback() {
 			if !tx.db.hasSyncedFreelist() {
 				// Reconstruct free page list by scanning the DB to get the whole free page list.
 				// Note: scanning the whole db is heavy if your db size is large in NoSyncFreeList mode.
-				tx.db.freelist.NoSyncReload(tx.db.freepages())
+				tx.db.freelist.InitFromPageIds(tx.db.freepages())
 			} else {
 				// Read free page list from freelist page.
 				tx.db.freelist.Reload(tx.db.page(tx.db.meta().Freelist()))
