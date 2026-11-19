@@ -16,7 +16,7 @@ func TestFreelistHashmap_init_panics(t *testing.T) {
 	f := NewHashMapFreelist()
 	require.Panics(t, func() {
 		// init expects sorted input
-		f.Init([]common.Pgid{25, 5})
+		f.init([]common.Pgid{25, 5})
 	})
 }
 
@@ -24,7 +24,7 @@ func TestFreelistHashmap_allocate(t *testing.T) {
 	f := NewHashMapFreelist()
 
 	ids := []common.Pgid{3, 4, 5, 6, 7, 9, 12, 13, 18}
-	f.Init(ids)
+	f.init(ids)
 
 	f.Allocate(1, 3)
 	if x := f.FreeCount(); x != 6 {
@@ -121,8 +121,8 @@ func TestFreelistHashmap_mergeWithExist(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		f := newTestHashMapFreelist()
-		f.Init(tt.ids)
+		f := newHashMap()
+		f.init(tt.ids)
 
 		f.mergeWithExistingSpan(tt.startPgid, tt.endPgid)
 
@@ -142,7 +142,7 @@ func TestFreelistHashmap_mergeWithExist(t *testing.T) {
 }
 
 func TestFreelistHashmap_GetFreePageIDs(t *testing.T) {
-	f := newTestHashMapFreelist()
+	f := newHashMap()
 
 	N := int32(100000)
 	fm := make(map[common.Pgid]uint64)
@@ -164,9 +164,9 @@ func TestFreelistHashmap_GetFreePageIDs(t *testing.T) {
 }
 
 func Test_Freelist_Hashmap_Rollback(t *testing.T) {
-	f := newTestHashMapFreelist()
+	f := NewHashMapFreelist()
 
-	f.Init([]common.Pgid{3, 5, 6, 7, 12, 13})
+	f.init([]common.Pgid{3, 5, 6, 7, 12, 13})
 
 	f.Free(100, common.NewPage(20, 0, 0, 1))
 	f.Allocate(100, 3)
@@ -186,7 +186,7 @@ func Test_Freelist_Hashmap_Rollback(t *testing.T) {
 }
 
 func Benchmark_freelist_hashmapGetFreePageIDs(b *testing.B) {
-	f := newTestHashMapFreelist()
+	f := newHashMap()
 	N := int32(100000)
 	fm := make(map[common.Pgid]uint64)
 	i := int32(0)
@@ -288,8 +288,8 @@ func benchmarkHashMapMergeSpans(b *testing.B, initIDs, mergePgids common.Pgids) 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
-		f := newTestHashMapFreelist()
-		f.Init(initIDs)
+		f := newHashMap()
+		f.init(initIDs)
 
 		mergeIDs := append(common.Pgids(nil), mergePgids...)
 
@@ -303,8 +303,8 @@ func benchmarkHashMapMergeSpansNonBatch(b *testing.B, initIDs, mergePgids common
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
-		f := newTestHashMapFreelist()
-		f.Init(initIDs)
+		f := newHashMap()
+		f.init(initIDs)
 
 		mergeIDs := append(common.Pgids(nil), mergePgids...)
 
@@ -313,9 +313,4 @@ func benchmarkHashMapMergeSpansNonBatch(b *testing.B, initIDs, mergePgids common
 			f.mergeWithExistingSpan(id, id)
 		}
 	}
-}
-
-func newTestHashMapFreelist() *hashMap {
-	f := NewHashMapFreelist()
-	return f.(*hashMap)
 }
