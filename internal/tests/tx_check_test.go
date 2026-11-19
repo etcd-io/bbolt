@@ -89,3 +89,46 @@ func TestTx_RecursivelyCheckPages_CorruptedLeaf(t *testing.T) {
 	}))
 	require.NoError(t, db.Close())
 }
+
+func TestTx_RecursivelyCheckPages_LoweredSeparator(t *testing.T) {
+	db := btesting.MustCreateDB(t)
+	db.ForceDisableStrictMode()
+	require.NoError(t, db.Fill([]byte("data"), 1, 10000,
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%04d", k)) },
+		func(tx int, k int) []byte { return make([]byte, 100) },
+	))
+	require.NoError(t, db.Close())
+
+	paths, err := surgeon.NewXRay(db.Path()).FindPathsToKey([]byte("0481"))
+	require.NoError(t, err)
+	require.Len(t, paths, 1)
+	path := paths[0]
+	require.GreaterOrEqual(t, len(path), 2)
+	parent, child := path[len(path)-2], path[len(path)-1]
+	p, pbuf, err := guts_cli.ReadPage(db.Path(), uint64(parent))
+	require.NoError(t, err)
+	var index int
+	for ; index < int(p.Count()); index++ {
+		if uint64(p.BranchPageElement(uint16(index)).Pgid()) == uint64(child) {
+			break
+		}
+	}
+	require.Greater(t, index, 0)
+	require.Less(t, index, int(p.Count()))
+	key := p.BranchPageElement(uint16(index)).Key()
+	key[len(key)-1]--
+	require.NoError(t, guts_cli.WritePage(db.Path(), pbuf))
+
+	db.MustReopen()
+	db.ForceDisableStrictMode()
+	require.NoError(t, db.View(func(tx *bolt.Tx) error {
+		var errors []error
+		for err := range tx.Check() {
+			errors = append(errors, err)
+		}
+		require.Len(t, errors, 1)
+		require.ErrorContains(t, errors[0], fmt.Sprintf("on branch page(%d) does not match the first key", parent))
+		return nil
+	}))
+	require.NoError(t, db.Close())
+}
