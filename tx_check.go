@@ -143,6 +143,40 @@ func (tx *Tx) recursivelyCheckBucket(b *Bucket, reachable map[common.Pgid]*commo
 	})
 }
 
+// recursivelyCheckBucketPages verifies the same invariant properties as
+// recursivelyCheckBucket does, for the bucket with the given root page and
+// all buckets nested within it. The difference is that it reads every page
+// only once: it verifies that a page is reachable and that its keys are in
+// order when it visits the page, and it descends into nested buckets straight
+// from the leaf pages they are stored in, rather than doing each of these in
+// a pass of its own.
+//
+// Since nested buckets are looked up in the pages only, this must only be
+// used with a read-only transaction, which has no in-memory nodes or buckets
+// that differ from what is stored in the pages.
+func (tx *Tx) recursivelyCheckBucketPages(rootPageId common.Pgid, reachable map[common.Pgid]*common.Page,
+	freed map[common.Pgid]bool, kvStringer KVStringer, ch chan error) {
+	// Ignore inline buckets.
+	if rootPageId == 0 {
+		return
+	}
+
+	visitPage := func(p *common.Page, stack []common.Pgid) {
+		verifyPageReachable(p, tx.meta.Pgid(), stack, reachable, freed, ch)
+
+		// The children of a branch page are visited next. Reading them
+		// one by one as they are accessed is slow on storage with a high
+		// latency, so have the kernel start reading all of them already.
+		tx.db.prefetchChildren(p)
+	}
+	visitBucket := func(value []byte) {
+		child := tx.root.openBucket(value)
+		tx.recursivelyCheckBucketPages(child.RootPage(), reachable, freed, kvStringer, ch)
+	}
+
+	tx.recursivelyCheckPageKeyOrderInternal(rootPageId, nil, nil, nil, kvStringer.KeyToString, ch, visitPage, visitBucket)
+}
+
 func (tx *Tx) checkInvariantProperties(pageId common.Pgid, reachable map[common.Pgid]*common.Page, freed map[common.Pgid]bool,
 	kvStringer KVStringer, ch chan error) {
 	tx.forEachPage(pageId, func(p *common.Page, _ int, stack []common.Pgid) {
@@ -179,7 +213,7 @@ func verifyPageReachable(p *common.Page, hwm common.Pgid, stack []common.Pgid, r
 //   - keys on pages must be sorted
 //   - keys on children pages are between 2 consecutive keys on the parent's branch page).
 func (tx *Tx) recursivelyCheckPageKeyOrder(pgId common.Pgid, keyToString func([]byte) string, ch chan error) {
-	tx.recursivelyCheckPageKeyOrderInternal(pgId, nil, nil, nil, keyToString, ch)
+	tx.recursivelyCheckPageKeyOrderInternal(pgId, nil, nil, nil, keyToString, ch, nil, nil)
 }
 
 // recursivelyCheckPageKeyOrderInternal verifies that all keys in the subtree rooted at `pgid` are:
@@ -187,12 +221,20 @@ func (tx *Tx) recursivelyCheckPageKeyOrder(pgId common.Pgid, keyToString func([]
 //   - <`maxKeyOpen` (can be nil)
 //   - Are in right ordering relationship to their parents.
 //     `pagesStack` is expected to contain IDs of pages from the tree root to `pgid` for the clean debugging message.
+//
+// If `visitPage` is not nil, it is called for every page of the subtree before
+// its keys are verified. If `visitBucket` is not nil, it is called with the
+// value of every bucket entry found on the leaf pages of the subtree.
 func (tx *Tx) recursivelyCheckPageKeyOrderInternal(
 	pgId common.Pgid, minKeyClosed, maxKeyOpen []byte, pagesStack []common.Pgid,
-	keyToString func([]byte) string, ch chan error) (maxKeyInSubtree []byte) {
+	keyToString func([]byte) string, ch chan error,
+	visitPage func(p *common.Page, stack []common.Pgid), visitBucket func(value []byte)) (maxKeyInSubtree []byte) {
 
 	p := tx.page(pgId)
 	pagesStack = append(pagesStack, pgId)
+	if visitPage != nil {
+		visitPage(p, pagesStack)
+	}
 	switch {
 	case p.IsBranchPage():
 		// For branch page we navigate ranges of all subpages.
@@ -205,7 +247,7 @@ func (tx *Tx) recursivelyCheckPageKeyOrderInternal(
 			if i < len(p.BranchPageElements())-1 {
 				maxKey = p.BranchPageElement(uint16(i + 1)).Key()
 			}
-			maxKeyInSubtree = tx.recursivelyCheckPageKeyOrderInternal(elem.Pgid(), elem.Key(), maxKey, pagesStack, keyToString, ch)
+			maxKeyInSubtree = tx.recursivelyCheckPageKeyOrderInternal(elem.Pgid(), elem.Key(), maxKey, pagesStack, keyToString, ch, visitPage, visitBucket)
 			runningMin = maxKeyInSubtree
 		}
 		return maxKeyInSubtree
@@ -215,6 +257,10 @@ func (tx *Tx) recursivelyCheckPageKeyOrderInternal(
 			elem := p.LeafPageElement(uint16(i))
 			verifyKeyOrder(pgId, "leaf", i, elem.Key(), runningMin, maxKeyOpen, ch, keyToString, pagesStack)
 			runningMin = elem.Key()
+
+			if visitBucket != nil && elem.IsBucketEntry() {
+				visitBucket(elem.Value())
+			}
 		}
 		if p.Count() > 0 {
 			return p.LeafPageElement(p.Count() - 1).Key()
