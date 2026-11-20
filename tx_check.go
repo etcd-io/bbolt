@@ -42,7 +42,10 @@ func (tx *Tx) check(cfg checkConfig, ch chan error) {
 		}
 	}()
 	// Force loading free list if opened in ReadOnly mode.
-	tx.db.loadFreelist()
+	if err := tx.db.loadFreelist(); err != nil {
+		ch <- err
+		return
+	}
 
 	// Check if any pages are double freed.
 	freed := make(map[common.Pgid]bool)

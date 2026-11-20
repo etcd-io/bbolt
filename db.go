@@ -134,8 +134,9 @@ type DB struct {
 	rwtx     *Tx
 	stats    *Stats
 
-	freelist     fl.Interface
-	freelistLoad sync.Once
+	freelist        fl.Interface
+	freelistLoad    sync.Once
+	freelistLoadErr error
 
 	pagePool sync.Pool
 
@@ -301,7 +302,11 @@ func Open(path string, mode os.FileMode, options *Options) (db *DB, err error) {
 	}
 
 	if db.PreLoadFreelist {
-		db.loadFreelist()
+		if err := db.loadFreelist(); err != nil {
+			_ = db.close()
+			lg.Errorf("failed to load freelist (%s): %v", path, err)
+			return nil, err
+		}
 	}
 
 	if db.readOnly {
@@ -419,7 +424,11 @@ func (db *DB) getPageSizeFromSecondMeta() (int, bool, error) {
 // loadFreelist reads the freelist if it is synced, or reconstructs it
 // by scanning the DB if it is not synced. It assumes there are no
 // concurrent accesses being made to the freelist.
-func (db *DB) loadFreelist() {
+//
+// A freelist that violates the invariants the writer maintains (see
+// validateFreelist) is reported as an error instead of being accepted
+// and panicking in the middle of a later commit.
+func (db *DB) loadFreelist() error {
 	db.freelistLoad.Do(func() {
 		db.freelist = newFreelist(db.FreelistType)
 		if !db.hasSyncedFreelist() {
@@ -429,10 +438,38 @@ func (db *DB) loadFreelist() {
 			// Read free list from freelist page.
 			db.freelist.Read(db.page(db.meta().Freelist()))
 		}
-		if db.stats != nil {
+		db.freelistLoadErr = db.validateFreelist()
+		if db.freelistLoadErr == nil && db.stats != nil {
 			db.stats.FreePageN = db.freelist.FreeCount()
 		}
 	})
+	return db.freelistLoadErr
+}
+
+// validateFreelist checks the cheap structural invariants of the loaded
+// freelist that the writer always maintains: every entry must be a real
+// page id (never a meta page), must lie below the high-water mark, and
+// must appear at most once. Without this, a corrupt freelist is accepted
+// at open and only dies later, mid-commit, with a panic such as
+// "invalid page allocation: 0" or "page N already freed" (see #1319).
+func (db *DB) validateFreelist() error {
+	highWaterMark := db.meta().Pgid()
+	ids := make([]common.Pgid, db.freelist.Count())
+	db.freelist.Copyall(ids)
+	seen := make(map[common.Pgid]struct{}, len(ids))
+	for _, id := range ids {
+		if id <= 1 {
+			return fmt.Errorf("freelist contains invalid page id %d", id)
+		}
+		if id >= highWaterMark {
+			return fmt.Errorf("freelist page id %d is at or above the high-water mark %d", id, highWaterMark)
+		}
+		if _, ok := seen[id]; ok {
+			return fmt.Errorf("freelist contains duplicate page id %d", id)
+		}
+		seen[id] = struct{}{}
+	}
+	return nil
 }
 
 func (db *DB) hasSyncedFreelist() bool {
