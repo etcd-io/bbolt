@@ -3,6 +3,9 @@ package bbolt_test
 import (
 	"fmt"
 	"math/rand"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -212,4 +215,38 @@ func mustGetBucketRootPage(t testing.TB, db *bbolt.DB, bucketName []byte) common
 	})
 
 	return rootPageId
+}
+
+// TestTx_Check_OverflowPastHighWaterMark is a regression test for
+// https://github.com/etcd-io/bbolt/issues/1319 (last row): a page whose
+// declared overflow pushes its span past meta.pgid passed Tx.Check, because
+// only the span's first page was bounds-checked and the unreachable-unfreed
+// sweep only examines pages below the high-water mark. The tail page of such
+// a span is also the next page the allocator hands out, so the file later
+// dies with "page N already freed" on a live open.
+func TestTx_Check_OverflowPastHighWaterMark(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("testdata", "issue1319", "overflow_past_hwm.db"))
+	require.NoError(t, err)
+	path := filepath.Join(t.TempDir(), "db")
+	require.NoError(t, os.WriteFile(path, data, 0600))
+
+	db, err := bbolt.Open(path, 0600, &bbolt.Options{PreLoadFreelist: true})
+	require.NoError(t, err)
+	defer db.Close()
+
+	var errs []error
+	require.NoError(t, db.View(func(tx *bbolt.Tx) error {
+		for err := range tx.Check() {
+			errs = append(errs, err)
+		}
+		return nil
+	}))
+	require.NotEmpty(t, errs, "Tx.Check should flag a page whose overflow span passes the high-water mark")
+	found := false
+	for _, err := range errs {
+		if strings.Contains(err.Error(), "overflow past high water mark") {
+			found = true
+		}
+	}
+	require.True(t, found, "expected an 'overflow past high water mark' error, got: %v", errs)
 }
