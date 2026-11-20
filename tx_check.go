@@ -157,6 +157,17 @@ func verifyPageReachable(p *common.Page, hwm common.Pgid, stack []common.Pgid, r
 		ch <- fmt.Errorf("page %d: out of bounds: %d (stack: %v)", int(p.Id()), int(hwm), stack)
 	}
 
+	// A page's overflow span must stay below the high-water mark. Only the
+	// span's first page is checked above, and the sweep below only examines
+	// pages below the high-water mark, so a span whose tail crosses it was
+	// silently accepted and the tail page could later be handed out by the
+	// allocator while still being treated as reachable.
+	if p.Id() < hwm {
+		if last := p.Id() + common.Pgid(p.Overflow()); last >= hwm {
+			ch <- fmt.Errorf("page %d: overflow past high water mark: last page %d, high water mark %d (stack: %v)", int(p.Id()), int(last), int(hwm), stack)
+		}
+	}
+
 	// Ensure each page is only referenced once.
 	for i := common.Pgid(0); i <= common.Pgid(p.Overflow()); i++ {
 		var id = p.Id() + i
