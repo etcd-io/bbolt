@@ -635,6 +635,15 @@ func (tx *Tx) page(id common.Pgid) *common.Page {
 		}
 	}
 
+	// Page ids come from the file, so an id beyond the high-water mark is
+	// corrupt. Reject it here, before indexing into the mmap, so the
+	// failure is a recoverable panic with a clear message (like the
+	// high-water checks in node.go and bucket.go) instead of an
+	// index-out-of-range panic or an unrecoverable SIGSEGV in page().
+	if id >= tx.meta.Pgid() {
+		panic(fmt.Sprintf("pgid (%d) above high water mark (%d)", id, tx.meta.Pgid()))
+	}
+
 	// Otherwise return directly from the mmap.
 	p := tx.db.page(id)
 	p.FastCheck(id)
