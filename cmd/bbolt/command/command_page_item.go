@@ -56,7 +56,7 @@ func pageItemFunc(cmd *cobra.Command, cfg pageItemOptions, dbPath string, pageID
 	// reported as an error rather than crashing the process.
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("page-item: %v", r)
+			err = errors.Join(err, fmt.Errorf("page-item: %v", r))
 		}
 	}()
 
