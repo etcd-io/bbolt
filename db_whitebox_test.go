@@ -220,6 +220,7 @@ func TestForEachOverflowRead(t *testing.T) {
 		name     string
 		flags    uint16
 		overflow uint32
+		count    uint16
 		inodes   []struct {
 			flags      uint32
 			key, value []byte
@@ -271,6 +272,21 @@ func TestForEachOverflowRead(t *testing.T) {
 			expected: []pageRange{{11, 11}},
 		},
 		{
+			// The elements of a page with that count would take up
+			// more than its two pages.
+			name:     "leaf page with a corrupt count",
+			flags:    common.LeafPageFlag,
+			overflow: 1,
+			count:    math.MaxUint16,
+			inodes: []struct {
+				flags      uint32
+				key, value []byte
+			}{
+				{key: []byte("a"), value: make([]byte, 6000)},
+				{key: []byte("b"), value: make([]byte, 100)},
+			},
+		},
+		{
 			name:     "branch page with overflow",
 			flags:    common.BranchPageFlag,
 			overflow: 2,
@@ -301,6 +317,9 @@ func TestForEachOverflowRead(t *testing.T) {
 				inodes[i].SetValue(in.value)
 			}
 			common.WriteInodeToPage(inodes, p)
+			if tc.count != 0 {
+				p.SetCount(tc.count)
+			}
 
 			var got []pageRange
 			forEachOverflowRead(p, pageSize, func(first, last common.Pgid) {

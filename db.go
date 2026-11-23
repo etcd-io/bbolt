@@ -1136,8 +1136,9 @@ func (db *DB) page(id common.Pgid) *common.Page {
 // page are about to be read, so that it can start reading all of them from
 // disk right away rather than one after the other as they are accessed. That
 // includes the overflow pages of the children that are read. It does nothing
-// for any other type of page.
-func (db *DB) prefetchChildren(p *common.Page) {
+// for any other type of page. No page at or beyond the given high water mark
+// is looked at.
+func (db *DB) prefetchChildren(p *common.Page, hwm common.Pgid) {
 	if !p.IsBranchPage() || p.Count() == 0 {
 		return
 	}
@@ -1161,17 +1162,24 @@ func (db *DB) prefetchChildren(p *common.Page) {
 	// Whether a child has overflow pages is only known from its header,
 	// which is being read by now. Request these before any of the
 	// children is visited, so that they are read at the same time too.
+	//
+	// The children haven't been verified yet. The mmap can be larger than
+	// the file, so only pages below the high water mark are safe to read.
 	limit := common.Pgid(db.datasz / db.pageSize)
+	if hwm < limit {
+		limit = hwm
+	}
 	for i := uint16(0); i < p.Count(); i++ {
 		id := p.BranchPageElement(i).Pgid()
 		if id >= limit {
 			continue
 		}
 
-		// The child hasn't been verified yet. Its overflow pages are
-		// located by its id, so don't go by a header with another one.
+		// The overflow pages of a child are located by its id, so don't
+		// go by a header with another one. They have to be below the
+		// high water mark as well.
 		child := db.page(id)
-		if child.Id() != id {
+		if child.Id() != id || uint64(child.Overflow()) >= uint64(limit-id) {
 			continue
 		}
 		forEachOverflowRead(child, db.pageSize, db.prefetchPages)
@@ -1193,6 +1201,12 @@ func forEachOverflowRead(p *common.Page, pageSize int, fn func(first, last commo
 		return
 	}
 	if !p.IsLeafPage() {
+		return
+	}
+
+	// Don't read elements from beyond the page if its count is corrupt.
+	elements := uint64(common.PageHeaderSize) + uint64(p.Count())*uint64(common.LeafPageElementSize)
+	if elements > (uint64(overflow)+1)*uint64(pageSize) {
 		return
 	}
 
