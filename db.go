@@ -1221,7 +1221,9 @@ func forEachOverflowRead(p *common.Page, pageSize int, fn func(first, last commo
 	//
 	// The offsets are computed with 64 bits, the sizes of a corrupt
 	// element could make them wrap around with less.
-	var reported common.Pgid
+	//
+	// Pages that are next to each other are reported as a single range.
+	var reported, pendingFirst, pendingLast common.Pgid
 	base := uintptr(unsafe.Pointer(p))
 	for i := uint16(0); i < p.Count(); i++ {
 		elem := p.LeafPageElement(i)
@@ -1246,8 +1248,19 @@ func forEachOverflowRead(p *common.Page, pageSize int, fn func(first, last commo
 			continue
 		}
 
-		fn(p.Id()+first, p.Id()+last)
 		reported = last
+		if pendingLast != 0 && first == pendingLast+1 {
+			pendingLast = last
+			continue
+		}
+
+		if pendingLast != 0 {
+			fn(p.Id()+pendingFirst, p.Id()+pendingLast)
+		}
+		pendingFirst, pendingLast = first, last
+	}
+	if pendingLast != 0 {
+		fn(p.Id()+pendingFirst, p.Id()+pendingLast)
 	}
 }
 

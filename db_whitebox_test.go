@@ -241,8 +241,8 @@ func TestForEachOverflowRead(t *testing.T) {
 		},
 		{
 			// The second key starts on the second page and the third
-			// one on the third page. The last two pages only hold the
-			// value of the third key.
+			// one on the third page, which are reported as one range.
+			// The last two pages only hold the value of the third key.
 			name:     "leaf page with overflow",
 			flags:    common.LeafPageFlag,
 			overflow: 4,
@@ -254,7 +254,23 @@ func TestForEachOverflowRead(t *testing.T) {
 				{key: []byte("b"), value: make([]byte, 5000)},
 				{key: []byte("c"), value: make([]byte, 9000)},
 			},
-			expected: []pageRange{{11, 11}, {12, 12}},
+			expected: []pageRange{{11, 12}},
+		},
+		{
+			// The third page only holds the value of the second key,
+			// so it is not part of either range.
+			name:     "leaf page with keys apart from each other",
+			flags:    common.LeafPageFlag,
+			overflow: 3,
+			inodes: []struct {
+				flags      uint32
+				key, value []byte
+			}{
+				{key: []byte("a"), value: make([]byte, 6000)},
+				{key: []byte("b"), value: make([]byte, 9000)},
+				{key: []byte("c"), value: make([]byte, 100)},
+			},
+			expected: []pageRange{{11, 11}, {13, 13}},
 		},
 		{
 			// Both the second key and the bucket are on the second
