@@ -156,6 +156,8 @@ func (tx *Tx) recursivelyCheckBucket(b *Bucket, reachable map[common.Pgid]*commo
 // that differ from what is stored in the pages.
 func (tx *Tx) recursivelyCheckBucketPages(rootPageId common.Pgid, reachable map[common.Pgid]*common.Page,
 	freed map[common.Pgid]bool, kvStringer KVStringer, ch chan error) {
+	common.Assert(!tx.writable, "buckets can't be checked by their pages in a writable transaction")
+
 	// Ignore inline buckets.
 	if rootPageId == 0 {
 		return

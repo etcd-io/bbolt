@@ -127,3 +127,28 @@ func testRecursivelyCheckBucketPages(t *testing.T, pageSize int) {
 	require.Equal(t, expectedFree, db.freepages())
 	require.NoError(t, db.Close())
 }
+
+// TestTx_recursivelyCheckBucketPages_Writable ensures that buckets are not
+// checked by their pages in a writable transaction, whose changes are not in
+// the pages yet.
+func TestTx_recursivelyCheckBucketPages_Writable(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "db"), 0600, nil)
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
+
+	err = db.Update(func(tx *Tx) error {
+		require.PanicsWithValue(t,
+			"assertion failed: buckets can't be checked by their pages in a writable transaction",
+			func() {
+				tx.recursivelyCheckBucketPages(
+					tx.root.RootPage(), make(map[common.Pgid]*common.Page),
+					make(map[common.Pgid]bool), HexKVStringer(), make(chan error),
+				)
+			},
+		)
+		return nil
+	})
+	require.NoError(t, err)
+}
