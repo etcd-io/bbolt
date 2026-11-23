@@ -1249,12 +1249,15 @@ func prefetchRange(first, last common.Pgid, pageSize, osPageSize, mmapSize int) 
 	start := int(first) * pageSize
 	end := (int(last) + 1) * pageSize
 
+	// The end is limited to the mmap before it is rounded up, since it
+	// could overflow otherwise.
 	start -= start % osPageSize
 	if rem := end % osPageSize; rem != 0 {
-		end += osPageSize - rem
-	}
-	if end > mmapSize {
-		end = mmapSize
+		if add := osPageSize - rem; add > mmapSize-end {
+			end = mmapSize
+		} else {
+			end += add
+		}
 	}
 
 	return start, end, true

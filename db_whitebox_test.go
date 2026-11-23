@@ -128,13 +128,18 @@ func prepareData(t *testing.T) (string, error) {
 }
 
 func TestPrefetchRange(t *testing.T) {
-	const mmapSize = 1 << 20
+	const defaultMmapSize = 1 << 20
+
+	// The last page of the largest mmap possible. Rounding its end up to
+	// the next OS page doesn't fit into an int.
+	const lastPage = math.MaxInt/4096 - 1
 
 	testCases := []struct {
 		name        string
 		first, last common.Pgid
 		pageSize    int
 		osPageSize  int
+		mmapSize    int
 
 		expectedStart, expectedEnd int
 		expectedOK                 bool
@@ -167,7 +172,13 @@ func TestPrefetchRange(t *testing.T) {
 		{
 			name:  "last page of the mmap",
 			first: 255, last: 255, pageSize: 4096, osPageSize: 16384,
-			expectedStart: 252 * 4096, expectedEnd: mmapSize, expectedOK: true,
+			expectedStart: 252 * 4096, expectedEnd: defaultMmapSize, expectedOK: true,
+		},
+		{
+			name:  "last page of the largest mmap",
+			first: lastPage, last: lastPage, pageSize: 4096, osPageSize: 16384,
+			mmapSize:      math.MaxInt,
+			expectedStart: lastPage*4096 - lastPage*4096%16384, expectedEnd: math.MaxInt, expectedOK: true,
 		},
 		{
 			name:  "beyond the mmap",
@@ -185,6 +196,11 @@ func TestPrefetchRange(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			mmapSize := tc.mmapSize
+			if mmapSize == 0 {
+				mmapSize = defaultMmapSize
+			}
+
 			start, end, ok := prefetchRange(tc.first, tc.last, tc.pageSize, tc.osPageSize, mmapSize)
 			require.Equal(t, tc.expectedOK, ok)
 			require.Equal(t, tc.expectedStart, start)
