@@ -1167,7 +1167,14 @@ func (db *DB) prefetchChildren(p *common.Page) {
 		if id >= limit {
 			continue
 		}
-		forEachOverflowRead(db.page(id), db.pageSize, db.prefetchPages)
+
+		// The child hasn't been verified yet. Its overflow pages are
+		// located by its id, so don't go by a header with another one.
+		child := db.page(id)
+		if child.Id() != id {
+			continue
+		}
+		forEachOverflowRead(child, db.pageSize, db.prefetchPages)
 	}
 }
 
