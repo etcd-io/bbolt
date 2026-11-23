@@ -102,6 +102,9 @@ func mmap(db *DB, sz int) error {
 	return nil
 }
 
+// prefetchSupported is whether madviseWillNeed has an effect.
+const prefetchSupported = false
+
 // madviseWillNeed is a no-op on Windows.
 func madviseWillNeed(_ []byte) {
 }

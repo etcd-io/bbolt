@@ -1139,6 +1139,12 @@ func (db *DB) page(id common.Pgid) *common.Page {
 // for any other type of page. No page at or beyond the given high water mark
 // is looked at.
 func (db *DB) prefetchChildren(p *common.Page, hwm common.Pgid) {
+	// There is no point in locating the pages if the kernel can't be told
+	// about them.
+	if !prefetchSupported {
+		return
+	}
+
 	if !p.IsBranchPage() || p.Count() == 0 {
 		return
 	}
