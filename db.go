@@ -1212,21 +1212,24 @@ func forEachOverflowRead(p *common.Page, pageSize int, fn func(first, last commo
 
 	// The elements are stored in order, so remembering the last page that
 	// was reported is enough to not report a page twice.
+	//
+	// The offsets are computed with 64 bits, the sizes of a corrupt
+	// element could make them wrap around with less.
 	var reported common.Pgid
 	base := uintptr(unsafe.Pointer(p))
 	for i := uint16(0); i < p.Count(); i++ {
 		elem := p.LeafPageElement(i)
-		size := uintptr(elem.Ksize())
+		size := uint64(elem.Ksize())
 		if elem.IsBucketEntry() {
-			size += uintptr(elem.Vsize())
+			size += uint64(elem.Vsize())
 		}
 		if size == 0 {
 			continue
 		}
 
-		start := uintptr(unsafe.Pointer(elem)) - base + uintptr(elem.Pos())
-		first := common.Pgid(start / uintptr(pageSize))
-		last := common.Pgid((start + size - 1) / uintptr(pageSize))
+		start := uint64(uintptr(unsafe.Pointer(elem))-base) + uint64(elem.Pos())
+		first := common.Pgid(start / uint64(pageSize))
+		last := common.Pgid((start + size - 1) / uint64(pageSize))
 		if first <= reported {
 			first = reported + 1
 		}

@@ -221,6 +221,7 @@ func TestForEachOverflowRead(t *testing.T) {
 		flags    uint16
 		overflow uint32
 		count    uint16
+		ksize    uint32
 		inodes   []struct {
 			flags      uint32
 			key, value []byte
@@ -287,6 +288,22 @@ func TestForEachOverflowRead(t *testing.T) {
 			},
 		},
 		{
+			// The end of the second key is beyond what fits into 32
+			// bits, it must not wrap around to before its start.
+			name:     "leaf page with a corrupt key size",
+			flags:    common.LeafPageFlag,
+			overflow: 3,
+			ksize:    0xFFFFF000,
+			inodes: []struct {
+				flags      uint32
+				key, value []byte
+			}{
+				{key: []byte("a"), value: make([]byte, 6000)},
+				{key: []byte("b"), value: make([]byte, 100)},
+			},
+			expected: []pageRange{{11, 13}},
+		},
+		{
 			name:     "branch page with overflow",
 			flags:    common.BranchPageFlag,
 			overflow: 2,
@@ -319,6 +336,9 @@ func TestForEachOverflowRead(t *testing.T) {
 			common.WriteInodeToPage(inodes, p)
 			if tc.count != 0 {
 				p.SetCount(tc.count)
+			}
+			if tc.ksize != 0 {
+				p.LeafPageElement(1).SetKsize(tc.ksize)
 			}
 
 			var got []pageRange
