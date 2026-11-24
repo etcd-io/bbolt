@@ -16,8 +16,18 @@ import (
 // writable one, and that the freelist is reconstructed from the pages that
 // aren't reached.
 func TestTx_recursivelyCheckBucket(t *testing.T) {
+	// A page size below the one of the OS results in pages that don't
+	// start at an OS page boundary, which prefetching has to deal with.
+	for _, pageSize := range []int{0, 1024} {
+		t.Run(fmt.Sprintf("pageSize=%d", pageSize), func(t *testing.T) {
+			testRecursivelyCheckBucket(t, pageSize)
+		})
+	}
+}
+
+func testRecursivelyCheckBucket(t *testing.T, pageSize int) {
 	path := filepath.Join(t.TempDir(), "db")
-	db, err := Open(path, 0600, nil)
+	db, err := Open(path, 0600, &Options{PageSize: pageSize})
 	require.NoError(t, err)
 
 	rng := rand.New(rand.NewSource(1))

@@ -168,6 +168,11 @@ func (tx *Tx) recursivelyCheckBucketPage(
 	pagesStack = append(pagesStack, pgId)
 	verifyPageReachable(p, tx.meta.Pgid(), pagesStack, reachable, freed, ch)
 
+	// The children of a branch page are visited next. Reading them one by
+	// one as they are accessed is slow on storage with a high latency, so
+	// have the kernel start reading all of them already.
+	tx.db.prefetchChildren(p, tx.meta.Pgid())
+
 	keyToString := kvStringer.KeyToString
 	switch {
 	case p.IsBranchPage():
