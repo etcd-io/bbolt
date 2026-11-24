@@ -24,8 +24,8 @@ const TestFreelistType = "TEST_FREELIST_TYPE"
 func TestFreelist_free(t *testing.T) {
 	f := newTestFreelist()
 	f.Free(100, common.NewPage(12, 0, 0, 0))
-	if !reflect.DeepEqual([]common.Pgid{12}, f.pendingPageIds()[100].ids) {
-		t.Fatalf("exp=%v; got=%v", []common.Pgid{12}, f.pendingPageIds()[100].ids)
+	if !reflect.DeepEqual([]common.Pgid{12}, f.pendingByTx()[100].ids) {
+		t.Fatalf("exp=%v; got=%v", []common.Pgid{12}, f.pendingByTx()[100].ids)
 	}
 }
 
@@ -33,8 +33,8 @@ func TestFreelist_free(t *testing.T) {
 func TestFreelist_free_overflow(t *testing.T) {
 	f := newTestFreelist()
 	f.Free(100, common.NewPage(12, 0, 0, 3))
-	if exp := []common.Pgid{12, 13, 14, 15}; !reflect.DeepEqual(exp, f.pendingPageIds()[100].ids) {
-		t.Fatalf("exp=%v; got=%v", exp, f.pendingPageIds()[100].ids)
+	if exp := []common.Pgid{12, 13, 14, 15}; !reflect.DeepEqual(exp, f.pendingByTx()[100].ids) {
+		t.Fatalf("exp=%v; got=%v", exp, f.pendingByTx()[100].ids)
 	}
 }
 
@@ -61,7 +61,7 @@ func TestFreelist_free_meta_panics(t *testing.T) {
 func TestFreelist_free_freelist(t *testing.T) {
 	f := newTestFreelist()
 	f.Free(100, common.NewPage(12, common.FreelistPageFlag, 0, 0))
-	pp := f.pendingPageIds()[100]
+	pp := f.pendingByTx()[100]
 	require.Equal(t, []common.Pgid{12}, pp.ids)
 	require.Equal(t, []common.Txid{0}, pp.alloctx)
 }
@@ -76,8 +76,8 @@ func TestFreelist_free_freelist_alloctx(t *testing.T) {
 
 	f.Free(101, common.NewPage(12, common.FreelistPageFlag, 0, 0))
 	require.True(t, f.Freed(12))
-	if exp := []common.Pgid{12}; !reflect.DeepEqual(exp, f.pendingPageIds()[101].ids) {
-		t.Fatalf("exp=%v; got=%v", exp, f.pendingPageIds()[101].ids)
+	if exp := []common.Pgid{12}; !reflect.DeepEqual(exp, f.pendingByTx()[101].ids) {
+		t.Fatalf("exp=%v; got=%v", exp, f.pendingByTx()[101].ids)
 	}
 	f.ReleasePendingPages()
 	require.True(t, f.Freed(12))
@@ -216,7 +216,7 @@ func TestFreelist_releaseRange(t *testing.T) {
 					ids = append(ids, common.Pgid(uint64(p.id)+i))
 				}
 			}
-			f.Init(ids)
+			f.init(ids)
 			for _, p := range c.pagesIn {
 				f.Allocate(p.allocTxn, p.n)
 			}
@@ -237,7 +237,7 @@ func TestFreelist_releaseRange(t *testing.T) {
 func TestFreeList_init(t *testing.T) {
 	buf := make([]byte, 4096)
 	f := newTestFreelist()
-	f.Init(common.Pgids{5, 6, 8})
+	f.init(common.Pgids{5, 6, 8})
 
 	p := common.LoadPage(buf)
 	f.Write(p)
@@ -248,14 +248,14 @@ func TestFreeList_init(t *testing.T) {
 
 	// When initializing the freelist with an empty list of page ID,
 	// it should reset the freelist page IDs.
-	f2.Init([]common.Pgid{})
+	f2.init([]common.Pgid{})
 	require.Equal(t, common.Pgids{}, f2.freePageIds())
 }
 
 func TestFreeList_reload(t *testing.T) {
 	buf := make([]byte, 4096)
 	f := newTestFreelist()
-	f.Init(common.Pgids{5, 6, 8})
+	f.init(common.Pgids{5, 6, 8})
 
 	p := common.LoadPage(buf)
 	f.Write(p)
@@ -270,7 +270,7 @@ func TestFreeList_reload(t *testing.T) {
 	f2.Reload(p)
 
 	require.Equal(t, common.Pgids{5, 6, 8}, f2.freePageIds())
-	require.Equal(t, []common.Pgid{10, 11, 12}, f2.pendingPageIds()[5].ids)
+	require.Equal(t, []common.Pgid{10, 11, 12}, f2.pendingByTx()[5].ids)
 }
 
 // Ensure that the txIDx swap, less and len are properly implemented
@@ -338,9 +338,9 @@ func TestFreelist_write(t *testing.T) {
 	var buf [4096]byte
 	f := newTestFreelist()
 
-	f.Init([]common.Pgid{12, 39})
-	f.pendingPageIds()[100] = &txPending{ids: []common.Pgid{28, 11}}
-	f.pendingPageIds()[101] = &txPending{ids: []common.Pgid{3}}
+	f.init([]common.Pgid{12, 39})
+	f.pendingByTx()[100] = &txPending{ids: []common.Pgid{28, 11}}
+	f.pendingByTx()[101] = &txPending{ids: []common.Pgid{3}}
 	p := (*common.Page)(unsafe.Pointer(&buf[0]))
 	f.Write(p)
 
@@ -357,7 +357,7 @@ func TestFreelist_write(t *testing.T) {
 
 func TestFreelist_E2E_HappyPath(t *testing.T) {
 	f := newTestFreelist()
-	f.Init([]common.Pgid{})
+	f.init([]common.Pgid{})
 	requirePages(t, f, common.Pgids{}, common.Pgids{})
 
 	allocated := f.Allocate(common.Txid(1), 5)
@@ -393,7 +393,7 @@ func TestFreelist_E2E_HappyPath(t *testing.T) {
 
 func TestFreelist_E2E_MultiSpanOverflows(t *testing.T) {
 	f := newTestFreelist()
-	f.Init([]common.Pgid{})
+	f.init([]common.Pgid{})
 	f.Free(common.Txid(10), common.NewPage(20, common.LeafPageFlag, 0, 1))
 	f.Free(common.Txid(10), common.NewPage(25, common.LeafPageFlag, 0, 2))
 	f.Free(common.Txid(10), common.NewPage(35, common.LeafPageFlag, 0, 3))
@@ -418,7 +418,7 @@ func TestFreelist_E2E_MultiSpanOverflows(t *testing.T) {
 
 func TestFreelist_E2E_Rollbacks(t *testing.T) {
 	freelist := newTestFreelist()
-	freelist.Init([]common.Pgid{})
+	freelist.init([]common.Pgid{})
 	freelist.Free(common.Txid(2), common.NewPage(5, common.LeafPageFlag, 0, 1))
 	freelist.Free(common.Txid(2), common.NewPage(8, common.LeafPageFlag, 0, 0))
 	requirePages(t, freelist, common.Pgids{}, common.Pgids{5, 6, 8})
@@ -436,7 +436,7 @@ func TestFreelist_E2E_Rollbacks(t *testing.T) {
 
 func TestFreelist_E2E_RollbackPanics(t *testing.T) {
 	freelist := newTestFreelist()
-	freelist.Init([]common.Pgid{5})
+	freelist.init([]common.Pgid{5})
 	requirePages(t, freelist, common.Pgids{5}, common.Pgids{})
 
 	_ = freelist.Allocate(common.Txid(5), 1)
@@ -450,7 +450,7 @@ func TestFreelist_E2E_RollbackPanics(t *testing.T) {
 // tests the reloading from another physical page
 func TestFreelist_E2E_Reload(t *testing.T) {
 	freelist := newTestFreelist()
-	freelist.Init([]common.Pgid{})
+	freelist.init([]common.Pgid{})
 	freelist.Free(common.Txid(2), common.NewPage(5, common.LeafPageFlag, 0, 1))
 	freelist.Free(common.Txid(2), common.NewPage(8, common.LeafPageFlag, 0, 0))
 	freelist.ReleasePendingPages()
@@ -468,7 +468,7 @@ func TestFreelist_E2E_Reload(t *testing.T) {
 	freelist.Write(px)
 
 	loadFreeList := newTestFreelist()
-	loadFreeList.Init([]common.Pgid{})
+	loadFreeList.init([]common.Pgid{})
 	loadFreeList.Read(px)
 	requirePages(t, loadFreeList, common.Pgids{3, 4, 5, 6, 8, 10, 11, 12}, common.Pgids{})
 	// restore the original freelist again
@@ -477,7 +477,7 @@ func TestFreelist_E2E_Reload(t *testing.T) {
 
 	// reload another page with different free pages to test we are deduplicating the free pages with the pending ones correctly
 	freelist = newTestFreelist()
-	freelist.Init([]common.Pgid{})
+	freelist.init([]common.Pgid{})
 	freelist.Free(common.Txid(5), common.NewPage(5, common.LeafPageFlag, 0, 4))
 	freelist.Reload(p)
 	requirePages(t, freelist, common.Pgids{}, common.Pgids{5, 6, 7, 8, 9})
@@ -486,7 +486,7 @@ func TestFreelist_E2E_Reload(t *testing.T) {
 // tests the loading and reloading from physical pages
 func TestFreelist_E2E_SerDe_HappyPath(t *testing.T) {
 	freelist := newTestFreelist()
-	freelist.Init([]common.Pgid{})
+	freelist.init([]common.Pgid{})
 	freelist.Free(common.Txid(2), common.NewPage(5, common.LeafPageFlag, 0, 1))
 	freelist.Free(common.Txid(2), common.NewPage(8, common.LeafPageFlag, 0, 0))
 	freelist.ReleasePendingPages()
@@ -502,7 +502,7 @@ func TestFreelist_E2E_SerDe_HappyPath(t *testing.T) {
 	freelist.Write(p)
 
 	loadFreeList := newTestFreelist()
-	loadFreeList.Init([]common.Pgid{})
+	loadFreeList.init([]common.Pgid{})
 	loadFreeList.Read(p)
 	requirePages(t, loadFreeList, common.Pgids{3, 4, 5, 6, 8, 10, 11, 12}, common.Pgids{})
 }
@@ -525,7 +525,7 @@ func TestFreelist_E2E_SerDe_AcrossImplementations(t *testing.T) {
 			p := common.LoadPage(buf)
 			freelist.Write(p)
 
-			for n, loadFreeList := range map[string]Interface{
+			for n, loadFreeList := range map[string]*txFreelist{
 				"hashmap": NewHashMapFreelist(),
 				"array":   NewArrayFreelist(),
 			} {
@@ -538,12 +538,12 @@ func TestFreelist_E2E_SerDe_AcrossImplementations(t *testing.T) {
 	}
 }
 
-func requirePages(t *testing.T, f Interface, freePageIds common.Pgids, pendingPageIds common.Pgids) {
+func requirePages(t *testing.T, f *txFreelist, freePageIds common.Pgids, pendingPageIds common.Pgids) {
 	require.Equal(t, f.FreeCount()+f.PendingCount(), f.Count())
 	require.Equalf(t, freePageIds, f.freePageIds(), "unexpected free pages")
 	require.Equal(t, len(freePageIds), f.FreeCount())
 
-	pp := allPendingPages(f.pendingPageIds())
+	pp := allPendingPages(f.pendingByTx())
 	require.Equalf(t, pendingPageIds, pp, "unexpected pending pages")
 	require.Equal(t, len(pp), f.PendingCount())
 
@@ -577,8 +577,8 @@ func benchmark_FreelistRelease(b *testing.B, size int) {
 	for i := 0; i < b.N; i++ {
 		txp := &txPending{ids: pending}
 		f := newTestFreelist()
-		f.pendingPageIds()[1] = txp
-		f.Init(ids)
+		f.pendingByTx()[1] = txp
+		f.init(ids)
 		f.release(1)
 	}
 }
@@ -596,7 +596,7 @@ func Test_freelist_ReadIDs_and_getFreePageIDs(t *testing.T) {
 	f := newTestFreelist()
 	exp := common.Pgids([]common.Pgid{3, 4, 5, 6, 7, 9, 12, 13, 18})
 
-	f.Init(exp)
+	f.init(exp)
 
 	if got := f.freePageIds(); !reflect.DeepEqual(exp, got) {
 		t.Fatalf("exp=%v; got=%v", exp, got)
@@ -604,7 +604,7 @@ func Test_freelist_ReadIDs_and_getFreePageIDs(t *testing.T) {
 
 	f2 := newTestFreelist()
 	exp2 := []common.Pgid{}
-	f2.Init(exp2)
+	f2.init(exp2)
 
 	if got2 := f2.freePageIds(); !reflect.DeepEqual(got2, common.Pgids(exp2)) {
 		t.Fatalf("exp2=%#v; got2=%#v", exp2, got2)
@@ -613,10 +613,64 @@ func Test_freelist_ReadIDs_and_getFreePageIDs(t *testing.T) {
 }
 
 // newTestFreelist get the freelist type from env and initial the freelist
-func newTestFreelist() Interface {
+func newTestFreelist() *txFreelist {
 	if env := os.Getenv(TestFreelistType); env == "hashmap" {
 		return NewHashMapFreelist()
 	}
 
 	return NewArrayFreelist()
+}
+
+func TestFreelist_InitAndReloadPanicOnUnsortedInput(t *testing.T) {
+	t.Cleanup(common.EnableVerifications(common.ENV_VERIFY_VALUE_ASSERT))
+	for name, newFn := range map[string]func() *txFreelist{
+		"array":   NewArrayFreelist,
+		"hashmap": NewHashMapFreelist,
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newFn()
+			f.init(common.Pgids{3, 4})
+
+			require.Panics(t, func() { f.init(common.Pgids{9, 5, 7}) })
+			// the check runs before any state is touched
+			requirePages(t, f, common.Pgids{3, 4}, common.Pgids{})
+
+			require.Panics(t, func() { f.InitFromPageIds(common.Pgids{9, 5, 7}) })
+			requirePages(t, f, common.Pgids{3, 4}, common.Pgids{})
+		})
+	}
+}
+
+func TestFreelist_FreeAndPendingPages(t *testing.T) {
+	f := newTestFreelist()
+	require.Equal(t, common.Pgids{}, f.FreeAndPendingPages())
+
+	f.init(common.Pgids{3, 4, 12})
+	f.Free(common.Txid(2), common.NewPage(10, common.LeafPageFlag, 0, 1))
+	f.Free(common.Txid(3), common.NewPage(5, common.LeafPageFlag, 0, 0))
+
+	all := f.FreeAndPendingPages()
+	require.Equal(t, common.Pgids{3, 4, 5, 10, 11, 12}, all)
+
+	// the result is a copy, modifying it must not change the freelist
+	all[0] = 99
+	requirePages(t, f, common.Pgids{3, 4, 12}, common.Pgids{5, 10, 11})
+}
+
+func TestFreelist_InitEmptyClearsFreedCache(t *testing.T) {
+	for name, newFn := range map[string]func() *txFreelist{
+		"array":   NewArrayFreelist,
+		"hashmap": NewHashMapFreelist,
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newFn()
+			f.init(common.Pgids{3, 4})
+			require.True(t, f.Freed(3))
+
+			// re-initializing with no free pages must also drop them from the freed cache
+			f.init(common.Pgids{})
+			require.False(t, f.Freed(3))
+			requirePages(t, f, common.Pgids{}, common.Pgids{})
+		})
+	}
 }

@@ -3,8 +3,8 @@ package freelist
 import (
 	"fmt"
 	"math"
+	"slices"
 	"sort"
-	"unsafe"
 
 	"go.etcd.io/bbolt/internal/common"
 )
@@ -15,8 +15,11 @@ type txPending struct {
 	lastReleaseBegin common.Txid   // beginning txid of last matching releaseRange
 }
 
-type shared struct {
-	Interface
+// txFreelist tracks free and pending pages across transactions. The free pages
+// themselves are stored in a backend, the on-disk format is handled by a codec.
+type txFreelist struct {
+	backend backend // stores the free pages.
+	codec   codec   // serializes the free and pending page ids into a freelist page.
 
 	readonlyTXIDs []common.Txid               // all readonly transaction IDs.
 	allocs        map[common.Pgid]common.Txid // mapping of Txid that allocated a pgid.
@@ -24,19 +27,54 @@ type shared struct {
 	pending       map[common.Txid]*txPending  // mapping of soon-to-be free page ids by tx.
 }
 
-func newShared() *shared {
-	return &shared{
+var _ Interface = (*txFreelist)(nil)
+
+func newTxFreelist(b backend) *txFreelist {
+	return &txFreelist{
+		backend: b,
+		codec:   pgidsCodec{},
 		pending: make(map[common.Txid]*txPending),
 		allocs:  make(map[common.Pgid]common.Txid),
 		cache:   make(map[common.Pgid]struct{}),
 	}
 }
 
-func (t *shared) pendingPageIds() map[common.Txid]*txPending {
+// init replaces all free pages with the given ids and rebuilds the freed cache.
+// Pending pages are kept as they are. It panics if ids are not sorted.
+func (t *txFreelist) init(ids common.Pgids) {
+	verifySorted(ids, "init")
+	t.backend.init(ids)
+	t.reindex()
+}
+
+func (t *txFreelist) Allocate(txid common.Txid, n int) common.Pgid {
+	id := t.backend.allocate(n)
+	if id == 0 {
+		return 0
+	}
+	// Remove from the free cache.
+	for i := common.Pgid(0); i < common.Pgid(n); i++ {
+		delete(t.cache, id+i)
+	}
+	t.allocs[id] = txid
+	return id
+}
+
+func (t *txFreelist) FreeCount() int {
+	return t.backend.freeCount()
+}
+
+// freePageIds returns the sorted IDs of all free pages. The returned slice must not be modified.
+func (t *txFreelist) freePageIds() common.Pgids {
+	return t.backend.freePageIds()
+}
+
+// pendingByTx returns all pending pages by transaction id.
+func (t *txFreelist) pendingByTx() map[common.Txid]*txPending {
 	return t.pending
 }
 
-func (t *shared) PendingCount() int {
+func (t *txFreelist) PendingCount() int {
 	var count int
 	for _, txp := range t.pending {
 		count += len(txp.ids)
@@ -44,16 +82,16 @@ func (t *shared) PendingCount() int {
 	return count
 }
 
-func (t *shared) Count() int {
+func (t *txFreelist) Count() int {
 	return t.FreeCount() + t.PendingCount()
 }
 
-func (t *shared) Freed(pgId common.Pgid) bool {
+func (t *txFreelist) Freed(pgId common.Pgid) bool {
 	_, ok := t.cache[pgId]
 	return ok
 }
 
-func (t *shared) Free(txid common.Txid, p *common.Page) {
+func (t *txFreelist) Free(txid common.Txid, p *common.Page) {
 	if p.Id() <= 1 {
 		panic(fmt.Sprintf("cannot free page 0 or 1: %d", p.Id()))
 	}
@@ -86,7 +124,7 @@ func (t *shared) Free(txid common.Txid, p *common.Page) {
 	}
 }
 
-func (t *shared) Rollback(txid common.Txid) {
+func (t *txFreelist) Rollback(txid common.Txid) {
 	// Remove page ids from cache.
 	txp := t.pending[txid]
 	if txp == nil {
@@ -117,11 +155,11 @@ func (t *shared) Rollback(txid common.Txid) {
 	}
 }
 
-func (t *shared) AddReadonlyTXID(tid common.Txid) {
+func (t *txFreelist) AddReadonlyTXID(tid common.Txid) {
 	t.readonlyTXIDs = append(t.readonlyTXIDs, tid)
 }
 
-func (t *shared) RemoveReadonlyTXID(tid common.Txid) {
+func (t *txFreelist) RemoveReadonlyTXID(tid common.Txid) {
 	for i := range t.readonlyTXIDs {
 		if t.readonlyTXIDs[i] == tid {
 			last := len(t.readonlyTXIDs) - 1
@@ -138,7 +176,7 @@ func (t txIDx) Len() int           { return len(t) }
 func (t txIDx) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
 func (t txIDx) Less(i, j int) bool { return t[i] < t[j] }
 
-func (t *shared) ReleasePendingPages() {
+func (t *txFreelist) ReleasePendingPages() {
 	// Free all pending pages prior to the earliest open transaction.
 	sort.Sort(txIDx(t.readonlyTXIDs))
 	minid := common.Txid(math.MaxUint64)
@@ -157,7 +195,8 @@ func (t *shared) ReleasePendingPages() {
 	// Any page both allocated and freed in an extent is safe to release.
 }
 
-func (t *shared) release(txid common.Txid) {
+// release moves all page ids for a transaction id (or older) to the freelist.
+func (t *txFreelist) release(txid common.Txid) {
 	m := make(common.Pgids, 0)
 	for tid, txp := range t.pending {
 		if tid <= txid {
@@ -167,10 +206,11 @@ func (t *shared) release(txid common.Txid) {
 			delete(t.pending, tid)
 		}
 	}
-	t.mergeSpans(m)
+	t.backend.mergeSpans(m)
 }
 
-func (t *shared) releaseRange(begin, end common.Txid) {
+// releaseRange moves pending pages allocated within an extent [begin,end] to the free list.
+func (t *txFreelist) releaseRange(begin, end common.Txid) {
 	if begin > end {
 		return
 	}
@@ -199,26 +239,44 @@ func (t *shared) releaseRange(begin, end common.Txid) {
 			delete(t.pending, tid)
 		}
 	}
-	t.mergeSpans(m)
+	t.backend.mergeSpans(m)
 }
 
-// Copyall copies a list of all free ids and all pending ids in one sorted list.
-// f.count returns the minimum length required for dst.
-func (t *shared) Copyall(dst []common.Pgid) {
+// pendingPageIds returns the sorted IDs of all pending pages. Returns an empty slice if no pages are pending.
+func (t *txFreelist) pendingPageIds() common.Pgids {
 	m := make(common.Pgids, 0, t.PendingCount())
-	for _, txp := range t.pendingPageIds() {
+	for _, txp := range t.pending {
 		m = append(m, txp.ids...)
 	}
 	sort.Sort(m)
-	common.Mergepgids(dst, t.freePageIds(), m)
+	return m
 }
 
-func (t *shared) Reload(p *common.Page) {
-	t.Read(p)
-	t.NoSyncReload(t.freePageIds())
+func (t *txFreelist) FreeAndPendingPages() common.Pgids {
+	free, pending := t.freePageIds(), t.pendingPageIds()
+	// always copy, freePageIds may alias internal state
+	all := make(common.Pgids, len(free)+len(pending))
+	common.Mergepgids(all, free, pending)
+	return all
 }
 
-func (t *shared) NoSyncReload(pgIds common.Pgids) {
+func (t *txFreelist) Read(p *common.Page) {
+	t.init(t.codec.read(p))
+}
+
+func (t *txFreelist) Write(p *common.Page) {
+	t.codec.write(p, t.freePageIds(), t.pendingPageIds())
+}
+
+func (t *txFreelist) EstimatedWritePageSize() int {
+	return t.codec.estimatedWritePageSize(t.Count())
+}
+
+func (t *txFreelist) Reload(p *common.Page) {
+	t.InitFromPageIds(t.codec.read(p))
+}
+
+func (t *txFreelist) InitFromPageIds(pgIds common.Pgids) {
 	// Build a cache of only pending pages.
 	pcache := make(map[common.Pgid]struct{})
 	for _, txp := range t.pending {
@@ -236,75 +294,30 @@ func (t *shared) NoSyncReload(pgIds common.Pgids) {
 		}
 	}
 
-	t.Init(a)
+	t.init(a)
 }
 
 // reindex rebuilds the free cache based on available and pending free lists.
-func (t *shared) reindex() {
+func (t *txFreelist) reindex() {
 	free := t.freePageIds()
-	pending := t.pendingPageIds()
 	t.cache = make(map[common.Pgid]struct{}, len(free))
 	for _, id := range free {
 		t.cache[id] = struct{}{}
 	}
-	for _, txp := range pending {
+	for _, txp := range t.pending {
 		for _, pendingID := range txp.ids {
 			t.cache[pendingID] = struct{}{}
 		}
 	}
 }
 
-func (t *shared) Read(p *common.Page) {
-	if !p.IsFreelistPage() {
-		panic(fmt.Sprintf("invalid freelist page: %d, page type is %s", p.Id(), p.Typ()))
-	}
-
-	ids := p.FreelistPageIds()
-
-	// Copy the list of page ids from the freelist.
-	if len(ids) == 0 {
-		t.Init([]common.Pgid{})
-	} else {
-		// copy the ids, so we don't modify on the freelist page directly
-		idsCopy := make([]common.Pgid, len(ids))
-		copy(idsCopy, ids)
-		// Make sure they're sorted.
-		sort.Sort(common.Pgids(idsCopy))
-
-		t.Init(idsCopy)
-	}
-}
-
-func (t *shared) EstimatedWritePageSize() int {
-	n := t.Count()
-	if n >= 0xFFFF {
-		// The first element will be used to store the count. See freelist.write.
-		n++
-	}
-	return int(common.PageHeaderSize) + (int(unsafe.Sizeof(common.Pgid(0))) * n)
-}
-
-func (t *shared) Write(p *common.Page) {
-	// Combine the old free pgids and pgids waiting on an open transaction.
-
-	// Update the header flag.
-	p.SetFlags(common.FreelistPageFlag)
-
-	// The page.count can only hold up to 64k elements so if we overflow that
-	// number then we handle it by putting the size in the first element.
-	l := t.Count()
-	if l == 0 {
-		p.SetCount(uint16(l))
-	} else if l < 0xFFFF {
-		p.SetCount(uint16(l))
-		data := common.UnsafeAdd(unsafe.Pointer(p), unsafe.Sizeof(*p))
-		ids := unsafe.Slice((*common.Pgid)(data), l)
-		t.Copyall(ids)
-	} else {
-		p.SetCount(0xFFFF)
-		data := common.UnsafeAdd(unsafe.Pointer(p), unsafe.Sizeof(*p))
-		ids := unsafe.Slice((*common.Pgid)(data), l+1)
-		ids[0] = common.Pgid(l)
-		t.Copyall(ids[1:])
-	}
+// verifySorted panics if the given page ids are not sorted in ascending order.
+// The check is O(n), so it only runs when verification is enabled, see common.Verify.
+// Callers that rely on sorted input should call this before mutating any state.
+func verifySorted(ids common.Pgids, caller string) {
+	common.Verify(func() {
+		if !slices.IsSorted(ids) {
+			panic(fmt.Sprintf("%s: pgids not sorted", caller))
+		}
+	})
 }

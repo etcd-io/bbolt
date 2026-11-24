@@ -7,18 +7,22 @@ import (
 	"go.etcd.io/bbolt/internal/common"
 )
 
+// array stores the free pages as a sorted slice of page ids.
 type array struct {
-	*shared
-
 	ids []common.Pgid // all free and available free page ids.
 }
 
-func (f *array) Init(ids common.Pgids) {
-	f.ids = ids
-	f.reindex()
+var _ backend = (*array)(nil)
+
+func newArray() *array {
+	return &array{ids: []common.Pgid{}}
 }
 
-func (f *array) Allocate(txid common.Txid, n int) common.Pgid {
+func (f *array) init(ids common.Pgids) {
+	f.ids = ids
+}
+
+func (f *array) allocate(n int) common.Pgid {
 	if len(f.ids) == 0 {
 		return 0
 	}
@@ -47,11 +51,6 @@ func (f *array) Allocate(txid common.Txid, n int) common.Pgid {
 				f.ids = f.ids[:len(f.ids)-n]
 			}
 
-			// Remove from the free cache.
-			for i := common.Pgid(0); i < common.Pgid(n); i++ {
-				delete(f.cache, initial+i)
-			}
-			f.allocs[initial] = txid
 			return initial
 		}
 
@@ -60,7 +59,7 @@ func (f *array) Allocate(txid common.Txid, n int) common.Pgid {
 	return 0
 }
 
-func (f *array) FreeCount() int {
+func (f *array) freeCount() int {
 	return len(f.ids)
 }
 
@@ -98,11 +97,7 @@ func (f *array) mergeSpans(ids common.Pgids) {
 	f.ids = common.Pgids(f.ids).Merge(ids)
 }
 
-func NewArrayFreelist() Interface {
-	a := &array{
-		shared: newShared(),
-		ids:    []common.Pgid{},
-	}
-	a.Interface = a
-	return a
+// NewArrayFreelist returns a freelist that stores its free pages in a sorted slice.
+func NewArrayFreelist() *txFreelist {
+	return newTxFreelist(newArray())
 }
