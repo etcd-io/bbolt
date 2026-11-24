@@ -73,6 +73,15 @@ func mmap(db *DB, sz int) error {
 	return nil
 }
 
+// prefetchSupported is whether madviseWillNeed has an effect.
+const prefetchSupported = true
+
+// madviseWillNeed advises the kernel that the given part of the mmap is
+// going to be accessed soon. It is only a hint, so a failure is ignored.
+func madviseWillNeed(b []byte) {
+	_ = unix.Madvise(b, syscall.MADV_WILLNEED)
+}
+
 // munmap unmaps a DB's data file from memory.
 func munmap(db *DB) error {
 	// Ignore the unmap if we have no mapped data.
