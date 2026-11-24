@@ -59,6 +59,7 @@ func TestMethodPage(t *testing.T) {
 	testCases := []struct {
 		name            string
 		readonly        bool
+		readTx          bool
 		preLoadFreePage bool
 		expectedError   error
 	}{
@@ -67,6 +68,13 @@ func TestMethodPage(t *testing.T) {
 			readonly:        false,
 			preLoadFreePage: false,
 			expectedError:   nil,
+		},
+		{
+			name:            "write mode with read transaction",
+			readonly:        false,
+			readTx:          true,
+			preLoadFreePage: false,
+			expectedError:   errors.ErrTxNotWritable,
 		},
 		{
 			name:            "readonly mode with preloading free pages",
@@ -95,13 +103,14 @@ func TestMethodPage(t *testing.T) {
 			require.NoError(t, err)
 			defer db.Close()
 
-			tx, err := db.Begin(!tc.readonly)
+			writable := !tc.readonly && !tc.readTx
+			tx, err := db.Begin(writable)
 			require.NoError(t, err)
 
 			_, err = tx.Page(0)
 			require.Equal(t, tc.expectedError, err)
 
-			if tc.readonly {
+			if !writable {
 				require.NoError(t, tx.Rollback())
 			} else {
 				require.NoError(t, tx.Commit())
