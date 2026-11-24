@@ -20,6 +20,11 @@ const (
 	LeafPageFlag     = 0x02
 	MetaPageFlag     = 0x04
 	FreelistPageFlag = 0x10
+
+	// CompressedPageFlag is an orthogonal bit flag that indicates the page
+	// data (everything after the header) is zstd-compressed. It can be
+	// combined with any page-type flag above (e.g. LeafPageFlag | CompressedPageFlag).
+	CompressedPageFlag = 0x20
 )
 
 const (
@@ -59,27 +64,43 @@ func (p *Page) Typ() string {
 }
 
 func (p *Page) IsBranchPage() bool {
-	return p.flags == BranchPageFlag
+	return p.flags&BranchPageFlag != 0
 }
 
 func (p *Page) IsLeafPage() bool {
-	return p.flags == LeafPageFlag
+	return p.flags&LeafPageFlag != 0
 }
 
 func (p *Page) IsMetaPage() bool {
-	return p.flags == MetaPageFlag
+	return p.flags&MetaPageFlag != 0
 }
 
 func (p *Page) IsFreelistPage() bool {
-	return p.flags == FreelistPageFlag
+	return p.flags&FreelistPageFlag != 0
+}
+
+// IsCompressed returns true if the page data is zstd-compressed.
+func (p *Page) IsCompressed() bool {
+	return p.flags&CompressedPageFlag != 0
+}
+
+// SetCompressed sets or clears the compressed flag on the page.
+func (p *Page) SetCompressed(compressed bool) {
+	if compressed {
+		p.flags |= CompressedPageFlag
+	} else {
+		p.flags &^= CompressedPageFlag
+	}
 }
 
 // IsValidPage checks Page flags correctness, only a single proper flag can be used.
+// The orthogonal CompressedPageFlag is masked out before checking the page type.
 func (p *Page) IsValidPage() bool {
-	return p.IsBranchPage() ||
-		p.IsLeafPage() ||
-		p.IsMetaPage() ||
-		p.IsFreelistPage()
+	switch p.flags &^ CompressedPageFlag {
+	case BranchPageFlag, LeafPageFlag, MetaPageFlag, FreelistPageFlag:
+		return true
+	}
+	return false
 }
 
 // Meta returns a pointer to the metadata section of the page.
