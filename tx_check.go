@@ -1,6 +1,7 @@
 package bbolt
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 
@@ -199,7 +200,7 @@ func (tx *Tx) recursivelyCheckPageKeyOrderInternal(
 		runningMin := minKeyClosed
 		for i := range p.BranchPageElements() {
 			elem := p.BranchPageElement(uint16(i))
-			verifyKeyOrder(elem.Pgid(), "branch", i, elem.Key(), runningMin, maxKeyOpen, ch, keyToString, pagesStack)
+			verifyKeyOrder(elem.Pgid(), "branch", i, elem.Key(), runningMin, maxKeyOpen, firstKey(tx.page(elem.Pgid())), ch, keyToString, pagesStack)
 
 			maxKey := maxKeyOpen
 			if i < len(p.BranchPageElements())-1 {
@@ -213,7 +214,7 @@ func (tx *Tx) recursivelyCheckPageKeyOrderInternal(
 		runningMin := minKeyClosed
 		for i := range p.LeafPageElements() {
 			elem := p.LeafPageElement(uint16(i))
-			verifyKeyOrder(pgId, "leaf", i, elem.Key(), runningMin, maxKeyOpen, ch, keyToString, pagesStack)
+			verifyKeyOrder(pgId, "leaf", i, elem.Key(), runningMin, maxKeyOpen, nil, ch, keyToString, pagesStack)
 			runningMin = elem.Key()
 		}
 		if p.Count() > 0 {
@@ -228,8 +229,10 @@ func (tx *Tx) recursivelyCheckPageKeyOrderInternal(
 /***
  * verifyKeyOrder checks whether an entry with given #index on pgId (pageType: "branch|leaf") that has given "key",
  * is within range determined by (previousKey..maxKeyOpen) and reports found violations to the channel (ch).
+ * For a branch entry, childFirstKey is the first key of the child page: the writer keeps the separator equal to it (node.spill),
+ * so a separator below it is reported (above it is reported by the child's own range check).
  */
-func verifyKeyOrder(pgId common.Pgid, pageType string, index int, key []byte, previousKey []byte, maxKeyOpen []byte, ch chan error, keyToString func([]byte) string, pagesStack []common.Pgid) {
+func verifyKeyOrder(pgId common.Pgid, pageType string, index int, key []byte, previousKey []byte, maxKeyOpen []byte, childFirstKey []byte, ch chan error, keyToString func([]byte) string, pagesStack []common.Pgid) {
 	if index == 0 && previousKey != nil && compareKeys(previousKey, key) > 0 {
 		ch <- fmt.Errorf("the first key[%d]=(hex)%s on %s page(%d) needs to be >= the key in the ancestor (%s). Stack: %v",
 			index, keyToString(key), pageType, pgId, keyToString(previousKey), pagesStack)
@@ -248,6 +251,10 @@ func verifyKeyOrder(pgId common.Pgid, pageType string, index int, key []byte, pr
 	if maxKeyOpen != nil && compareKeys(key, maxKeyOpen) >= 0 {
 		ch <- fmt.Errorf("key[%d]=(hex)%s on %s page(%d) needs to be < than key of the next element in ancestor (hex)%s. Pages stack: %v",
 			index, keyToString(key), pageType, pgId, keyToString(previousKey), pagesStack)
+	}
+	if childFirstKey != nil && bytes.Compare(childFirstKey, key) > 0 {
+		ch <- fmt.Errorf("key[%d]=(hex)%s on branch page(%d) does not match the first key (hex)%s of its child page(%d). Stack: %v",
+			index, keyToString(key), pagesStack[len(pagesStack)-1], keyToString(childFirstKey), pgId, pagesStack)
 	}
 }
 
@@ -292,4 +299,16 @@ func (hexKvStringer) KeyToString(key []byte) string {
 
 func (hexKvStringer) ValueToString(value []byte) string {
 	return hex.EncodeToString(value)
+}
+
+func firstKey(p *common.Page) []byte {
+	switch {
+	case p.Count() == 0:
+		return nil
+	case p.IsBranchPage():
+		return p.BranchPageElement(0).Key()
+	case p.IsLeafPage():
+		return p.LeafPageElement(0).Key()
+	}
+	return nil
 }
