@@ -1276,15 +1276,15 @@ func (db *DB) IsReadOnly() bool {
 
 func (db *DB) freepages() []common.Pgid {
 	tx, err := db.beginTx()
+	if err != nil {
+		panic("freepages: failed to open read only tx")
+	}
 	defer func() {
 		err = tx.Rollback()
 		if err != nil {
 			panic("freepages: failed to rollback tx")
 		}
 	}()
-	if err != nil {
-		panic("freepages: failed to open read only tx")
-	}
 
 	reachable := make(map[common.Pgid]*common.Page)
 	nofreed := make(map[common.Pgid]bool)
