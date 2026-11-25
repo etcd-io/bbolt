@@ -142,10 +142,14 @@ type DB struct {
 	batchMu sync.Mutex
 	batch   *batch
 
-	rwlock   sync.Mutex   // Allows only one writer at a time.
-	metalock sync.Mutex   // Protects meta page access.
-	mmaplock sync.RWMutex // Protects mmap access during remapping.
-	statlock sync.RWMutex // Protects stats access.
+	rwlock sync.Mutex // Allows only one writer at a time.
+
+	// writeCursorStack is the cursor stack that Put and Delete use again for
+	// each key. Only the writable transaction uses it, under rwlock.
+	writeCursorStack []elemRef
+	metalock         sync.Mutex   // Protects meta page access.
+	mmaplock         sync.RWMutex // Protects mmap access during remapping.
+	statlock         sync.RWMutex // Protects stats access.
 
 	ops struct {
 		writeAt func(b []byte, off int64) (n int, err error)
