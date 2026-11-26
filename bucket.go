@@ -518,6 +518,22 @@ func (b *Bucket) Get(key []byte) []byte {
 	return v
 }
 
+// writeCursor returns a cursor that uses the write cursor stack of the DB
+// again, so that Put and Delete do not grow a new stack for each key.
+// It must only be called from a writable transaction.
+func (b *Bucket) writeCursor() *Cursor {
+	b.tx.stats.IncCursorCount(1)
+	return &Cursor{bucket: b, stack: b.tx.db.writeCursorStack[:0]}
+}
+
+// releaseWriteCursor gives the stack of c back to the DB. It clears the
+// entries, so that the DB does not keep the pages and nodes of this
+// transaction alive.
+func (b *Bucket) releaseWriteCursor(c *Cursor) {
+	clear(c.stack)
+	b.tx.db.writeCursorStack = c.stack[:0]
+}
+
 // Put sets the value for a key in the bucket.
 // If the key exist then its previous value will be overwritten.
 // Supplied value must remain valid for the life of the transaction.
@@ -551,7 +567,8 @@ func (b *Bucket) Put(key []byte, value []byte) (err error) {
 	newKey := cloneBytes(key)
 
 	// Move cursor to correct position.
-	c := b.Cursor()
+	c := b.writeCursor()
+	defer b.releaseWriteCursor(c)
 	k, _, flags := c.seek(newKey)
 
 	// Return an error if there is an existing key with a bucket value.
@@ -588,7 +605,8 @@ func (b *Bucket) Delete(key []byte) (err error) {
 	}
 
 	// Move cursor to correct position.
-	c := b.Cursor()
+	c := b.writeCursor()
+	defer b.releaseWriteCursor(c)
 	k, _, flags := c.seek(key)
 
 	// Return nil if the key doesn't exist.
