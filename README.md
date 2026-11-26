@@ -37,7 +37,7 @@ Shopify and Heroku use Bolt-backed services every day.
 ## Project versioning
 
 bbolt uses [semantic versioning](http://semver.org).
-API should not change between patch and minor releases.
+The API should not change between patch and minor releases.
 New minor versions may add additional features to the API.
 
 ## Table of Contents
@@ -156,9 +156,9 @@ read-only transactions as you want at a time. Each transaction has a consistent
 view of the data as it existed when the transaction started.
 
 Individual transactions and all objects created from them (e.g. buckets, keys)
-are not thread safe. To work with data in multiple goroutines you must start
+are not thread-safe. To work with data in multiple goroutines you must start
 a transaction for each one or use locking to ensure only one goroutine accesses
-a transaction at a time. Creating transaction from the `DB` is thread safe.
+a transaction at a time. Creating a transaction from the `DB` is thread-safe.
 
 Transactions should not depend on one another and generally shouldn't be opened
 simultaneously in the same goroutine. This can cause a deadlock as the read-write
@@ -233,7 +233,7 @@ set variables in the enclosing scope:
 ```go
 var id uint64
 err := db.Batch(func(tx *bolt.Tx) error {
-	// Find last key in bucket, decode as bigendian uint64, increment
+	// Find last key in bucket, decode as big-endian uint64, increment
 	// by one, encode back to []byte, and add new key.
 	...
 	id = newValue
@@ -242,7 +242,7 @@ err := db.Batch(func(tx *bolt.Tx) error {
 if err != nil {
 	return ...
 }
-fmt.Println("Allocated ID %d", id)
+fmt.Printf("Allocated ID %d\n", id)
 ```
 
 
@@ -367,7 +367,7 @@ db.Update(func (tx *bolt.Tx) error {
 })
 ```
 
-This will delete the key `answers` from the bucket `MyBucket`.
+This will delete the key `answer` from the bucket `MyBucket`.
 
 Please note that values returned from `Get()` are only valid while the
 transaction is open. If you need to use a value outside of the transaction
@@ -388,7 +388,7 @@ func (s *Store) CreateUser(u *User) error {
         b := tx.Bucket([]byte("users"))
 
         // Generate ID for the user.
-        // This returns an error only if the Tx is closed or not writeable.
+        // This returns an error only if the Tx is closed or not writable.
         // That can't happen in an Update() call so I ignore the error check.
         id, _ := b.NextSequence()
         u.ID = int(id)
@@ -404,7 +404,7 @@ func (s *Store) CreateUser(u *User) error {
     })
 }
 
-// itob returns an 8-byte big endian representation of v.
+// itob returns an 8-byte big-endian representation of v.
 func itob(v int) []byte {
     b := make([]byte, 8)
     binary.BigEndian.PutUint64(b, uint64(v))
@@ -550,7 +550,7 @@ func (*Bucket) CreateBucketIfNotExists(key []byte) (*Bucket, error)
 func (*Bucket) DeleteBucket(key []byte) error
 ```
 
-Say you had a multi-tenant application where the root level bucket was the account bucket. Inside of this bucket was a sequence of accounts which themselves are buckets. And inside the sequence bucket you could have many buckets pertaining to the Account itself (Users, Notes, etc) isolating the information into logical groupings.
+Say you had a multi-tenant application where the root-level bucket was the account bucket. Inside of this bucket was a sequence of accounts which themselves are buckets. And inside the sequence bucket you could have many buckets pertaining to the Account itself (Users, Notes, etc) isolating the information into logical groupings.
 
 ```go
 
@@ -611,7 +611,7 @@ By default, it will use a regular file handle which will utilize the operating
 system's page cache. See the [`Tx`](https://godoc.org/go.etcd.io/bbolt#Tx)
 documentation for information about optimizing for larger-than-RAM datasets.
 
-One common use case is to backup over HTTP so you can use tools like `cURL` to
+One common use case is to backup over HTTP so you can use tools like `curl` to
 do database backups:
 
 ```go
@@ -679,7 +679,7 @@ or to provide an HTTP endpoint that will perform a fixed-length sample.
 
 ### Read-Only Mode
 
-Sometimes it is useful to create a shared, read-only Bolt database. To this,
+Sometimes it is useful to create a shared, read-only Bolt database. To do this,
 set the `Options.ReadOnly` flag when opening your database. Read-only mode
 uses a shared lock to allow multiple processes to read from the database but
 it will block any processes from opening the database in read-write mode.
