@@ -277,6 +277,47 @@ func TestOpen_ReadPageSize_FromMeta1_Given(t *testing.T) {
 	}
 }
 
+// Ensure that a first meta page with a zero page size but a matching checksum
+// is treated as invalid, and the database is read through the second meta page.
+func TestOpen_ZeroPageSizeInMeta0(t *testing.T) {
+	db := btesting.MustCreateDB(t)
+	path := db.Path()
+	pageSize := db.Info().PageSize
+	err := db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucket([]byte("widgets"))
+		if err != nil {
+			return err
+		}
+		return b.Put([]byte("foo"), []byte("bar"))
+	})
+	require.NoError(t, err)
+	// A second commit writes to the second meta page, so it holds the newest txid.
+	err = db.Update(func(tx *bolt.Tx) error {
+		return tx.Bucket([]byte("widgets")).Put([]byte("baz"), []byte("qux"))
+	})
+	require.NoError(t, err)
+	db.MustClose()
+
+	buf, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	// Zero the page size of the first meta page and recompute its checksum.
+	meta0 := (*common.Meta)(unsafe.Pointer(&buf[pageHeaderSize]))
+	meta0.SetPageSize(0)
+	meta0.SetChecksum(meta0.Sum64())
+	require.NoError(t, os.WriteFile(path, buf, 0666))
+
+	db = btesting.MustOpenDBWithOption(t, path, &bolt.Options{ReadOnly: true})
+	require.Equal(t, pageSize, db.Info().PageSize)
+	err = db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("widgets"))
+		require.Equal(t, []byte("bar"), b.Get([]byte("foo")))
+		require.Equal(t, []byte("qux"), b.Get([]byte("baz")))
+		return nil
+	})
+	require.NoError(t, err)
+}
+
 // Ensure that opening a database does not increase its size.
 // https://github.com/boltdb/bolt/issues/291
 func TestOpen_Size(t *testing.T) {
