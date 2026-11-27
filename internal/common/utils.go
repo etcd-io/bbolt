@@ -41,7 +41,7 @@ func CopyFile(srcPath, dstPath string) error {
 		return fmt.Errorf("failed to open source file %q: %w", srcPath, err)
 	}
 	defer srcDB.Close()
-	dstDB, err := os.Create(dstPath)
+	dstDB, err := os.OpenFile(dstPath, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0666)
 	if err != nil {
 		return fmt.Errorf("failed to create output file %q: %w", dstPath, err)
 	}
