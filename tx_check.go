@@ -4,21 +4,39 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	berrors "go.etcd.io/bbolt/errors"
 	"go.etcd.io/bbolt/internal/common"
 )
 
 // Check performs several consistency checks on the database for this transaction.
 // An error is returned if any inconsistency is found.
 //
-// It can be safely run concurrently on a writable transaction. However, this
-// incurs a high cost for large databases and databases with a lot of subbuckets
-// because of caching. This overhead can be removed if running on a read-only
-// transaction, however, it is not safe to execute other writer transactions at
-// the same time.
+// Check must be called in a read-only transaction. Calling it in a writable
+// transaction isn't supported, and the returned channel yields
+// ErrTxWritable. In a writable transaction, the changes which haven't been
+// committed yet aren't visible in the db file, from which the pages are read,
+// so a passing result wouldn't mean the transaction's changes are consistent;
+// on the other hand, bucket information is read from memory, which may already
+// include the uncommitted changes, so the two views can be inconsistent.
 //
 // It also allows users to provide a customized `KVStringer` implementation,
 // so that bolt can generate human-readable diagnostic messages.
 func (tx *Tx) Check(options ...CheckOption) <-chan error {
+	if tx.writable {
+		ch := make(chan error, 1)
+		ch <- berrors.ErrTxWritable
+		close(ch)
+		return ch
+	}
+	return tx.startCheck(options...)
+}
+
+// startCheck runs the consistency check in a goroutine. Commit calls it
+// directly instead of Check: by then the pages are already written, and
+// tx.meta and the bucket state are final, so the check is consistent even in
+// a writable transaction. Any restriction on calling Check in a writable
+// transaction should be added to Check only.
+func (tx *Tx) startCheck(options ...CheckOption) <-chan error {
 	chkConfig := checkConfig{
 		kvStringer: HexKVStringer(),
 	}

@@ -38,7 +38,7 @@ func TestTx_RecursivelyCheckPages_MisplacedPage(t *testing.T) {
 
 	db.MustReopen()
 	db.ForceDisableStrictMode()
-	require.NoError(t, db.Update(func(tx *bolt.Tx) error {
+	require.NoError(t, db.View(func(tx *bolt.Tx) error {
 		// Collect all the errors.
 		var errors []error
 		for err := range tx.Check() {
@@ -76,7 +76,7 @@ func TestTx_RecursivelyCheckPages_CorruptedLeaf(t *testing.T) {
 
 	db.MustReopen()
 	db.ForceDisableStrictMode()
-	require.NoError(t, db.Update(func(tx *bolt.Tx) error {
+	require.NoError(t, db.View(func(tx *bolt.Tx) error {
 		// Collect all the errors.
 		var errors []error
 		for err := range tx.Check() {
