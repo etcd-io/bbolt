@@ -21,7 +21,7 @@ type Meta struct {
 	checksum uint64
 }
 
-// Validate checks the marker bytes and version of the meta page to ensure it matches this binary.
+// Validate checks the marker bytes, version, checksum and page size of the meta page to ensure it matches this binary.
 func (m *Meta) Validate() error {
 	if m.magic != Magic {
 		return errors.ErrInvalid
@@ -29,6 +29,8 @@ func (m *Meta) Validate() error {
 		return errors.ErrVersionMismatch
 	} else if m.checksum != m.Sum64() {
 		return errors.ErrChecksum
+	} else if m.pageSize == 0 {
+		return errors.ErrInvalid
 	}
 	return nil
 }
