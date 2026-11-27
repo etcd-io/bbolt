@@ -249,7 +249,7 @@ func (tx *Tx) Commit() (err error) {
 
 	// If strict mode is enabled then perform a consistency check.
 	if tx.db.StrictMode {
-		ch := tx.Check()
+		ch := tx.startCheck()
 		var errs []string
 		for {
 			chkErr, ok := <-ch

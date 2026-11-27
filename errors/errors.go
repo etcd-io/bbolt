@@ -35,6 +35,10 @@ var (
 	// read-only transaction.
 	ErrTxNotWritable = errors.New("tx not writable")
 
+	// ErrTxWritable is returned when performing an operation which isn't
+	// supported on a writable transaction, e.g. Tx.Check().
+	ErrTxWritable = errors.New("tx writable")
+
 	// ErrTxClosed is returned when committing or rolling back a transaction
 	// that has already been committed or rolled back.
 	ErrTxClosed = errors.New("tx closed")

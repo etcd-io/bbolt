@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"go.etcd.io/bbolt"
+	berrors "go.etcd.io/bbolt/errors"
 	"go.etcd.io/bbolt/internal/btesting"
 	"go.etcd.io/bbolt/internal/common"
 	"go.etcd.io/bbolt/internal/guts_cli"
@@ -155,6 +156,36 @@ func TestTx_Check_Panic(t *testing.T) {
 	// Manually close the db, otherwise the PostTestCleanup will
 	// check the db again and accordingly fail the test.
 	db.MustClose()
+}
+
+// TestTx_Check_WritableTx ensures that Check isn't supported in a writable
+// transaction, while committing a writable transaction in strict mode, which
+// runs the check internally, still works.
+func TestTx_Check_WritableTx(t *testing.T) {
+	db := btesting.MustCreateDB(t)
+	db.StrictMode = true
+
+	err := db.Update(func(tx *bbolt.Tx) error {
+		b, err := tx.CreateBucket([]byte("data"))
+		require.NoError(t, err)
+		require.NoError(t, b.Put([]byte("key"), []byte("value")))
+
+		var errs []error
+		for cErr := range tx.Check() {
+			errs = append(errs, cErr)
+		}
+		require.Equal(t, []error{berrors.ErrTxWritable}, errs)
+		return nil
+	})
+	require.NoError(t, err)
+
+	err = db.View(func(tx *bbolt.Tx) error {
+		for cErr := range tx.Check() {
+			return cErr
+		}
+		return nil
+	})
+	require.NoError(t, err)
 }
 
 // corruptRandomLeafPage corrupts one random leaf page.
