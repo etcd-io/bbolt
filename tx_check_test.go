@@ -157,6 +157,75 @@ func TestTx_Check_Panic(t *testing.T) {
 	db.MustClose()
 }
 
+func TestTx_Check_BranchPageMinElements(t *testing.T) {
+	bucketName := []byte("data")
+	opts := &bbolt.Options{
+		PageSize:       4096,
+		NoFreelistSync: true,
+	}
+
+	db := btesting.MustCreateDBWithOption(t, opts)
+	err := db.Fill(bucketName, 1, 2000,
+		func(tx int, k int) []byte { return []byte(fmt.Sprintf("%08d-key-%052d", k, k)) },
+		func(tx int, k int) []byte { return make([]byte, 200) },
+	)
+	require.NoError(t, err)
+
+	// Verify the valid multi-level B+tree passes Tx.Check with 0 errors.
+	var nonRootBranchPageId common.Pgid
+	err = db.View(func(tx *bbolt.Tx) error {
+		var cErrs []error
+		for cErr := range tx.Check() {
+			cErrs = append(cErrs, cErr)
+		}
+		require.Empty(t, cErrs)
+
+		b := tx.Bucket(bucketName)
+		require.NotNil(t, b)
+		rootPage, _, rErr := guts_cli.ReadPage(db.Path(), uint64(b.RootPage()))
+		require.NoError(t, rErr)
+		require.True(t, rootPage.IsBranchPage())
+
+		for _, elem := range rootPage.BranchPageElements() {
+			childPage, _, cErr := guts_cli.ReadPage(db.Path(), uint64(elem.Pgid()))
+			require.NoError(t, cErr)
+			if childPage.IsBranchPage() {
+				nonRootBranchPageId = elem.Pgid()
+				break
+			}
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	require.NotZero(t, nonRootBranchPageId, "expected a multi-level B+tree with a non-root branch page")
+
+	path := db.Path()
+	require.NoError(t, db.Close())
+
+	for _, count := range []uint16{1, 0} {
+		t.Run(fmt.Sprintf("count_%d", count), func(t *testing.T) {
+			p, buf, rErr := guts_cli.ReadPage(path, uint64(nonRootBranchPageId))
+			require.NoError(t, rErr)
+			require.True(t, p.IsBranchPage())
+			p.SetCount(count)
+			require.NoError(t, guts_cli.WritePage(path, buf))
+
+			corruptDB := btesting.MustOpenDBWithOption(t, path, opts)
+			vErr := corruptDB.View(func(tx *bbolt.Tx) error {
+				var cErrs []error
+				for cErr := range tx.Check() {
+					cErrs = append(cErrs, cErr)
+				}
+				require.NotEmpty(t, cErrs)
+				require.ErrorContains(t, cErrs[0], fmt.Sprintf("page %d: branch page has fewer than 2 elements: %d", nonRootBranchPageId, count))
+				return nil
+			})
+			require.NoError(t, vErr)
+			corruptDB.MustClose()
+		})
+	}
+}
+
 // corruptRandomLeafPage corrupts one random leaf page.
 func corruptRandomLeafPageInBucket(t testing.TB, db *bbolt.DB, bucketName []byte) (victimPageId common.Pgid, validPageIds []common.Pgid) {
 	bucketRootPageId := mustGetBucketRootPage(t, db, bucketName)
