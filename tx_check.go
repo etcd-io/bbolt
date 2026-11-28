@@ -86,6 +86,12 @@ func (tx *Tx) check(cfg checkConfig, ch chan error) {
 
 		tx.recursivelyCheckPage(common.Pgid(cfg.pageId), reachable, freed, cfg.kvStringer, ch)
 	}
+
+	for id, p := range reachable {
+		if p.Id() == id && p.IsBranchPage() && p.Count() < 2 {
+			ch <- fmt.Errorf("page %d: branch page has fewer than 2 elements: %d", int(p.Id()), int(p.Count()))
+		}
+	}
 }
 
 func (tx *Tx) recursivelyCheckPage(pageId common.Pgid, reachable map[common.Pgid]*common.Page, freed map[common.Pgid]bool,
